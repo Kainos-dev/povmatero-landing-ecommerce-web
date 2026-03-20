@@ -1,0 +1,110 @@
+.site-header {
+  position: fixed;
+  top: 0;
+  width: 100%;
+  z-index: 500;
+
+  background: transparent;
+  transition: background 0.3s ease;
+}
+
+.site-header.scrolled{
+  background:#000;
+}
+
+.header-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 24px;
+  height: 60px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.header-left{
+  flex:1;
+  display:flex;
+  align-items:center;
+}
+
+.header-center{
+  flex:1;
+  display:flex;
+  justify-content:center;
+}
+
+.header-right{
+  flex:1;
+  display:flex;
+  justify-content:flex-end;
+  align-items:center;
+}
+/* 
+
+/* Logo: sparse letterspacing, all lowercase */
+
+.logo img{
+  height: 38px;
+  width:auto;
+  display:block;
+}
+
+.logo{
+  display:flex;
+  align-items:center;
+}
+
+.logo:hover { opacity: 0.6; }
+
+.header-nav{
+  display:flex;
+  gap:10px;
+  margin-left:auto;
+  margin-right:.85em;
+  font-size:.75em;
+  letter-spacing:0.03em;
+  font-weight: 900;
+}
+
+.header-nav a:hover{background-color:var(--details)}
+/* .header-nav a:hover{text-shadow: -.6cap .8cap 2px var(--details);} */
+
+/* Cart button */
+.cart-btn {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius);
+  border: .1em solid ;
+  color: var(--text-secondary);
+  transition: border-color var(--t), background var(--t);
+  flex-shrink: 0;
+}
+.cart-btn:hover { border-color: var(--text); color: var(--text) }
+
+/* Cart count badge */
+.cart-count {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: var(--details);
+  color: var(--bg);
+  font-size: 1em;
+  font-weight: 400;
+  min-width: 1.5em;
+  height: 1.5em;
+  padding: 0 4px;
+  border-radius: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Hidden by default */
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity var(--t), transform var(--t);
+}
+.cart-count.visible { opacity: 1; transform: scale(1); }

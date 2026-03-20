@@ -1,0 +1,8 @@
+.empty-state {
+  text-align: center;
+  padding: 100px 20px;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  letter-spacing: 0.05em;
+  grid-column: 1 / -1;
+}

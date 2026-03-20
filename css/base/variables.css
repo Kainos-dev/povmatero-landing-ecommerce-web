@@ -1,0 +1,29 @@
+:root {
+  /* Colors */
+  --bg:            #fff;
+  --surface:       #0b0b0b;
+  --surface-2:     #141414;
+  /* --border:        #222222; */
+  /* --border-subtle: #1a1a1a; */
+  --text:          #ffffff;
+  --text-secondary:#bdbdbd;
+  --text-muted:    #666666;
+  --details:         #37271d;
+
+  /* Typography */
+  --font:          'Inter', system-ui, -apple-system, sans-serif;
+  --font-size-xs:  11px;
+  --font-size-sm:  13px;
+  --font-size-base:15px;
+  --font-size-lg:  18px;
+  --font-size-xl:  24px;
+
+  /* Spacing & shape */
+  --radius:        3px;      
+  --radius-pill:   100px;
+  --cart-width:    400px;
+
+  /* Transitions */
+  --t:             0.2s ease;
+  --t-slow:        0.35s ease;
+}

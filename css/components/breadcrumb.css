@@ -1,0 +1,16 @@
+.breadcrumb {
+  border-bottom: 1px solid var(--border);
+}
+.breadcrumb-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 16px 24px;
+}
+.breadcrumb a {
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  transition: color var(--t);
+}
+.breadcrumb a:hover { color: var(--text); }

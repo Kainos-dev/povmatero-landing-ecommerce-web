@@ -1,0 +1,100 @@
+.hero {
+  border-bottom: 1px solid var(--border);
+  min-height: 100vh;
+  padding-top: 60px;
+  margin-bottom: 3%;
+
+  display: flex;
+  align-items: center;
+
+  /* DESKTOP IMAGE */
+  background-image: url("../../images/fondoDesktop.png");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.hero-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 80px 24px 72px;
+  width: 100%;
+}
+
+/* EYEBROW */
+.hero-eyebrow {
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 30px;
+}
+
+/* TITLE */
+.hero-title {
+  font-size: clamp(32px, 12vw, 75px);
+  font-weight: 200;
+  font-family: 'Times New Roman', Times, serif;
+  line-height: 0.3;
+  letter-spacing: -0.03em;
+  color: var(--text);
+  margin-bottom: 24px;
+
+  max-width: 100%;
+}
+
+/* SPAN (povmatero) */
+.povmatero-heroTitle {
+  font-size: 1.25em; 
+  font-weight: 600;
+
+  display: inline-block; 
+  line-height: 1; 
+
+  transform: translateY(0.05em); 
+  letter-spacing: -0.02em;
+}
+
+/* SUB */
+.hero-sub {
+  font-size: var(--font-size-base);
+  font-weight: 300;
+  color: var(--text-secondary);
+  max-width: 340px;
+}
+
+
+/* =========================
+   MOBILE
+========================= */
+
+@media (max-width: 767px) {
+
+  .hero {
+    min-height: 100vh;
+
+    /* IMAGEN MOBILE */
+    background-image: url("../../images/fondoMobile.png");
+
+    background-position: center top;
+  }
+
+  .hero-inner {
+    padding: 80px 20px 60px;
+  }
+
+  .hero-eyebrow{
+    margin-bottom: 15px;
+  }
+
+  .hero-title {
+    font-size: 9vw;
+    line-height: 0.3;
+    letter-spacing: -0.02em;
+  }
+
+  .hero-title br {
+    display: none; 
+  }
+
+}

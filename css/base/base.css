@@ -1,0 +1,29 @@
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  font-size: var(--font-size-base);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+img { display: block; max-width: 100%; height: auto; }
+button { cursor: pointer; border: none; background: none; font-family: inherit; }
+a { text-decoration: none; color: inherit; }
+
+/* Selection color */
+::selection { background: #ffffff; color: #000000; }
+
+/* Selección de texto personalizada */
+::selection {
+  background: var(--details);
+  color: #fff;
+}
+
+/* Para compatibilidad (Safari viejo) */
+::-moz-selection {
+  background: var(--details);
+  color: #fff;
+}

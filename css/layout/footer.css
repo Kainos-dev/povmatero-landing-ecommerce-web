@@ -1,0 +1,293 @@
+/* =========================
+   FOOTER BASE
+========================= */
+
+.site-footer {
+  width: 100%;
+  background: #000;
+  color: #fff;
+  margin-top: 0;
+}
+
+
+/* =========================
+   BRAND
+========================= */
+
+.footer-brand {
+  width: 100%;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-start; 
+  padding: 0;
+}
+
+.footer-brand h2 {
+  font-size: 18.1vw; 
+  font-weight: 900;
+  line-height: 0.75; 
+
+  margin: 0;
+  padding: 0;
+
+  
+  white-space: nowrap;
+  
+  transform: translate(-2%, -2%);
+  letter-spacing: -0.09em;
+}
+
+/* =========================
+   FOOTER BOTTOM
+========================= */
+
+.footer-bottom {
+  padding: 40px 24px 32px;
+}
+
+
+/* =========================
+   CENTRO
+========================= */
+
+.footer-center {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 40px;
+}
+
+/* columnas */
+.footer-columns {
+  display: flex;
+  align-items: stretch; 
+  gap: 64px; 
+}
+
+/* divisor */
+.footer-divider {
+  width: 1px;
+  background: var(--text);
+  opacity: 1;
+  align-self: stretch;
+}
+
+
+/* =========================
+   COLUMNAS
+========================= */
+
+.footer-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  text-align: center;
+}
+
+.footer-label {
+  font-size: 0.7em;
+  letter-spacing: 0.12em;
+  color: var(--text);
+}
+
+.footer-col a {
+  font-size: 0.9em;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: opacity var(--t);
+}
+
+.footer-col a:hover {
+  color: var(--text);
+  background-color: var(--details);
+}
+
+
+/* =========================
+   BOTTOM BAR
+========================= */
+
+.footer-bottom-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+
+  font-size: 0.75em;
+  color: var(--text-muted);
+}
+
+.footer-left p {
+  margin: 0;
+}
+
+.footer-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.powered-by {
+  font-size: 0.7em;
+  color: var(--text-muted);
+}
+
+.kainos-link {
+  font-size: 0.9em;
+  color: #fff;
+  text-decoration: none;
+  transition: opacity var(--t);
+}
+
+.kainos-link:hover {
+    color: #ff8000;
+  /* opacity: 0.6; */
+}
+
+/* =========================
+   MODAL BASE
+========================= */
+
+.contact-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: none;
+}
+
+.contact-modal.open {
+  display: block;
+}
+
+/* overlay */
+.contact-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(4px);
+}
+
+/* =========================
+   BOX
+========================= */
+
+.contact-box {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  /* transform: translate(-50%, -50%); */
+  opacity: 0;
+  transform: translate(-50%, -40%) scale(0.95);
+  transition: all 0.25s ease;
+
+  width: 360px;
+  padding: 36px 28px;
+
+  background: linear-gradient(145deg, #000, #0a0a0a);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+
+  text-align: center;
+}
+
+/* =========================
+   CLOSE
+========================= */
+
+.contact-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: none;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.contact-close:hover {
+  color: #fff;
+}
+
+/* =========================
+   TITLE
+========================= */
+
+.contact-title {
+  font-size: 0.9em;
+  letter-spacing: 0.18em;
+  font-weight: 600;
+  margin-bottom: 6px;
+  position: relative;
+  display: inline-block;
+}
+
+.contact-title::after {
+  content: "";
+  display: block;
+  height: 1px;
+  width: 100%;
+  background: var(--details);
+  margin-top: 6px;
+}
+
+/* =========================
+   SUBTITLE
+========================= */
+
+.contact-subtitle {
+  font-size: 0.8em;
+  color: var(--text-muted);
+  margin-bottom: 28px;
+}
+
+/* =========================
+   GRID
+========================= */
+
+.contact-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+/* =========================
+   ITEMS
+========================= */
+
+.contact-item {
+  height: 80px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border: 1px solid var(--border);
+  border-radius: 12px;
+
+  text-decoration: none;
+  color: #fff;
+
+  font-size: 0.8em;
+  letter-spacing: 0.05em;
+
+  background: rgba(255,255,255,0.02);
+
+  transition: all 0.2s ease;
+}
+
+.contact-item:hover {
+  border-color: var(--details);
+  background: rgba(255,255,255,0.05);
+  transform: translateY(-2px);
+  transform: scale(1.15);
+}
+
+.contact-item svg {
+  transition: transform 0.2s ease;
+}
+
+.contact-modal.open .contact-box {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}

@@ -1,0 +1,26 @@
+/* BASE */
+@import url('./base/variables.css');
+@import url('./base/reset.css');
+@import url('./base/base.css');
+
+/* LAYOUT */
+@import url('./layout/header.css');
+@import url('./layout/hero.css');
+@import url('./layout/filters.css');
+@import url('./layout/catalog.css');
+@import url('./layout/footer.css');
+
+/* COMPONENTS */
+@import url('./components/productCard.css');
+@import url('./components/cart.css');
+@import url('./components/modal.css');
+@import url('./components/toast.css');
+@import url('./components/breadcrumb.css');
+@import url('./components/emptyState.css');
+
+/* PAGES */
+@import url('./pages/productPage.css');
+@import url('./pages/sobreNosotros.css');
+
+/* RESPONSIVE */
+@import url('./responsive/responsive.css');

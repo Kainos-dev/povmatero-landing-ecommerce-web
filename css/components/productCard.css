@@ -1,0 +1,113 @@
+.product-card {
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  border-radius: 1em;
+  overflow: hidden;
+  border: hidden;
+  border-radius: 20px;
+  /* Stagger fade-in set per-card in JS */
+  animation: fadeIn 0.4s ease both;
+  transition: background var(--t);
+}
+
+/* .product-card:hover { background: var(--surface); } */
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Image: tall portrait ratio dominates the card */
+.card-image-wrap {
+  aspect-ratio: 3 / 2;
+  overflow: hidden;
+  background: #fff;
+  line-height: 0;
+  position: relative;
+  border-top-left-radius: 20px;
+  border-top-right-radius: 20px;
+}
+
+.card-image-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94), filter 0.4s ease;
+  filter: grayscale(20%);
+  border-top-left-radius: 20px;
+  border-top-right-radius: 20px;
+}
+
+.product-card:hover .card-image-wrap img {
+  transform: scale(1.075);
+  filter: grayscale(0%);
+}
+
+/* Card text area */
+.card-body {
+  background: #000;
+  padding: 16px 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.card-category {
+  font-size: var(--font-size-xs);
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.card-name {
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: 0.15em;
+  line-height: 1.3;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+}
+
+.card-price {
+  font-size: var(--font-size-sm);
+  font-weight: 900;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+/* Add to cart button: white outline, inverts on hover */
+.btn-add {
+  margin-top: auto;
+  padding-top: auto;
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: var(--font);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  background: transparent;
+  transition: background var(--t), color var(--details), border-color var(--t);
+  margin-top: auto;
+}
+
+.btn-add:hover {
+  background: var(--details);
+  color: #fff;
+  /* border-color: var(--text);  */
+}
+
+.card-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover; 
+}
