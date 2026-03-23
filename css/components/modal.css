@@ -27,8 +27,8 @@
   border: 1px solid var(--border);
 
   width: 100%;
-  max-width: 1100px;
-  height: 60%;
+  max-width: 80vw;
+  height: 64%;
   /* max-height: 700px; */
 
   display: flex;
@@ -65,7 +65,7 @@
   justify-content: center;
 
   height: 100%;            
-  padding: 24px;           
+  /* padding: 24px;            */
   overflow: hidden;       
 }
 
@@ -95,7 +95,7 @@
 }
 
 .modal-title {
-  font-size: 28px;
+  font-size: 1em;
   font-weight: 300;
   text-transform: uppercase;
 }

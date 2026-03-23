@@ -25,14 +25,18 @@
   max-width: 800px;
   height: auto;
 
-  background: #0e0e0e; 
-  border: 1px solid var(--border);
+  /* background: #000; 
+  border: 1px solid var(--border); */
 
   display: flex;
   flex-direction: column;
 
   overflow: hidden;
   position: relative;
+
+  background: linear-gradient(145deg, #000, #0a0a0a);
+  border: 1px solid var(--border);
+  border-radius: 20px;
 }
 
 /* HEADER */

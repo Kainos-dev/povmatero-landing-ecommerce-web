@@ -9,6 +9,7 @@ import { initFooter } from './components/ui.js';
 import { initContactModal } from './components/ui.js';
 import { initFiltersToggle } from './components/ui.js';
 import { initAboutModal } from './components/ui.js';
+import { initMobileMenu } from './components/ui.js';
 
 const UI = initUI();
 
@@ -27,3 +28,4 @@ initContactModal();
 initFooter(UI);
 initFiltersToggle(UI);
 initAboutModal();
+initMobileMenu();

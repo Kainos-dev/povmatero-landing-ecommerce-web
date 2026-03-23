@@ -150,3 +150,39 @@ export function initAboutModal() {
     if (e.target === overlay) closeModal();
   });
 }
+
+export function initMobileMenu() {
+
+  const menu = document.getElementById("mobileMenu");
+  const openBtn = document.getElementById("menuBtn");
+  const closeBtn = document.getElementById("mobileMenuClose");
+  const overlay = document.getElementById("mobileMenuOverlay");
+
+  const contacto = document.getElementById("mobileContacto");
+  const about = document.getElementById("mobileAbout");
+
+  function open() {
+    menu.classList.add("open");
+  }
+
+  function close() {
+    menu.classList.remove("open");
+  }
+
+  openBtn?.addEventListener("click", open);
+  closeBtn?.addEventListener("click", close);
+  overlay?.addEventListener("click", close);
+
+  // abrir modales
+  contacto?.addEventListener("click", (e) => {
+    e.preventDefault();
+    close();
+    document.getElementById("footerContacto")?.click();
+  });
+
+  about?.addEventListener("click", (e) => {
+    e.preventDefault();
+    close();
+    document.getElementById("headerAbout")?.click();
+  });
+}

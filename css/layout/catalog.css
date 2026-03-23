@@ -1,5 +1,5 @@
 .catalog-bar{
-  max-width:1280px;
+  max-width:90vw;
   margin:40px auto 20px;
   padding:0 24px;
 
@@ -52,7 +52,7 @@
 }
 
 .catalog-section {
-  max-width: 1280px;
+  max-width: 90vw;
   margin: 0 auto;
   padding: 40px 24px 120px;
   background:#ffffff;
@@ -62,7 +62,9 @@
 /* Mobile: 2 columns */
 .product-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px,1fr));
+  max-width: 90vw;
+  /* grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); */
+  /* grid-template-columns: repeat(4, 1fr); */
   gap: 24px; 
   background: transparent; 
   /* border: 1px solid var(--border); */

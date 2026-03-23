@@ -137,7 +137,7 @@ export const products =
   },
   {
     id: 13,
-    name: "Mate Camionera Alpaca",
+    name: "Mate Camionero Alpaca",
     category: "mates",
     price: 40560,
     description: "Acá va la descripción del producto.",
@@ -237,14 +237,16 @@ export const products =
   },
   {
     id: 21,
-    name: "Mate Copita",
-    category: "mates",
-    price: 22780,
+    name: "Bombillón Alpaca",
+    category: "bombillas",
+    price: 40320,
     description: "Acá va la descripción del producto.",
-    image: "images/2289/detalle.jpg",
-    // variants: [
-    //   { name:"variante", image: "imagen" },
-    // ]
+    image: "images/2301/Portada.jpeg",
+    variants: [
+      { name:"Chica", image: "images/2301/A.jpeg" },
+      { name:"Mediana", image: "images/2301/B.jpeg" },
+      { name:"Grande", image: "images/2301/C.jpeg" },
+    ]
   },
   {
     id: 22,
@@ -437,5 +439,27 @@ export const products =
       { name:"Cemento", image: "images/2264/Cemento.jpg" },
       { name:"Verde", image: "images/2264/Verde.jpg" },
     ]
+  },
+  {
+    id: 38,
+    name: "Mate Imperial Roma",
+    category: "mates",
+    price: 71450,
+    description: "Acá va la descripción del producto.",
+    image: "images/2284/Portada.jpeg",
+    // variants: [
+    //   { name:"variante", image: "imagen" },
+    // ]
+  },
+  {
+    id: 39,
+    name: "Cartera Termera Descarne",
+    category: "termeras",
+    price: 92760,
+    description: "Acá va la descripción del producto.",
+    image: "images/2552/Portada.jpeg",
+    // variants: [
+    //   { name:"variante", image: "imagen" },
+    // ]
   },
 ];

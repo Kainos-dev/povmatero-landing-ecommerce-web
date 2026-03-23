@@ -19,19 +19,31 @@
 
       <a href="index.html" class="logo"><img src="images/Logo.png" alt="povmatero"></a>
 
+      <!-- DESKTOP NAV -->
       <nav class="header-nav">
         <a href="#">CONTACTO</a>
         <a href="javascript:void(0)" id="headerAbout">SOBRE NOSOTROS</a>
       </nav>
 
-      <button class="cart-btn" id="cartBtn" aria-label="Abrir carrito">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="20" height="20">
-          <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
-          <line x1="3" y1="6" x2="21" y2="6"/>
-          <path d="M16 10a4 4 0 01-8 0"/>
-        </svg>
-        <span class="cart-count" id="cartCount">0</span>
-      </button>
+      <!-- MOBILE ACTIONS -->
+      <div class="header-actions">
+
+        <button class="menu-btn" id="menuBtn" aria-label="Abrir menú">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+
+        <button class="cart-btn" id="cartBtn" aria-label="Abrir carrito">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="20" height="20">
+            <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <path d="M16 10a4 4 0 01-8 0"/>
+          </svg>
+          <span class="cart-count" id="cartCount">0</span>
+        </button>
+
+      </div>
 
     </div>
   </header>
@@ -215,7 +227,13 @@
 
     <div class="contact-box">
 
-      <button class="contact-close" id="contactClose">✕</button>
+      <button class="contact-close" id="contactClose">
+        <!-- ✕ -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
 
       <h2 class="contact-title">CONTACTO</h2>
       <p class="contact-subtitle">Elegí cómo preferís contactarte con nosotros.</p>
@@ -271,7 +289,13 @@
 
         <p class="about-title-header">SOBRE NOSOTROS</p>
 
-        <button class="about-close" id="aboutClose">✕</button>
+        <button class="about-close" id="aboutClose">
+          <!-- ✕ -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
 
       </div>
 
@@ -296,7 +320,30 @@
 
   </div>
 
+  <div class="mobile-menu" id="mobileMenu">
+
+    <!-- <div class="mobile-menu-overlay" id="mobileMenuOverlay"></div> -->
+
+    <div class="mobile-menu-panel">
+
+      <button class="mobile-menu-close" id="mobileMenuClose">
+        <!-- ✕ -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+
+      <!-- <nav class="mobile-menu-links"> -->
+        <a href="#" id="mobileContacto">Contacto</a>
+        <a href="#" id="mobileAbout">Sobre Nosotros</a>
+      <!-- </nav> -->
+
+    </div>
+
+  </div>
+
   <script type="module" src="js/main.js"></script>
-  
+
 </body>
-</html>
+</html> 

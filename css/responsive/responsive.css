@@ -4,11 +4,15 @@
     grid-template-columns: repeat(3, 1fr);
   }
 
+  .site-header {
+    max-width: 100vw;
+  }
+
   .hero-inner { padding: 96px 24px 80px; }
 
-  .modal-content {
+  /* .modal-content {
     grid-template-columns: 1.1fr 1fr;
-  }
+  } */
 }
 
 /* --- Desktop: 1024px+ --- */
@@ -18,7 +22,9 @@
     grid-template-columns: repeat(4, 1fr);
   }
 
-  .header-inner { padding: 0 40px; }
+  .header-inner { 
+    padding: 0 40px; 
+  }
 
   .hero-inner { padding: 120px 40px 100px; }
 
@@ -34,5 +40,169 @@
 
 /* --- Large desktop: 1440px+ --- */
 @media (min-width: 1440px) {
-  .product-grid { grid-template-columns: repeat(5, 1fr); }
+  /* .product-grid { grid-template-columns: repeat(5, 1fr); } */
+  .footer-brand h2 {
+    font-size: 18.15vw;
+  }
+
+  .modal{
+    height: 58.6%;
+  }
+}
+
+@media (max-width: 768px) {
+
+  .header-nav {
+    display: none;
+  }
+
+  .menu-btn {
+    display: flex;
+  }
+
+  .cart-panel-close {
+    color: var(--text);
+  }
+
+  .header-nav {
+    display: none !important; /* 👈 esto es CLAVE */
+  }
+
+  .menu-btn {
+    display: flex;
+  }
+
+  .hero-title{
+    font-size: 1.8em;
+  }
+
+  .modal-close {
+  color: #000;
+}
+
+.footer-bottom-bar{
+  display: flex;
+  flex-direction: column;
+}
+
+.kainos-link{
+  color: #ff8000;
+}
+
+.footer-brand h2{
+  font-size: 18.3vw;
+}
+
+.modal{
+  height: 65vh;
+}
+
+.modal-info .btn-add {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+
+    padding: 16px;
+
+    background: #000;
+    color: #fff;
+    border: none;
+
+    z-index: 20;
+  }
+
+  .modal-info .btn-add {
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  }
+
+  .modal-variants {
+    display: flex;
+    overflow-x: auto;
+    gap: 8px;
+    padding-bottom: 4px;
+  }
+
+  .variant-btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .modal-title {
+    font-size: 20px;
+  }
+
+  .modal-description {
+    font-size: 13px;
+  }
+
+  .modal-content {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  .modal-image {
+    height: 10%;
+    min-height: 200px;
+  }
+
+  .modal-info {
+    height: 60%;
+    overflow-y: auto;
+    padding: 20px;
+    padding-bottom: 100px; /* 👈 espacio para botón fijo */
+  }
+
+  .modal-info .btn-add {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+
+    padding: 16px;
+
+    background: #000;
+    color: #fff;
+    border: none;
+
+    z-index: 20;
+  }
+
+  .modal-info .btn-add {
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  }
+
+  .modal-variants {
+    display: flex;
+    overflow-x: auto;
+    /* gap: 8px; */
+    height: 7.8vh;
+  }
+
+  .variant-btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .modal-title {
+    font-size: 20px;
+    color: #fff;
+  }
+
+  .modal-description {
+    font-size: 13px;
+    /* display: none; */
+  }
+
+}
+
+@media (min-width: 768px) {
+  .menu-btn {
+    display: none;
+  }
+
+  .header-nav {
+    display: flex;
+  }
 }
