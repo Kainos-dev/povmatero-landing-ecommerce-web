@@ -9,7 +9,7 @@
   align-items: center;
   justify-content: center;
 
-  padding: 20px;
+  padding: 0px;
 
   opacity: 0;
   pointer-events: none;
@@ -23,13 +23,13 @@
 
 /* MODAL */
 .modal {
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: #000;
+  /* border: .1em solid var(--details); */
 
-  width: 100%;
-  max-width: 80vw;
-  height: 64%;
-  /* max-height: 700px; */
+  /* width: 100%; */
+  max-width: 65vw;
+  /* height: 64%; */
+  /* max-height: 100vh; */
 
   display: flex;
   flex-direction: column;
@@ -131,6 +131,7 @@
 
 .variant-btn:hover {
   color: var(--text);
+  background-color: var(--details);
 }
 
 .variant-btn.active {

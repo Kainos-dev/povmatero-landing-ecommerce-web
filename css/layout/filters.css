@@ -129,15 +129,15 @@
 
   .filters-chips {
     display: flex;
-    flex-wrap: nowrap; /* 👈 una sola línea */
-    justify-content: space-between; /* 👈 distribuye */
-    gap: 4px; /* 👈 achica espacio */
+    flex-wrap: nowrap; 
+    justify-content: space-between; 
+    gap: 2px; 
   }
 
   .filter-chip {
-    flex: 1; /* 👈 todos ocupan lo mismo */
-    padding: 8px 8px; /* 👈 más compacto */
-    font-size: 10px; /* 👈 clave */
+    flex: 1; 
+    padding: 4px 4px; 
+    font-size: .78em; 
     letter-spacing: 0.02em;
     text-align: center;
   }

@@ -31,7 +31,7 @@ randomized.forEach(product => {
         <p class="card-category">${product.category}</p>
         <p class="card-name">${product.name}</p>
         <p class="card-price">${formatPrice(product.price)}</p>
-        <button class="btn-add">Seleccionar variante</button>
+        <button class="btn-add">Ver más</button>
       </div>
     `;
 

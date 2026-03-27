@@ -52,6 +52,10 @@
 
 @media (max-width: 768px) {
 
+  /* .modal-category{
+    display: none;
+  } */
+
   .header-nav {
     display: none;
   }
@@ -65,7 +69,7 @@
   }
 
   .header-nav {
-    display: none !important; /* 👈 esto es CLAVE */
+    display: none !important; 
   }
 
   .menu-btn {
@@ -94,7 +98,10 @@
 }
 
 .modal{
-  height: 65vh;
+  max-height: 100vh;
+  height: auto-fit;
+  max-width: 100vw;
+  width: 90vw;
 }
 
 .modal-info .btn-add {
@@ -120,7 +127,7 @@
     display: flex;
     overflow-x: auto;
     gap: 8px;
-    padding-bottom: 4px;
+    /* padding-bottom: 4px; */
   }
 
   .variant-btn {
@@ -150,8 +157,8 @@
   .modal-info {
     height: 60%;
     overflow-y: auto;
-    padding: 20px;
-    padding-bottom: 100px; /* 👈 espacio para botón fijo */
+    padding: 15px; 
+    /* padding-bottom: 100px;  */
   }
 
   .modal-info .btn-add {
@@ -160,11 +167,11 @@
     left: 0;
     width: 100%;
 
-    padding: 16px;
-
     background: #000;
     color: #fff;
-    border: none;
+    border-top: 2px solid #fff;
+    border-right: 2px solid #fff;
+    border-left: 2px solid #fff;
 
     z-index: 20;
   }
@@ -176,13 +183,20 @@
   .modal-variants {
     display: flex;
     overflow-x: auto;
+    align-self: center;
+    gap: 0;
+    padding-bottom: .8em;
     /* gap: 8px; */
-    height: 7.8vh;
+    /* height: 12vh; */
+    /* margin: 0; */
   }
 
   .variant-btn {
     flex: 0 0 auto;
+    margin: 0;
     white-space: nowrap;
+    gap: 0;
+    padding: .45em;
   }
 
   .modal-title {

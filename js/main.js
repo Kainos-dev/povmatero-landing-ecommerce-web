@@ -21,7 +21,6 @@ initFilters(UI, products, renderCatalog, modal, cart);
 // Render inicial
 renderCatalog(products, UI, modal, cart);
 
-
 import { initHeaderScroll } from './components/ui.js';
 initHeaderScroll();
 initContactModal();
@@ -29,3 +28,12 @@ initFooter(UI);
 initFiltersToggle(UI);
 initAboutModal();
 initMobileMenu();
+
+document.addEventListener("DOMContentLoaded", () => {
+  const preloader = document.getElementById("preloader");
+
+  // duración mínima del preloader
+  setTimeout(() => {
+    preloader.classList.add("hidden");
+  }, 2800); // podés ajustar (2.5–3.2s ideal)
+});

@@ -462,4 +462,26 @@ export const products =
     //   { name:"variante", image: "imagen" },
     // ]
   },
+  {
+    id: 40,
+    name: "Cartera Termera Descarne Chica",
+    category: "termeras",
+    price: 92760,
+    description: "Acá va la descripción del producto.",
+    image: "images/2550/Portada.jpg",
+    // variants: [
+    //   { name:"variante", image: "imagen" },
+    // ]
+  },
+  {
+    id: 41,
+    name: "Bombillon Alpaca Punta de Bronce",
+    category: "bombillas",
+    price: 40320,
+    description: "Acá va la descripción del producto.",
+    image: "images/2302/Detalle.png",
+    // variants: [
+    //   { name:"variante", image: "imagen" },
+    // ]
+  },
 ];
