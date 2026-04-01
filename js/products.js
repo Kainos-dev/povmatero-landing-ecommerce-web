@@ -6,7 +6,7 @@ export const products =
     category: "mates",
     price: 52660,
     description: "Acá va la descripción del producto.",
-    image:"images/2329/VariosMotivos.jpg",
+    image:"images/2329/varios-motivos.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
     // ]
@@ -17,7 +17,7 @@ export const products =
     category: "mates",
     price: 45480,
     description: "Acá va la descripción del producto.",
-    image: "images/2330/ambasVirolas.jpg",
+    image: "images/2330/ambas-virolas.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
     // ]
@@ -28,7 +28,7 @@ export const products =
     category: "mates",
     price: 23570,
     description: "Acá va la descripción del producto.",
-    image: "images/2328/coloresVarios.jpg",
+    image: "images/2328/colores-varios.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
     // ]
@@ -39,7 +39,7 @@ export const products =
     category: "mates",
     price: 22150,
     description: "Acá va la descripción del producto.",
-    image: "images/2327/coloresVarios.jpg",
+    image: "images/2327/colores-varios.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
     // ]
@@ -50,7 +50,7 @@ export const products =
     category: "mates",
     price: 22320,
     description: "Acá va la descripción del producto.",
-    image: "images/2306/coloresVarios.jpg",
+    image: "images/2306/colores-varios.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
     // ]
@@ -61,11 +61,11 @@ export const products =
     category: "bombillas",
     price: 30720,
     description: "Acá va la descripción del producto.",
-    image: "images/2300/medidas.jpg",
+    image: "images/2300/medidas.webp",
     variants: [
-      { name:"Chica", image: "images/2300/A.jpg" },
-      { name:"Mediana", image: "images/2300/B.jpg" },
-      { name:"Grande", image: "images/2300/C.jpg" },
+      { name:"Chica", image: "images/2300/a.webp" },
+      { name:"Mediana", image: "images/2300/b.webp" },
+      { name:"Grande", image: "images/2300/c.webp" },
     ]
   },
   {
@@ -74,10 +74,10 @@ export const products =
     category: "bombillas",
     price: 21360,
     description: "Acá va la descripción del producto.",
-    image: "images/2295/detalleDije.jpg",
+    image: "images/2295/detalle-dije.webp",
     variants: [
-      { name:"Caño Redondo", image: "images/2295/variosMotivos.png" },
-      { name:"Caño Plano", image: "images/2295/variosMotivos.png" },
+      { name:"Caño Redondo", image: "images/2295/varios-motivos.webp" },
+      { name:"Caño Plano", image: "images/2295/varios-motivos.webp" },
     ]
   },
   {
@@ -86,7 +86,7 @@ export const products =
     category: "mates",
     price: 58340,
     description: "Acá va la descripción del producto.",
-    image: "images/2294/Portada.jpg",
+    image: "images/2294/segunda.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
     // ]
@@ -97,7 +97,7 @@ export const products =
     category: "mates",
     price: 71450,
     description: "Acá va la descripción del producto.",
-    image: "images/2293/Portada.jpg",
+    image: "images/2293/portada.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
     // ]
@@ -108,7 +108,7 @@ export const products =
     category: "mates",
     price: 46150,
     description: "Acá va la descripción del producto.",
-    image: "images/2292/Marron.jpg",
+    image: "images/2292/marron.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
     // ]
@@ -119,7 +119,7 @@ export const products =
     category: "mates",
     price: 17470,
     description: "Acá va la descripción del producto.",
-    image: "images/2290/Negro.jpg",
+    image: "images/2290/negro.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
     // ]
@@ -130,7 +130,7 @@ export const products =
     category: "mates",
     price: 22780,
     description: "Acá va la descripción del producto.",
-    image: "images/2289/detalle.jpg",
+    image: "images/2289/detalle.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
     // ]
@@ -141,7 +141,7 @@ export const products =
     category: "mates",
     price: 40560,
     description: "Acá va la descripción del producto.",
-    image: "images/2287/suelaBridge.jpg",
+    image: "images/2287/suela-bridge.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
     // ]
@@ -152,7 +152,7 @@ export const products =
     category: "mates",
     price: 30890,
     description: "Acá va la descripción del producto.",
-    image: "images/2286/Negro.jpg",
+    image: "images/2286/negro.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
     // ]
@@ -163,7 +163,7 @@ export const products =
     category: "mates",
     price: 21220,
     description: "Acá va la descripción del producto.",
-    image: "images/2285/coloresVarios.jpg",
+    image: "images/2285/colores-varios.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
     // ]
@@ -174,11 +174,11 @@ export const products =
     category: "termeras",
     price: 85340,
     description: "Acá va la descripción del producto.",
-    image: "images/2573/2573.jpg",
+    image: "images/2573/portada.webp",
     variants: [
-      { name:"Negro", image: "images/2573/negro.jpg" },
-      { name:"Marrón", image: "images/2573/marron.jpg" },
-      { name:"Azul", image: "images/2573/azul.jpg" },
+      { name:"Negro", image: "images/2573/negro.webp" },
+      { name:"Marrón", image: "images/2573/marron.webp" },
+      { name:"Azul", image: "images/2573/azul.webp" },
     ]
   },
   {
@@ -187,13 +187,13 @@ export const products =
     category: "termeras",
     price: 133080,
     description: "Acá va la descripción del producto.",
-    image: "images/2572/Negro.jpg",
+    image: "images/2572/negro.webp",
     variants: [
-      { name:"Negro", image: "images/2572/Negro.jpg" },
-      { name:"Marrón", image: "images/2572/Chocolate.jpg" },
-      { name:"Azul", image: "images/2572/Azul.jpg" },
-      { name:"Rojo", image: "images/2572/Rojo.jpg" },
-      { name:"Verde", image: "images/2572/Verde.jpg" },
+      { name:"Negro", image: "images/2572/negro.webp" },
+      { name:"Marrón", image: "images/2572/marron.webp" },
+      { name:"Azul", image: "images/2572/azul.webp" },
+      { name:"Rojo", image: "images/2572/rojo.webp" },
+      { name:"Verde", image: "images/2572/verde.webp" },
     ]
   },
   {
@@ -202,11 +202,11 @@ export const products =
     category: "termeras",
     price: 165890,
     description: "Acá va la descripción del producto.",
-    image: "images/2571/2571.jpg",
+    image: "images/2571/portada.webp",
     variants: [
-      { name:"Marrón", image: "images/2571/Marron.jpg" },
-      { name:"Negro", image: "images/2571/Negro.jpg" },
-      { name:"Suela", image: "images/2571/Suela.jpg" },
+      { name:"Marrón", image: "images/2571/marron.webp" },
+      { name:"Negro", image: "images/2571/negro.webp" },
+      { name:"Suela", image: "images/2571/suela.webp" },
     ]
   },
   {
@@ -215,12 +215,12 @@ export const products =
     category: "termeras",
     price: 152760,
     description: "Acá va la descripción del producto.",
-    image: "images/2570/coloresVarios.jpg",
+    image: "images/2570/portada.webp",
     variants: [
-      { name:"Negro", image: "images/2570/Negro.jpg" },
-      { name:"Marrón", image: "images/2570/Chocolate.jpg" },
-      { name:"Azul", image: "images/2570/Azul.jpg" },
-      { name:"Rojo", image: "images/2570/Rojo.jpg" },
+      { name:"Negro", image: "images/2570/negro.webp" },
+      { name:"Marrón", image: "images/2570/marron.webp" },
+      { name:"Azul", image: "images/2570/azul.webp" },
+      { name:"Rojo", image: "images/2570/rojo.webp" },
     ]
   },
   {
@@ -229,10 +229,10 @@ export const products =
     category: "termeras",
     price: 171890,
     description: "Acá va la descripción del producto.",
-    image: "images/2569/coloresVarios.jpg",
+    image: "images/2569/colores-varios.webp",
     variants: [
-      { name:"Marrón", image: "images/2569/Chocolate.jpg" },
-      { name:"Suela", image: "images/2569/Suela.jpg" },
+      { name:"Marrón", image: "images/2569/chocolate.webp" },
+      { name:"Suela", image: "images/2569/suela.webp" },
     ]
   },
   {
@@ -241,11 +241,11 @@ export const products =
     category: "bombillas",
     price: 40320,
     description: "Acá va la descripción del producto.",
-    image: "images/2301/Portada.jpeg",
+    image: "images/2301/portada.webp",
     variants: [
-      { name:"Chica", image: "images/2301/A.jpeg" },
-      { name:"Mediana", image: "images/2301/B.jpeg" },
-      { name:"Grande", image: "images/2301/C.jpeg" },
+      { name:"Chica", image: "images/2301/a.webp" },
+      { name:"Mediana", image: "images/2301/b.webp" },
+      { name:"Grande", image: "images/2301/c.webp" },
     ]
   },
   {
@@ -254,10 +254,10 @@ export const products =
     category: "termeras",
     price: 142870,
     description: "Acá va la descripción del producto.",
-    image: "images/2568/coloresVarios.jpg",
+    image: "images/2568/colores-varios.webp",
     variants: [
-      { name:"Cemento", image: "images/2568/Cemento.jpg" },
-      { name:"Azul", image: "images/2568/Azul.jpg" },
+      { name:"Cemento", image: "images/2568/cemento.webp" },
+      { name:"Azul", image: "images/2568/azul.webp" },
 
     ]
   },
@@ -267,10 +267,10 @@ export const products =
     category: "termeras",
     price: 171890,
     description: "Acá va la descripción del producto.",
-    image: "images/2565/Portada.jpg",
+    image: "images/2565/portada.webp",
     variants: [
-      { name:"Marrón", image: "images/2565/Chocolate.jpg" },
-      { name:"Suela", image: "images/2565/Suela.jpg" },
+      { name:"Marrón", image: "images/2565/chocolate.webp" },
+      { name:"Suela", image: "images/2565/suela.webp" },
     ]
   },
   {
@@ -279,7 +279,7 @@ export const products =
     category: "termeras",
     price: 142870,
     description: "Acá va la descripción del producto.",
-    image: "images/2564/Frente.jpg",
+    image: "images/2564/portada.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
     // ]
@@ -290,10 +290,10 @@ export const products =
     category: "termeras",
     price: 166800,
     description: "Acá va la descripción del producto.",
-    image: "images/2563/Portada.jpg",
+    image: "images/2563/portada.webp",
     variants: [
-      { name:"Negro", image: "images/2563/Negro.jpg" },
-      { name:"Suela Bridge", image: "images/2563/SuelaBridge.jpg" },
+      { name:"Negro", image: "images/2563/negro.webp" },
+      { name:"Suela Bridge", image: "images/2563/suela-bridge.webp" },
     ]
   },
   {
@@ -302,11 +302,11 @@ export const products =
     category: "termeras",
     price: 90340,
     description: "Acá va la descripción del producto.",
-    image: "images/2562/Chocolate.jpg",
+    image: "images/2562/chocolate.webp",
     variants: [
-      { name:"Negro", image: "images/2562/Negro.jpg" },
-      { name:"Marrón", image: "images/2562/Chocolate.jpg" },
-      { name:"Suela", image: "images/2562/Suela.jpg" },
+      { name:"Negro", image: "images/2562/negro.webp" },
+      { name:"Marrón", image: "images/2562/chocolate.webp" },
+      { name:"Suela", image: "images/2562/suela.webp" },
     ]
   },
   {
@@ -315,11 +315,11 @@ export const products =
     category: "termeras",
     price: 84620,
     description: "Acá va la descripción del producto.",
-    image: "images/2561/Portada.jpg",
+    image: "images/2561/portada.webp",
     variants: [
-      { name:"Negro", image: "images/2561/Negro.jpg" },
-      { name:"Marrón", image: "images/2561/Chocolate.jpg" },
-      { name:"Suela", image: "images/2561/Suela.jpg" },
+      { name:"Negro", image: "images/2561/negro.webp" },
+      { name:"Marrón", image: "images/2561/chocolate.webp" },
+      { name:"Suela", image: "images/2561/suela.webp" },
     ]
   },
   {
@@ -328,11 +328,11 @@ export const products =
     category: "termeras",
     price: 145440,
     description: "Acá va la descripción del producto.",
-    image: "images/2555/Portada.jpg",
+    image: "images/2555/portada.webp",
     variants: [
-      { name:"Negro", image: "images/2555/Negro.jpg" },
-      { name:"Marrón", image: "images/2555/Chocolate.jpg" },
-      { name:"Suela", image: "images/2555/Suela.jpg" },
+      { name:"Negro", image: "images/2555/negro.webp" },
+      { name:"Marrón", image: "images/2555/chocolate.webp" },
+      { name:"Suela", image: "images/2555/suela.webp" },
     ]
   },
   {
@@ -341,7 +341,7 @@ export const products =
     category: "yerberos",
     price: 23810,
     description: "Acá va la descripción del producto.",
-    image: "images/2274/2274.jpg",
+    image: "images/2274/portada.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
     // ]
@@ -352,7 +352,7 @@ export const products =
     category: "yerberos",
     price: 28580,
     description: "Acá va la descripción del producto.",
-    image: "images/2273/2273.jpg",
+    image: "images/2273/portada.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
     // ]
@@ -363,7 +363,7 @@ export const products =
     category: "yerberos",
     price: 30550,
     description: "Acá va la descripción del producto.",
-    image: "images/2272/Marrón.jpg",
+    image: "images/2272/marron.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
     // ]
@@ -374,7 +374,7 @@ export const products =
     category: "yerberos",
     price: 26140,
     description: "Acá va la descripción del producto.",
-    image: "images/2271/Marron.jpg",
+    image: "images/2271/marron.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
     // ]
@@ -385,7 +385,7 @@ export const products =
     category: "yerberos",
     price: 24190,
     description: "Acá va la descripción del producto.",
-    image: "images/2270/Marron.jpg",
+    image: "images/2270/marron.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
     // ]
@@ -396,11 +396,11 @@ export const products =
     category: "yerberos",
     price: 30530,
     description: "Acá va la descripción del producto.",
-    image: "images/2267/ColoresVarios.jpg",
+    image: "images/2267/colores-varios.webp",
     variants: [
-      { name:"Negro", image: "images/2267/Negro.jpg" },
-      { name:"Marrón", image: "images/2267/Chocolate.jpg" },
-      { name:"Suela", image: "images/2267/Suela.jpg" },
+      { name:"Negro", image: "images/2267/negro.webp" },
+      { name:"Marrón", image: "images/2267/chocolate.webp" },
+      { name:"Suela", image: "images/2267/suela.webp" },
     ]
   },
   {
@@ -409,10 +409,10 @@ export const products =
     category: "yerberos",
     price: 22780,
     description: "Acá va la descripción del producto.",
-    image: "images/2266/coloresVarios.jpg",
+    image: "images/2266/colores-varios.webp",
     variants: [
-      { name:"Negro", image: "images/2266/Negro.jpg" },
-      { name:"Suela", image: "images/2266/Suela.jpg" },
+      { name:"Negro", image: "images/2266/negro.webp" },
+      { name:"Suela", image: "images/2266/suela.webp" },
     ]
   },
   {
@@ -421,10 +421,10 @@ export const products =
     category: "yerberos",
     price: 20500,
     description: "Acá va la descripción del producto.",
-    image: "images/2265/coloresVarios.jpg",
+    image: "images/2265/colores-varios.webp",
     variants: [
-      { name:"Marrón", image: "images/2265/Chocolate.jpg" },
-      { name:"Suela", image: "images/2265/Oxido.jpg" },
+      { name:"Marrón", image: "images/2265/chocolate.webp" },
+      { name:"Óxido", image: "images/2265/oxido.webp" },
     ]
   },
   {
@@ -433,11 +433,11 @@ export const products =
     category: "yerberos",
     price: 16010,
     description: "Acá va la descripción del producto.",
-    image: "images/2264/coloresVarios.jpg",
+    image: "images/2264/colores-varios.webp",
     variants: [
-      { name:"Azul", image: "images/2264/Azul.jpg" },
-      { name:"Cemento", image: "images/2264/Cemento.jpg" },
-      { name:"Verde", image: "images/2264/Verde.jpg" },
+      { name:"Azul", image: "images/2264/azul.webp" },
+      { name:"Cemento", image: "images/2264/cemento.webp" },
+      { name:"Verde", image: "images/2264/verde.webp" },
     ]
   },
   {
@@ -446,7 +446,7 @@ export const products =
     category: "mates",
     price: 71450,
     description: "Acá va la descripción del producto.",
-    image: "images/2284/Portada.jpeg",
+    image: "images/2284/portada.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
     // ]
@@ -457,10 +457,10 @@ export const products =
     category: "termeras",
     price: 92760,
     description: "Acá va la descripción del producto.",
-    image: "images/2552/Portada.jpeg",
-    // variants: [
-    //   { name:"variante", image: "imagen" },
-    // ]
+    image: "images/2552/portada.webp",
+    variants: [
+      { name:"Chocolate", image: "images/2552/chocolate.webp" },
+    ]
   },
   {
     id: 40,
@@ -468,7 +468,7 @@ export const products =
     category: "termeras",
     price: 92760,
     description: "Acá va la descripción del producto.",
-    image: "images/2550/Portada.jpg",
+    image: "images/2550/portada.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
     // ]
@@ -479,7 +479,7 @@ export const products =
     category: "bombillas",
     price: 40320,
     description: "Acá va la descripción del producto.",
-    image: "images/2302/Detalle.png",
+    image: "images/2302/portada.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
     // ]
