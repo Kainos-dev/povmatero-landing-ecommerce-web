@@ -5,7 +5,7 @@ export const products =
     name: "Mate Imperial",
     category: "mates",
     price: 52660,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image:"images/2329/varios-motivos.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
@@ -16,7 +16,7 @@ export const products =
     name: "Mate Torpedo Alpaca",
     category: "mates",
     price: 45480,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2330/ambas-virolas.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
@@ -27,7 +27,7 @@ export const products =
     name: "Mate Torpedo Cincelado",
     category: "mates",
     price: 23570,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2328/colores-varios.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
@@ -38,7 +38,7 @@ export const products =
     name: "Mate Torpedo Aluminio",
     category: "mates",
     price: 22150,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2327/colores-varios.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
@@ -49,7 +49,7 @@ export const products =
     name: "Mate Camionero Cincelado",
     category: "mates",
     price: 22320,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2306/colores-varios.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
@@ -60,7 +60,7 @@ export const products =
     name: "Bombilla Uruguaya",
     category: "bombillas",
     price: 30720,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2300/medidas.webp",
     variants: [
       { name:"Chica", image: "images/2300/a.webp" },
@@ -73,7 +73,7 @@ export const products =
     name: "Bombilla con Resorte",
     category: "bombillas",
     price: 21360,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2295/detalle-dije.webp",
     variants: [
       { name:"Caño Redondo", image: "images/2295/varios-motivos.webp" },
@@ -85,7 +85,7 @@ export const products =
     name: "Mate Imperial Crudo",
     category: "mates",
     price: 58340,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2294/segunda.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
@@ -96,7 +96,7 @@ export const products =
     name: "Mate Imperial Premium",
     category: "mates",
     price: 71450,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2293/portada.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
@@ -107,7 +107,7 @@ export const products =
     name: "Mate Tejido",
     category: "mates",
     price: 46150,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2292/marron.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
@@ -118,7 +118,7 @@ export const products =
     name: "Mate Porito",
     category: "mates",
     price: 17470,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2290/negro.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
@@ -129,7 +129,7 @@ export const products =
     name: "Mate Copita",
     category: "mates",
     price: 22780,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2289/detalle.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
@@ -140,7 +140,7 @@ export const products =
     name: "Mate Camionero Alpaca",
     category: "mates",
     price: 40560,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2287/suela-bridge.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
@@ -151,7 +151,7 @@ export const products =
     name: "Mate Camionero Acero",
     category: "mates",
     price: 30890,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2286/negro.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
@@ -162,7 +162,7 @@ export const products =
     name: "Mate Camionero Aluminio",
     category: "mates",
     price: 21220,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2285/colores-varios.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
@@ -173,7 +173,7 @@ export const products =
     name: "Termera Canasta Rígida Chica",
     category: "termeras",
     price: 85340,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2573/portada.webp",
     variants: [
       { name:"Negro", image: "images/2573/negro.webp" },
@@ -186,7 +186,7 @@ export const products =
     name: "Termera Canasta Rígida",
     category: "termeras",
     price: 133080,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2572/negro.webp",
     variants: [
       { name:"Negro", image: "images/2572/negro.webp" },
@@ -201,7 +201,7 @@ export const products =
     name: "Termera Rígida Grande",
     category: "termeras",
     price: 165890,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2571/portada.webp",
     variants: [
       { name:"Marrón", image: "images/2571/marron.webp" },
@@ -214,7 +214,7 @@ export const products =
     name: "Termera Rígida",
     category: "termeras",
     price: 152760,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2570/portada.webp",
     variants: [
       { name:"Negro", image: "images/2570/negro.webp" },
@@ -228,7 +228,7 @@ export const products =
     name: "Termera Mochila Cuero",
     category: "termeras",
     price: 171890,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2569/colores-varios.webp",
     variants: [
       { name:"Marrón", image: "images/2569/chocolate.webp" },
@@ -240,7 +240,7 @@ export const products =
     name: "Bombillón Alpaca",
     category: "bombillas",
     price: 40320,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2301/portada.webp",
     variants: [
       { name:"Chica", image: "images/2301/a.webp" },
@@ -253,7 +253,7 @@ export const products =
     name: "Termera Mochila Lona",
     category: "termeras",
     price: 142870,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2568/colores-varios.webp",
     variants: [
       { name:"Cemento", image: "images/2568/cemento.webp" },
@@ -266,7 +266,7 @@ export const products =
     name: "Termera Morral Cuero",
     category: "termeras",
     price: 171890,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2565/portada.webp",
     variants: [
       { name:"Marrón", image: "images/2565/chocolate.webp" },
@@ -278,7 +278,7 @@ export const products =
     name: "Termera Morral Lona",
     category: "termeras",
     price: 142870,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2564/portada.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
@@ -289,7 +289,7 @@ export const products =
     name: "Termera Doble Cierre",
     category: "termeras",
     price: 166800,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2563/portada.webp",
     variants: [
       { name:"Negro", image: "images/2563/negro.webp" },
@@ -301,7 +301,7 @@ export const products =
     name: "Termera Canasta",
     category: "termeras",
     price: 90340,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2562/chocolate.webp",
     variants: [
       { name:"Negro", image: "images/2562/negro.webp" },
@@ -314,7 +314,7 @@ export const products =
     name: "Termera Canasta Chica",
     category: "termeras",
     price: 84620,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2561/portada.webp",
     variants: [
       { name:"Negro", image: "images/2561/negro.webp" },
@@ -327,7 +327,7 @@ export const products =
     name: "Termera Cartera",
     category: "termeras",
     price: 145440,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2555/portada.webp",
     variants: [
       { name:"Negro", image: "images/2555/negro.webp" },
@@ -340,7 +340,7 @@ export const products =
     name: "Yerbero Redondo Chico",
     category: "yerberos",
     price: 23810,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2274/portada.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
@@ -351,7 +351,7 @@ export const products =
     name: "Yerbero Redondo Grande",
     category: "yerberos",
     price: 28580,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2273/portada.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
@@ -362,7 +362,7 @@ export const products =
     name: "Yerbero Rectangular Grande",
     category: "yerberos",
     price: 30550,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2272/marron.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
@@ -373,7 +373,7 @@ export const products =
     name: "Yerbero Rectangular Mediano",
     category: "yerberos",
     price: 26140,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2271/marron.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
@@ -384,7 +384,7 @@ export const products =
     name: "Yerbero Rectangular Chico",
     category: "yerberos",
     price: 24190,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2270/marron.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
@@ -395,7 +395,7 @@ export const products =
     name: "Yerbero Grande de Cuero",
     category: "yerberos",
     price: 30530,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2267/colores-varios.webp",
     variants: [
       { name:"Negro", image: "images/2267/negro.webp" },
@@ -408,7 +408,7 @@ export const products =
     name: "Yerbero de Cuero",
     category: "yerberos",
     price: 22780,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2266/colores-varios.webp",
     variants: [
       { name:"Negro", image: "images/2266/negro.webp" },
@@ -420,7 +420,7 @@ export const products =
     name: "Yerbero de Descarne",
     category: "yerberos",
     price: 20500,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2265/colores-varios.webp",
     variants: [
       { name:"Marrón", image: "images/2265/chocolate.webp" },
@@ -432,7 +432,7 @@ export const products =
     name: "Yerbero de Lona",
     category: "yerberos",
     price: 16010,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2264/colores-varios.webp",
     variants: [
       { name:"Azul", image: "images/2264/azul.webp" },
@@ -445,7 +445,7 @@ export const products =
     name: "Mate Imperial Roma",
     category: "mates",
     price: 71450,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2284/portada.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
@@ -456,7 +456,7 @@ export const products =
     name: "Cartera Termera Descarne",
     category: "termeras",
     price: 92760,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2552/portada.webp",
     variants: [
       { name:"Chocolate", image: "images/2552/chocolate.webp" },
@@ -467,7 +467,7 @@ export const products =
     name: "Cartera Termera Descarne Chica",
     category: "termeras",
     price: 92760,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2550/portada.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
@@ -478,7 +478,7 @@ export const products =
     name: "Bombillon Alpaca Punta de Bronce",
     category: "bombillas",
     price: 40320,
-    description: "Acá va la descripción del producto.",
+    description: "",
     image: "images/2302/portada.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
