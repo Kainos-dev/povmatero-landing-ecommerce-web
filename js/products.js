@@ -4,7 +4,7 @@ export const products =
     id: 1,
     name: "Mate Imperial",
     category: "mates",
-    price: 52660,
+    price: 54300,
     description: "",
     image:"images/2329/varios-motivos.webp",
     // variants: [
@@ -15,7 +15,7 @@ export const products =
     id: 2,
     name: "Mate Torpedo Alpaca",
     category: "mates",
-    price: 45480,
+    price: 46800,
     description: "",
     image: "images/2330/ambas-virolas.webp",
     // variants: [
@@ -26,7 +26,7 @@ export const products =
     id: 3,
     name: "Mate Torpedo Cincelado",
     category: "mates",
-    price: 23570,
+    price: 24350,
     description: "",
     image: "images/2328/colores-varios.webp",
     // variants: [
@@ -37,13 +37,14 @@ export const products =
     id: 4,
     name: "Mate Torpedo Aluminio",
     category: "mates",
-    price: 22150,
+    price: 22780,
     description: "",
     image: "images/2327/colores-varios.webp",
     // variants: [
     //   { name:"variante", image: "imagen" },
     // ]
   },
+  // HASTA ACÁ SE ACTUALIZARON LOS PRECIOS 14/7/26
   {
     id: 5,
     name: "Mate Camionero Cincelado",
