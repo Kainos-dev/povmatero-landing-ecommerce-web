@@ -241,6 +241,21 @@ input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--text); }
 }
 .toolbar .input { width: auto; flex: 1 1 180px; }
 
+/* Acciones en lote del listado */
+.bulk-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 12px;
+  padding: 10px 12px;
+  border: 1px solid #2a2a2a;
+  border-radius: var(--radius);
+  font-size: var(--font-size-sm);
+}
+.bulk-bar[hidden] { display: none; }
+.bulk-confirm { display: flex; flex-direction: column; gap: 8px; }
+
 /* ---------- Tablas ---------- */
 .table-wrap { overflow-x: auto; }
 

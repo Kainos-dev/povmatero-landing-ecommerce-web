@@ -49,6 +49,16 @@ export async function updateProduct(id, fields) {
   return ensureSaved(check(await supabase.from("products").update(fields).eq("id", id).select("id")));
 }
 
+// Publica o pasa a borrador varios productos. Devuelve los ids que sí se guardaron
+// (la RLS puede bloquear filas sin dar error: quien llama compara con lo pedido).
+export async function setProductsActive(ids, isActive) {
+  if (!ids.length) return [];
+  const rows = check(
+    await supabase.from("products").update({ is_active: isActive }).in("id", ids).select("id")
+  );
+  return rows.map((r) => r.id);
+}
+
 // ---------- Variantes ----------
 // Devuelve las variantes del producto con su costo interno (null si no tiene).
 export async function listVariants(productId) {
