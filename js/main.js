@@ -1,4 +1,4 @@
-import { products } from "./products.js";
+import { loadCatalog } from "./catalogSource.js";
 import { getYerbas, agruparYerbas } from "./yerbas.js";
 import { initUI } from "./components/ui.js";
 import { renderCatalog } from "./components/catalog.js";
@@ -13,13 +13,28 @@ import { initMobileMenu } from './components/ui.js';
 
 const UI = initUI();
 
-const cart = initCart(UI, products);
+const cart = initCart(UI);
 const modal = initModal(UI, cart);
 
-initFilters(UI, products, renderCatalog, modal, cart);
+// Catálogo: fuente actual por defecto, Supabase solo con ?fuente=supabase.
+const catalogPromise = loadCatalog();
+const EMPTY_STATE_HTML = UI.emptyState.innerHTML;
 
-// Render inicial
-renderCatalog(products, UI, modal, cart);
+function render(list) {
+  UI.emptyState.innerHTML = EMPTY_STATE_HTML;
+  renderCatalog(list, UI, modal, cart);
+}
+
+function showError() {
+  UI.productGrid.innerHTML = "";
+  UI.emptyState.innerHTML = "<p>No pudimos cargar los productos. Probá recargar la página en unos minutos.</p>";
+  UI.emptyState.style.display = "block";
+}
+
+const filters = initFilters(UI, catalogPromise, render, showError);
+
+// Render inicial ("Todo")
+filters.show("all");
 
 import { initHeaderScroll } from './components/ui.js';
 initHeaderScroll();

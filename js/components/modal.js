@@ -13,6 +13,8 @@ export function initModal(UI, cart) {
     const variant = product.variants.find(v => v.name === selectedVariant);
     if (!variant) return "";
 
+    // stock null = la variante no controla stock (fuente Supabase).
+    if (variant.stock == null) return "";
     if (variant.stock <= 0) return "Sin stock";
     if (variant.stock === 1) return "Última unidad disponible";
 
@@ -71,7 +73,7 @@ export function initModal(UI, cart) {
                       <button 
                         class="variant-btn"
                         data-name="${v.name}"
-                        data-img="${product.category === "yerbas" ? product.image : v.image}"
+                        data-img="${(product.category === "yerbas" ? product.image : v.image) ?? ""}"
                       >
                         ${v.name}
                       </button>
@@ -173,7 +175,7 @@ export function initModal(UI, cart) {
           finalPrice = variantData.price ?? product.price;
 
           // 🔥 stock solo yerbas
-          if (product.category === "yerbas" && variantData.stock <= 0) {
+          if (product.category === "yerbas" && variantData.stock != null && variantData.stock <= 0) {
             showToast("Sin stock disponible");
             return;
           }
