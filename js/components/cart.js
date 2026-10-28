@@ -39,7 +39,13 @@ export function initCart(UI) {
       `;
 
       // ➕ ➖
-      div.querySelector(".plus").onclick = () => {
+      // maxQty = stock disponible (null = no se controla stock)
+      const plus = div.querySelector(".plus");
+      const atLimit = item.maxQty != null && item.qty >= item.maxQty;
+      plus.disabled = atLimit;
+      if (atLimit) plus.title = "No hay más stock disponible";
+      plus.onclick = () => {
+        if (item.maxQty != null && item.qty >= item.maxQty) return;
         item.qty++;
         update();
       };
@@ -81,7 +87,12 @@ export function initCart(UI) {
       item.variant === product.variant
     );
 
+    // No se supera el stock disponible (maxQty null = no se controla).
+    const limit = product.maxQty ?? null;
+    if (limit != null && (existing?.qty ?? 0) >= limit) return false;
+
     if (existing) {
+      existing.maxQty = limit;
       existing.qty++;
     } else {
       cart.push({
@@ -91,6 +102,7 @@ export function initCart(UI) {
     }
 
     update();
+    return true;
   }
 
   // WHATSAPP

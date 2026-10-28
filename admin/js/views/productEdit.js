@@ -126,7 +126,7 @@ export async function renderProductEdit(view, productId) {
       try {
         if (isNew) {
           const created = await api.createProduct(data);
-          toast("Producto creado como borrador. Ahora agregá sus variantes.");
+          toast("Producto creado como borrador. Ahora cargá su precio o sus variantes.");
           location.hash = `#/productos/${created.id}`;
         } else {
           await api.updateProduct(product.id, data);
@@ -158,7 +158,9 @@ export async function renderProductEdit(view, productId) {
         if (currentVariants === null) { showError(error, "Esperá a que terminen de cargar las variantes."); return; }
         const publishable = currentVariants.some((v) => v.is_active && v.price > 0);
         if (!publishable) {
-          showError(error, "Para publicar, el producto necesita al menos una variante activa con precio mayor a 0.");
+          showError(error, api.isSimpleProduct(currentVariants)
+            ? "Para publicar, cargá un precio mayor a 0 en “Precio y stock”."
+            : "Para publicar, el producto necesita al menos una variante activa con precio mayor a 0.");
           return;
         }
       }
@@ -201,11 +203,17 @@ export async function renderProductEdit(view, productId) {
   let imagesVariantsKey = null;
 
   function refreshImages() {
-    const key = JSON.stringify(currentVariants.map((v) => [v.id, v.name, v.is_active]));
+    const simple = mode === "simple";
+    const key = JSON.stringify([simple, currentVariants.map((v) => [v.id, v.name, v.is_active])]);
     if (key === imagesVariantsKey) return;
     imagesVariantsKey = key;
-    renderImagesPanel(imagesSection, { product, variants: currentVariants });
+    // En un producto simple no hay variantes para elegir: todo va a la galería.
+    renderImagesPanel(imagesSection, { product, variants: simple ? [] : currentVariants });
   }
+
+  // "simple": precio y stock directo en el producto (variante interna "Único").
+  // "variants": tabla de variantes. Se decide al cargar; se puede pasar a variantes.
+  let mode = null;
   let stockVariantId = null;
   let stockTab = "entrada";
 
@@ -315,9 +323,10 @@ export async function renderProductEdit(view, productId) {
     const track = h("input", { type: "checkbox", checked: true });
     const submit = h("button", { type: "submit", class: "btn-primary btn-inline" }, "Agregar variante");
 
-    const useSingle = currentVariants.length === 0
-      ? h("button", { type: "button", class: "btn-ghost", onClick: () => { name.value = "Único"; price.focus(); } },
-          "Es un solo modelo: usar “Único”")
+    // Mientras no tenga más de un modelo, se puede volver a "Producto simple".
+    const useSingle = api.isSimpleProduct(currentVariants)
+      ? h("button", { type: "button", class: "btn-ghost", onClick: () => { mode = "simple"; loadVariants(); } },
+          "Es un solo modelo: volver a producto simple")
       : null;
 
     const form = h("form", { class: "new-variant", novalidate: true },
@@ -372,8 +381,80 @@ export async function renderProductEdit(view, productId) {
     return form;
   }
 
+  // ------------------------------------------------------------------
+  // Producto simple: precio, costo, SKU y stock sin variantes visibles
+  // ------------------------------------------------------------------
+  function simpleForm(v) {
+    const price = h("input", { class: "input input-num", type: "number", min: "0", step: "0.01", placeholder: "Precio", value: v ? String(v.price) : "", "aria-label": "Precio" });
+    const cost = h("input", { class: "input input-num", type: "number", min: "0", step: "0.01", placeholder: "Opcional", value: v?.cost == null ? "" : String(v.cost), "aria-label": "Costo" });
+    const sku = h("input", { class: "input input-sku", maxlength: "64", placeholder: "Opcional", value: v?.sku ?? "", "aria-label": "SKU" });
+    const track = h("input", { type: "checkbox", checked: v ? v.track_stock : true, "aria-label": "Controla stock" });
+    const submit = h("button", { type: "submit", class: "btn-primary btn-inline", disabled: !!v }, v ? "Guardar" : "Guardar precio");
+
+    const stockInfo = !v
+      ? h("p", { class: "muted" }, "Después de guardar el precio vas a poder cargar el stock.")
+      : v.track_stock
+        ? h("div", { class: "actions" },
+            h("span", {}, "Stock actual: ", h("strong", {}, String(v.stock))),
+            h("button", { type: "button", class: "btn-ghost btn-sm", onClick: () => openStock(v.id) }, "Registrar stock"))
+        : h("p", { class: "muted" }, "Se vende sin controlar stock.");
+
+    const form = h("form", { class: "new-variant", novalidate: true },
+      h("div", { class: "new-variant-fields" },
+        field("Precio", price),
+        field("Costo", cost, "Interno: no se muestra en la tienda."),
+        field("SKU", sku),
+        h("label", { class: "check" }, track, h("span", {}, "Controla stock"))
+      ),
+      stockInfo,
+      h("div", { class: "actions" }, submit)
+    );
+    const markDirty = () => { submit.disabled = false; };
+    [price, cost, sku].forEach((el) => el.addEventListener("input", markDirty));
+    track.addEventListener("change", markDirty);
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const parsed = parseVariant({ name: { value: api.SINGLE_VARIANT_NAME }, price, cost, track });
+      if (parsed.error) { toast(parsed.error, "error"); return; }
+
+      submit.disabled = true;
+      submit.textContent = "Guardando…";
+      let variantId = v?.id;
+      try {
+        if (v) await api.updateVariant(v.id, { price: parsed.fields.price, track_stock: parsed.fields.track_stock, is_active: true });
+        else variantId = (await api.createVariant(product.id, { ...parsed.fields, sort_order: 0 })).id;
+      } catch (err) {
+        console.error(err);
+        toast(errorMessage(err), "error");
+        submit.disabled = false;
+        submit.textContent = v ? "Guardar" : "Guardar precio";
+        return;
+      }
+
+      const pending = [];
+      try {
+        if (parsed.cost !== (v?.cost ?? null)) await api.saveVariantCost(variantId, parsed.cost);
+      } catch (err) {
+        console.error(err);
+        pending.push(`el costo no (${errorMessage(err).replace(/\.$/, "")})`);
+      }
+      try {
+        if (api.normalizeSku(sku.value) !== (v?.sku ?? null)) await api.saveVariantSku(variantId, sku.value);
+      } catch (err) {
+        console.error(err);
+        pending.push(`el SKU no (${errorMessage(err).replace(/\.$/, "")})`);
+      }
+      if (pending.length) toast(`El precio se guardó, pero ${pending.join(" y ")}.`, "error");
+      else toast("Precio guardado.");
+      await loadVariants();
+    });
+
+    return form;
+  }
+
   async function loadVariants() {
-    const title = h("h3", {}, "Variantes y precios");
+    const title = h("h3", {}, mode === "simple" ? "Precio y stock" : "Variantes y precios");
     mount(variantsSection, title, h("p", { class: "muted" }, "Cargando variantes…"));
 
     try {
@@ -385,6 +466,27 @@ export async function renderProductEdit(view, productId) {
     }
 
     const sellable = currentVariants.some((v) => v.is_active && v.price > 0);
+    const simple = api.isSimpleProduct(currentVariants);
+    if (mode === null || (mode === "simple" && !simple)) mode = simple ? "simple" : "variants";
+
+    if (mode === "simple") {
+      const v = currentVariants[0] ?? null;
+      mount(variantsSection,
+        h("h3", {}, "Precio y stock"),
+        h("p", { class: "muted" }, "Producto simple: un solo modelo, sin talles, colores ni pesos para elegir."),
+        product.is_active && !sellable
+          ? h("p", { class: "notice-warn" }, "Atención: el producto está publicado pero no tiene precio.")
+          : null,
+        simpleForm(v),
+        h("div", { class: "actions" },
+          h("button", { type: "button", class: "btn-ghost", onClick: () => { mode = "variants"; loadVariants(); } },
+            "Tiene variantes (talles, colores, pesos…)"))
+      );
+      if (stockVariantId !== null) openStock(stockVariantId, stockTab, { scroll: false });
+      refreshImages();
+      return;
+    }
+
     const warning = product.is_active && !sellable
       ? h("p", { class: "notice-warn" }, "Atención: el producto está publicado pero no tiene variantes activas con precio.")
       : null;
@@ -403,7 +505,7 @@ export async function renderProductEdit(view, productId) {
     mount(variantsSection, 
       title,
       h("p", { class: "muted" },
-        "Cada variante tiene su propio precio y stock. Si el producto tiene un solo modelo, creá una variante llamada “Único”. ",
+        "Cada variante tiene su propio precio y stock. ",
         "El costo es interno y nunca se muestra en la tienda. El stock se carga con el botón “Stock” de cada variante."),
       warning,
       table,
@@ -426,7 +528,7 @@ export async function renderProductEdit(view, productId) {
     ),
     productForm(),
     isNew
-      ? h("p", { class: "muted" }, "Después de crear el producto vas a poder agregar sus variantes y precios.")
+      ? h("p", { class: "muted" }, "Después de crear el producto vas a poder cargar su precio y stock, o sus variantes.")
       : [publishSection(), variantsSection, stockSection, imagesSection]
   );
 

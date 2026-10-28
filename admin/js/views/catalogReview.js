@@ -2,6 +2,7 @@
 // Cruza la base con las fuentes actuales de la tienda (js/products.js y la hoja
 // WEB). Solo lee: no cambia nada.
 import * as api from "../api/catalog.js";
+import { isSimpleProduct } from "../api/catalog.js";
 import { listAllImages, imageSource } from "../api/images.js";
 import { h, mount, errorMessage, formatPrice } from "../ui.js";
 
@@ -44,7 +45,7 @@ export function reviewCatalog({ categories, products, variants, images, legacyId
     const isYerba = category?.slug === "yerbas";
     const issues = [];
 
-    if (!vs.length) issues.push(issue("block", "Sin variantes"));
+    if (!vs.length) issues.push(issue("block", "Sin precio cargado"));
     else if (!sellable.length) issues.push(issue("block", "Ninguna variante activa con precio mayor a 0"));
     if (!category) issues.push(issue("block", "Sin categoría"));
     else if (!category.is_active) issues.push(issue("block", `Categoría "${category.name}" desactivada`));
@@ -182,7 +183,7 @@ export async function renderCatalogReview(view) {
         h("td", {}, h("a", { href: `#/productos/${r.product.id}` }, r.product.name)),
         h("td", {}, r.category?.name ?? "—"),
         h("td", {}, h("span", { class: `badge ${r.product.is_active ? "badge-ok" : ""}` }, r.product.is_active ? "Publicado" : "Borrador")),
-        h("td", {}, `${r.activeCount} de ${r.variants.length} activas`),
+        h("td", {}, !r.variants.length ? "—" : isSimpleProduct(r.variants) ? "Producto simple" : `${r.activeCount} de ${r.variants.length} activas`),
         h("td", {}, String(r.imageCount)),
         h("td", {}, r.issues.length
           ? h("div", { class: "image-badges" }, r.issues.map((i) =>

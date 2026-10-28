@@ -12,6 +12,8 @@
 // y cart.js:
 //   { id, name, category, description, price, image, variants? }
 //   variants: [{ name, price, image, stock }]   (stock null = no se controla)
+//   stock:    solo en productos simples (sin variantes), mismo criterio
+//   gallery:  [src] portada + imágenes generales del producto (solo Supabase)
 
 import { products as legacyProducts } from "./products.js";
 import { getYerbas, transformarYerbas } from "./yerbas.js";
@@ -85,11 +87,12 @@ function loadLegacyCatalog() {
 }
 
 // ---------------------------------------------------------------------
-// Supabase: una sola consulta, después se filtra en memoria
+// Supabase: catálogo (vista) + galería (imágenes generales), en paralelo;
+// después se filtra en memoria
 // ---------------------------------------------------------------------
 async function loadSupabaseCatalog(timeoutMs) {
-  const rows = await fetchStorefrontRows(timeoutMs);
-  const products = mapRowsToProducts(rows);
+  const { rows, galleryRows } = await fetchStorefrontRows(timeoutMs);
+  const products = mapRowsToProducts(rows, galleryRows);
 
   // Categorías con al menos un producto publicado, en el orden en que aparecen.
   const categories = [];
@@ -126,23 +129,42 @@ async function fetchStorefrontRows(timeoutMs) {
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const { data, error } = await supabase
-      .from("storefront_catalog")
-      .select(VIEW_COLUMNS)
-      .order("product_sort")
-      .order("product_id")
-      .order("variant_sort")
-      .abortSignal(controller.signal);
+    const [catalog, gallery] = await Promise.all([
+      supabase
+        .from("storefront_catalog")
+        .select(VIEW_COLUMNS)
+        .order("product_sort")
+        .order("product_id")
+        .order("variant_sort")
+        .abortSignal(controller.signal),
+      // Imágenes generales de productos publicados (la RLS filtra el resto).
+      supabase
+        .from("product_images")
+        .select("product_id, src, is_cover, sort_order")
+        .is("variant_id", null)
+        .order("product_id")
+        .order("sort_order")
+        .order("id")
+        .abortSignal(controller.signal),
+    ]);
 
-    if (error) throw new Error(`Supabase: ${error.message}`);
-    return data ?? [];
+    if (catalog.error) throw new Error(`Supabase: ${catalog.error.message}`);
+    // Sin galería la tienda funciona igual (portada y fotos de variantes).
+    if (gallery.error) console.warn("Catálogo: no se pudo leer la galería de imágenes.", gallery.error);
+    return { rows: catalog.data ?? [], galleryRows: gallery.error ? [] : (gallery.data ?? []) };
   } finally {
     clearTimeout(timer);
   }
 }
 
-export function mapRowsToProducts(rows) {
+export function mapRowsToProducts(rows, galleryRows = []) {
   const byId = new Map();
+
+  const galleryByProduct = new Map();
+  for (const g of galleryRows) {
+    if (!galleryByProduct.has(g.product_id)) galleryByProduct.set(g.product_id, []);
+    galleryByProduct.get(g.product_id).push(g.src);
+  }
 
   for (const row of rows) {
     let product = byId.get(row.product_id);
@@ -174,14 +196,19 @@ export function mapRowsToProducts(rows) {
       ?? (isYerba ? YERBA_PLACEHOLDER : PRODUCT_PLACEHOLDER);
     const price = Math.min(...variants.map((v) => v.price));
 
-    // Un producto con su única variante "Único" se muestra sin variantes.
+    // Un producto con su única variante "Único" es un producto simple: se muestra
+    // sin variantes, pero conserva su stock (null = no lo controla).
     const single = variants.length === 1 && variants[0].name === SINGLE_VARIANT_NAME;
+
+    // Galería: la portada primero y después las demás imágenes generales, sin repetir.
+    const gallery = [...new Set([image, ...(galleryByProduct.get(product.id) ?? [])])];
 
     return {
       ...product,
       price,
       image,
-      ...(single ? {} : { variants }),
+      gallery,
+      ...(single ? { stock: variants[0].stock } : { variants }),
     };
   });
 }

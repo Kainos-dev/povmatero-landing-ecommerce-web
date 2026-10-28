@@ -1,5 +1,12 @@
 import { showToast } from "./ui.js";
 
+// Texto seguro para insertar en HTML (nombres e imágenes vienen de la base).
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (ch) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]
+  ));
+}
+
 export function initModal(UI, cart) {
 
   function formatPrice(price) {
@@ -7,37 +14,54 @@ export function initModal(UI, cart) {
     return "$" + price.toLocaleString("es-AR");
   }
 
-  function getStockText(product, selectedVariant) {
-    if (!product.variants) return "";
-
+  // Stock de lo que se está por comprar: la variante elegida o, en un producto
+  // simple, el producto. null = no se controla stock (o todavía no hay variante).
+  function stockFor(product, selectedVariant) {
+    if (!product.variants) return product.stock ?? null;
     const variant = product.variants.find(v => v.name === selectedVariant);
-    if (!variant) return "";
-
-    // stock null = la variante no controla stock (fuente Supabase).
-    if (variant.stock == null) return "";
-    if (variant.stock <= 0) return "Sin stock";
-    if (variant.stock === 1) return "Última unidad disponible";
-
-    return `Stock disponible: ${variant.stock}`;
+    return variant ? (variant.stock ?? null) : null;
   }
 
-  // Muestra el aviso de stock si alguna variante lo informa
-  // (yerbas de la hoja o variantes de Supabase que controlan stock).
+  function getStockText(stock) {
+    if (stock == null) return "";
+    if (stock <= 0) return "Sin stock";
+    if (stock === 1) return "Última unidad disponible";
+    return `Stock disponible: ${stock}`;
+  }
+
+  // Muestra el aviso de stock si el producto o alguna variante lo informa
+  // (yerbas de la hoja o productos de Supabase que controlan stock).
   function hasStockInfo(product) {
-    return (product.variants ?? []).some(v => v.stock != null);
+    if (!product.variants) return product.stock != null;
+    return product.variants.some(v => v.stock != null);
   }
 
   function open(product) {
 
     let selectedImage = product.image;
     let selectedVariant = null;
+    const gallery = product.gallery ?? [];
+    const simpleOutOfStock = !product.variants && product.stock != null && product.stock <= 0;
 
     function render() {
       UI.modalBody.innerHTML = `
         <div class="modal-content vertical">
 
           <div class="modal-image">
-            <img src="${selectedImage}" />
+            <img src="${escapeHtml(selectedImage)}" />
+            ${
+              gallery.length > 1
+                ? `
+                  <div class="modal-thumbs">
+                    ${gallery.map((src) => `
+                      <button type="button" class="modal-thumb${src === selectedImage ? " active" : ""}" data-src="${escapeHtml(src)}" aria-label="Ver imagen">
+                        <img src="${escapeHtml(src)}" alt="" loading="lazy" />
+                      </button>
+                    `).join("")}
+                  </div>
+                `
+                : ""
+            }
           </div>
 
           <div class="modal-info">
@@ -62,24 +86,24 @@ export function initModal(UI, cart) {
             </p>
 
             ${
+              hasStockInfo(product)
+                ? `
+                  <p class="modal-stock" id="modalStock">
+                    ${product.variants ? "" : getStockText(product.stock)}
+                  </p>
+                `
+                : ""
+            }
+
+            ${
               product.variants
                 ? `
-                  ${
-                    hasStockInfo(product)
-                      ? `
-                        <p class="modal-stock" id="modalStock">
-                          ${selectedVariant ? getStockText(product, selectedVariant) : ""}
-                        </p>
-                      `
-                      : ""
-                  }
-
                   <div class="modal-variants">
                     ${product.variants.map((v) => `
-                      <button 
+                      <button
                         class="variant-btn"
-                        data-name="${v.name}"
-                        data-img="${(product.category === "yerbas" ? product.image : v.image) ?? ""}"
+                        data-name="${escapeHtml(v.name)}"
+                        data-img="${escapeHtml((product.category === "yerbas" ? product.image : v.image) ?? "")}"
                       >
                         ${v.name}
                       </button>
@@ -89,13 +113,35 @@ export function initModal(UI, cart) {
                 : ""
             }
 
-            <button class="btn-add" id="modalAdd">
-              Agregar al carrito
+            <button class="btn-add" id="modalAdd"${simpleOutOfStock ? " disabled" : ""}>
+              ${simpleOutOfStock ? "Sin stock" : "Agregar al carrito"}
             </button>
           </div>
 
         </div>
       `;
+
+      const mainImg = UI.modalBody.querySelector(".modal-image > img");
+
+      function showImage(src) {
+        if (!src || src === selectedImage) return;
+        mainImg.style.opacity = 0;
+        setTimeout(() => {
+          mainImg.src = src;
+          mainImg.style.opacity = 1;
+        }, 120);
+        selectedImage = src;
+        UI.modalBody.querySelectorAll(".modal-thumb").forEach(t => {
+          t.classList.toggle("active", t.dataset.src === src);
+        });
+      }
+
+      // =========================
+      // GALERÍA
+      // =========================
+      UI.modalBody.querySelectorAll(".modal-thumb").forEach(thumb => {
+        thumb.onclick = () => showImage(thumb.dataset.src);
+      });
 
       // =========================
       // VARIANTES
@@ -108,25 +154,12 @@ export function initModal(UI, cart) {
 
           selectedVariant = variantName;
 
-          // 🔥 CAMBIO DE IMAGEN (solo si no es yerba)
-          if (product.category !== "yerbas" && newSrc) {
-            const img = UI.modalBody.querySelector(".modal-image img");
-
-            if (newSrc !== img.src) {
-              img.style.opacity = 0;
-
-              setTimeout(() => {
-                img.src = newSrc;
-                img.style.opacity = 1;
-              }, 120);
-            }
-
-            selectedImage = newSrc;
-          }
+          // Cambio de imagen (solo si no es yerba y la variante tiene foto propia)
+          if (product.category !== "yerbas" && newSrc) showImage(newSrc);
 
           const variantData = product.variants.find(v => v.name === variantName);
 
-          // 🔥 PRECIO
+          // PRECIO
           const priceEl = UI.modalBody.querySelector("#modalPrice");
           if (variantData && priceEl) {
             const finalPrice = variantData.price ?? product.price;
@@ -139,19 +172,17 @@ export function initModal(UI, cart) {
           // STOCK (solo si la variante lo informa)
           const stockEl = UI.modalBody.querySelector("#modalStock");
           if (variantData && stockEl) {
-            stockEl.textContent = getStockText(product, variantName);
+            stockEl.textContent = getStockText(stockFor(product, variantName));
           }
 
-          // 🔥 ACTIVE (fix real)
-          const allBtns = UI.modalBody.querySelectorAll(".variant-btn");
-
-          allBtns.forEach(b => {
+          // ACTIVE
+          UI.modalBody.querySelectorAll(".variant-btn").forEach(b => {
             b.classList.remove("active");
           });
 
           btn.classList.add("active");
 
-          // 🔥 habilitar botón
+          // habilitar botón
           const addBtn = UI.modalBody.querySelector("#modalAdd");
 
           if (addBtn) {
@@ -165,7 +196,6 @@ export function initModal(UI, cart) {
       // CARRITO
       // =========================
       UI.modalBody.querySelector("#modalAdd").onclick = () => {
-        console.log("VARIANTE SELECCIONADA:", selectedVariant);
         if (product.variants && !selectedVariant) {
           showToast("Seleccione una variante.");
           return;
@@ -175,25 +205,30 @@ export function initModal(UI, cart) {
 
         if (product.variants) {
           const variantData = product.variants.find(v => v.name === selectedVariant);
-
           if (!variantData) return;
-
           finalPrice = variantData.price ?? product.price;
-
-          // Sin stock: solo variantes que informan stock (yerbas de la hoja o
-          // variantes de Supabase con control de stock).
-          if (variantData.stock != null && variantData.stock <= 0) {
-            showToast("Sin stock disponible");
-            return;
-          }
         }
 
-        cart.add({
+        // Sin stock: variantes o productos simples que informan stock
+        // (yerbas de la hoja o productos de Supabase con control de stock).
+        const stock = stockFor(product, selectedVariant);
+        if (stock != null && stock <= 0) {
+          showToast("Sin stock disponible");
+          return;
+        }
+
+        const added = cart.add({
           ...product,
           image: selectedImage,
           variant: selectedVariant,
-          price: finalPrice
+          price: finalPrice,
+          maxQty: stock,
         });
+
+        if (!added) {
+          showToast(`No hay más stock: ya tenés ${stock} en el carrito.`);
+          return;
+        }
 
         showToast(`${product.name} ${selectedVariant || ""} agregado/a.`);
       };

@@ -1,4 +1,4 @@
-import { listProducts, listCategories, setProductsActive } from "../api/catalog.js";
+import { listProducts, listCategories, setProductsActive, isSimpleProduct } from "../api/catalog.js";
 import { h, mount, formatPrice, errorMessage, normalizeText, toast } from "../ui.js";
 
 function summarize(product) {
@@ -15,7 +15,9 @@ function summarize(product) {
   }
 
   return {
-    variants: variants.length ? `${active.length} de ${variants.length} activas` : null,
+    variants: !variants.length ? null
+      : isSimpleProduct(variants) ? "Producto simple"
+      : `${active.length} de ${variants.length} activas`,
     price,
     stock: tracked.length ? String(tracked.reduce((sum, v) => sum + v.stock, 0)) : "—",
   };
@@ -102,7 +104,7 @@ export async function renderProductList(view) {
         : "No hay cambios para hacer con la selección actual.",
       unchanged ? `Sin cambios en ${plural(unchanged, "producto", "productos")}: ya ${publishing ? "publicados" : "en borrador"}.` : null,
       blocked.length
-        ? `${blocked.length === 1 ? "Se omite" : "Se omiten"} ${plural(blocked.length, "producto", "productos")} sin variante activa con precio mayor a 0: ${blocked.map((p) => p.name).join(", ")}.`
+        ? `${blocked.length === 1 ? "Se omite" : "Se omiten"} ${plural(blocked.length, "producto", "productos")} sin precio (o sin variantes activas con precio): ${blocked.map((p) => p.name).join(", ")}.`
         : null,
     ];
 
@@ -163,7 +165,7 @@ export async function renderProductList(view) {
       h("td", { class: "center", onClick: (e) => { if (e.target === e.currentTarget) { e.stopPropagation(); check.click(); } } }, check),
       h("td", {}, h("a", { href }, product.name)),
       h("td", {}, categoryName.get(product.category_id) ?? "—"),
-      h("td", {}, s.variants ?? h("span", { class: "badge badge-warn" }, "Sin variantes")),
+      h("td", {}, s.variants ?? h("span", { class: "badge badge-warn" }, "Sin precio")),
       h("td", {}, s.price),
       h("td", { class: "num" }, s.stock),
       h("td", {}, h("span", { class: product.is_active ? "badge badge-ok" : "badge" },

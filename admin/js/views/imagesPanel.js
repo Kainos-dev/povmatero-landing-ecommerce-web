@@ -1,5 +1,6 @@
-// Sección "Imágenes" de un producto: galería, subir a Storage, registrar del repo,
-// portada, variante, orden, texto alternativo y eliminación segura.
+// Sección "Imágenes" de un producto: galería del producto e imágenes de variantes,
+// subir a Storage, portada, orden, texto alternativo y eliminación segura.
+// Las rutas viejas del repo (images/...) se pasan a Storage desde la pantalla "Imágenes".
 import * as img from "../api/images.js";
 import { convertToWebp } from "../imageConvert.js";
 import { h, mount, field, showError, toast, errorMessage } from "../ui.js";
@@ -11,7 +12,7 @@ const SOURCE_LABELS = { storage: "Storage", repo: "Repo", other: "Externa" };
  * variants: lista de variantes del producto (para asignar imágenes)
  */
 export function renderImagesPanel(section, { product, variants }) {
-  const gallery = h("div", { class: "image-grid" });
+  const gallery = h("div", { class: "image-groups" });
   let images = [];
 
   const variantName = new Map(variants.map((v) => [v.id, v.name]));
@@ -40,12 +41,29 @@ export function renderImagesPanel(section, { product, variants }) {
     renderGallery();
   }
 
+  // Galería del producto (sin variante) y, aparte, las imágenes de cada variante.
+  // El orden se cambia dentro de cada grupo.
+  const productImages = () => images.filter((i) => i.variant_id == null);
+  const variantImages = () => images.filter((i) => i.variant_id != null);
+
   function renderGallery() {
     if (!images.length) {
       mount(gallery, h("p", { class: "empty-box" }, "Este producto todavía no tiene imágenes."));
       return;
     }
-    mount(gallery, images.map((image, index) => imageCard(image, index)));
+    const own = productImages();
+    const byVariant = variantImages();
+    mount(gallery,
+      h("h4", {}, "Galería del producto"),
+      own.length
+        ? h("div", { class: "image-grid" }, own.map((image, index) => imageCard(image, index, own)))
+        : h("p", { class: "muted" }, "Sin imágenes generales. Subí fotos con “Asignar a: Todo el producto”."),
+      byVariant.length
+        ? [h("h4", {}, "Imágenes de variantes"),
+           h("p", { class: "muted" }, "Se muestran en la tienda al elegir esa variante."),
+           h("div", { class: "image-grid" }, byVariant.map((image, index) => imageCard(image, index, byVariant)))]
+        : null
+    );
   }
 
   // ---------------- Acciones ----------------
@@ -63,13 +81,18 @@ export function renderImagesPanel(section, { product, variants }) {
     await load();
   }
 
-  async function move(index, direction) {
-    const reordered = [...images];
+  // Mueve una imagen dentro de su grupo y renumera el orden de todas, para que
+  // los dos grupos no compartan números.
+  async function move(group, index, direction) {
+    const reordered = [...group];
     const [item] = reordered.splice(index, 1);
     reordered.splice(index + direction, 0, item);
+    const all = item.variant_id == null
+      ? [...reordered, ...variantImages()]
+      : [...productImages(), ...reordered];
     try {
-      for (let i = 0; i < reordered.length; i++) {
-        if (reordered[i].sort_order !== i) await img.updateImage(reordered[i].id, { sort_order: i });
+      for (let i = 0; i < all.length; i++) {
+        if (all[i].sort_order !== i) await img.updateImage(all[i].id, { sort_order: i });
       }
     } catch (err) {
       console.error(err);
@@ -102,12 +125,14 @@ export function renderImagesPanel(section, { product, variants }) {
       message += " El archivo del repositorio no se tocó.";
     }
 
-    // Si se borró la portada, la primera imagen restante pasa a serlo.
+    // Si se borró la portada, pasa a serlo la primera de la galería del producto
+    // (o, si no hay, la primera imagen restante).
     if (image.is_cover) {
       try {
         const remaining = await img.listImages(product.id);
-        if (remaining.length && !remaining.some((i) => i.is_cover)) {
-          await img.updateImage(remaining[0].id, { is_cover: true });
+        const next = remaining.find((i) => i.variant_id == null) ?? remaining[0];
+        if (next && !remaining.some((i) => i.is_cover)) {
+          await img.updateImage(next.id, { is_cover: true });
           message += " La primera imagen pasó a ser la portada.";
         }
       } catch (err) {
@@ -122,7 +147,7 @@ export function renderImagesPanel(section, { product, variants }) {
   }
 
   // ---------------- Tarjeta ----------------
-  function imageCard(image, index) {
+  function imageCard(image, index, group) {
     const source = img.imageSource(image.src);
     const alt = h("input", { class: "input", maxlength: "160", value: image.alt, placeholder: "Texto alternativo", "aria-label": "Texto alternativo" });
     const variant = variantSelect(image.variant_id);
@@ -173,14 +198,17 @@ export function renderImagesPanel(section, { product, variants }) {
         h("span", { class: "badge" }, image.variant_id == null ? "Todo el producto" : (variantName.get(image.variant_id) ?? "Variante"))
       ),
       h("p", { class: "image-src", title: image.src }, source === "storage" ? img.storagePathFromSrc(image.src) : image.src),
-      field("Variante", variant),
+      variants.length || image.variant_id != null ? field("Asignar a", variant) : null,
       field("Texto alternativo", alt),
       h("div", { class: "actions" },
         save,
-        h("button", { type: "button", class: "btn-ghost btn-sm", disabled: image.is_cover, onClick: () => setCover(image) },
-          image.is_cover ? "Es la portada" : "Hacer portada"),
-        h("button", { type: "button", class: "btn-ghost btn-sm", disabled: index === 0, "aria-label": "Mover antes", onClick: () => move(index, -1) }, "↑"),
-        h("button", { type: "button", class: "btn-ghost btn-sm", disabled: index === images.length - 1, "aria-label": "Mover después", onClick: () => move(index, 1) }, "↓"),
+        // La portada se elige entre las imágenes de la galería del producto.
+        image.variant_id == null || image.is_cover
+          ? h("button", { type: "button", class: "btn-ghost btn-sm", disabled: image.is_cover, onClick: () => setCover(image) },
+              image.is_cover ? "Es la portada" : "Hacer portada")
+          : null,
+        h("button", { type: "button", class: "btn-ghost btn-sm", disabled: index === 0, "aria-label": "Mover antes", onClick: () => move(group, index, -1) }, "↑"),
+        h("button", { type: "button", class: "btn-ghost btn-sm", disabled: index === group.length - 1, "aria-label": "Mover después", onClick: () => move(group, index, 1) }, "↓"),
         deleteButton
       ),
       confirmSlot
@@ -199,7 +227,7 @@ export function renderImagesPanel(section, { product, variants }) {
       h("h4", {}, "Subir imágenes"),
       h("p", { class: "muted" }, "Se convierten a WebP (máx. 1600 px, calidad 85 %) antes de subirse."),
       field("Archivos", fileInput),
-      field("Asignar a", variant),
+      variants.length ? field("Asignar a", variant) : null,
       status,
       error,
       h("div", { class: "actions" }, submit)
@@ -225,7 +253,8 @@ export function renderImagesPanel(section, { product, variants }) {
           await img.uploadImage(product.id, blob, file.name, {
             variantId: selectedVariant(variant),
             alt: product.name,
-            isCover: !hasCover(),
+            // La primera imagen de la galería pasa a ser la portada si todavía no hay.
+            isCover: !hasCover() && selectedVariant(variant) == null,
             sortOrder: nextSortOrder(),
           });
           uploaded++;
@@ -247,66 +276,16 @@ export function renderImagesPanel(section, { product, variants }) {
     return form;
   }
 
-  // ---------------- Registrar del repositorio ----------------
-  function repoForm() {
-    const path = h("input", { class: "input", placeholder: "images/2300/a.webp", "aria-label": "Ruta en el repositorio" });
-    const variant = variantSelect(null);
-    const error = h("p", { class: "form-error", role: "alert", hidden: true });
-    const submit = h("button", { type: "submit", class: "btn-primary btn-inline" }, "Agregar");
-
-    const form = h("form", { class: "image-add-form", novalidate: true },
-      h("h4", {}, "Usar imagen del repositorio"),
-      h("p", { class: "muted" }, "Para imágenes que ya están en la carpeta images/ del sitio. No se vuelven a subir."),
-      field("Ruta", path, "Respetá mayúsculas, espacios y extensión."),
-      field("Asignar a", variant),
-      error,
-      h("div", { class: "actions" }, submit)
-    );
-
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      error.hidden = true;
-      const src = path.value.trim();
-
-      const problem = img.validateRepoPath(src);
-      if (problem) { showError(error, problem); return; }
-      if (images.some((i) => i.src === src)) { showError(error, "Esta imagen ya está cargada en este producto."); return; }
-
-      submit.disabled = true;
-      try {
-        if (!(await img.repoFileExists(src))) {
-          showError(error, "No se encontró ese archivo en el sitio. Revisá mayúsculas, espacios y extensión.");
-          return;
-        }
-        await img.addImage({
-          productId: product.id,
-          variantId: selectedVariant(variant),
-          src,
-          alt: product.name,
-          isCover: !hasCover(),
-          sortOrder: nextSortOrder(),
-        });
-        path.value = "";
-        toast("Imagen agregada.");
-        await load();
-      } catch (err) {
-        console.error(err);
-        showError(error, errorMessage(err));
-      } finally {
-        submit.disabled = false;
-      }
-    });
-
-    return form;
-  }
-
   // ---------------- Armado ----------------
   mount(section,
     h("h3", {}, "Imágenes"),
     h("p", { class: "muted" },
-      "La portada es la imagen principal del producto. Las imágenes asignadas a una variante se muestran al elegir esa variante."),
+      "La portada es la imagen principal del producto y se elige entre las de la galería. ",
+      "Las demás imágenes de la galería se muestran en la ficha del producto. ",
+      "Las imágenes asignadas a una variante se muestran al elegir esa variante. ",
+      "Todo se guarda en Supabase Storage."),
     gallery,
-    h("div", { class: "image-add" }, uploadForm(), repoForm())
+    h("div", { class: "image-add" }, uploadForm())
   );
 
   return load();

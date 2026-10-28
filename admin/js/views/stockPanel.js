@@ -316,7 +316,7 @@ export function renderStockPanel(section, { variant, initialTab = "entrada", onC
   mount(section,
     h("div", { class: "page-header stock-head" },
       h("div", {},
-        h("h3", {}, `Stock de “${variant.name}”`),
+        h("h3", {}, variant.name === "Único" ? "Stock del producto" : `Stock de “${variant.name}”`),
         h("p", { class: "muted" }, "Stock registrado: ", h("strong", {}, String(variant.stock)))
       ),
       h("button", { type: "button", class: "btn-ghost", onClick: onClose }, "Cerrar")

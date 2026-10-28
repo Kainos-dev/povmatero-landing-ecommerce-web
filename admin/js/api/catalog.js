@@ -31,7 +31,7 @@ export async function listProducts() {
   return check(
     await supabase
       .from("products")
-      .select(`${PRODUCT_COLUMNS}, product_variants (id, price, stock, track_stock, is_active)`)
+      .select(`${PRODUCT_COLUMNS}, product_variants (id, name, price, stock, track_stock, is_active)`)
       .order("name")
   );
 }
@@ -62,6 +62,16 @@ export async function setProductsActive(ids, isActive) {
 // Vínculo de cada producto con su id en js/products.js (solo los importados de ahí).
 export async function listProductLegacyIds() {
   return check(await supabase.from("product_internal").select("product_id, legacy_id"));
+}
+
+// ---------- Productos simples ----------
+// Un producto de un solo modelo se guarda con una única variante interna "Único":
+// ahí viven su precio, stock, costo, SKU y movimientos. El panel la muestra como
+// "Producto simple" y la tienda como un producto sin variantes.
+export const SINGLE_VARIANT_NAME = "Único";
+
+export function isSimpleProduct(variants) {
+  return variants.length === 0 || (variants.length === 1 && variants[0].name === SINGLE_VARIANT_NAME);
 }
 
 // ---------- Variantes ----------
