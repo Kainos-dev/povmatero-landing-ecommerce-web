@@ -1,6 +1,7 @@
 // Precios y stock: todas las variantes en una tabla para editar precio, costo y
 // registrar entradas de stock, y guardar todo junto después de revisar.
 import * as api from "../api/catalog.js";
+import { normalizeSku } from "../api/catalog.js";
 import { registerMovement } from "../api/inventory.js";
 import { h, mount, formatPrice, errorMessage, normalizeText, toast } from "../ui.js";
 
@@ -53,6 +54,7 @@ export async function renderPriceTable(view) {
     h("option", { value: "" }, "Todas las variantes"),
     h("option", { value: "stock" }, "Solo las que controlan stock"),
     h("option", { value: "nocost" }, "Sin costo cargado"),
+    h("option", { value: "nosku" }, "Sin SKU"),
     h("option", { value: "changed" }, "Solo con cambios sin guardar")
   );
   const sheetButton = h("button", { type: "button", class: "btn-ghost", title: "Completa la columna Entrada con el stock de la hoja WEB. No guarda nada." },
@@ -96,12 +98,16 @@ export async function renderPriceTable(view) {
     const price = "price" in e ? readNumber(e.price) : v.price;
     const cost = "cost" in e ? readNumber(e.cost) : v.cost;
     const entry = "entry" in e ? readNumber(e.entry) : null;
-    return { price, cost, entry };
+    const sku = "sku" in e ? normalizeSku(e.sku) : v.sku;
+    return { price, cost, entry, sku };
   }
 
   function setEdit(v, key, value) {
     const e = { ...(edits.get(v.id) ?? {}) };
-    const original = key === "price" ? String(v.price) : key === "cost" ? (v.cost == null ? "" : String(v.cost)) : "";
+    const original = key === "price" ? String(v.price)
+      : key === "cost" ? (v.cost == null ? "" : String(v.cost))
+      : key === "sku" ? (v.sku ?? "")
+      : "";
     if (String(value).trim() === original) delete e[key];
     else e[key] = value;
     if (Object.keys(e).length) edits.set(v.id, e);
@@ -112,6 +118,22 @@ export async function renderPriceTable(view) {
   function collectChanges() {
     const changes = [];
     const problems = [];
+
+    // SKU final de cada variante (con las ediciones), para detectar repetidos.
+    const owners = new Map();
+    for (const v of variants) {
+      const sku = current(v).sku;
+      if (sku == null) continue;
+      if (!owners.has(sku)) owners.set(sku, []);
+      owners.get(sku).push(v);
+    }
+    for (const [sku, list] of owners) {
+      if (list.length > 1 && list.some((v) => "sku" in (edits.get(v.id) ?? {}))) {
+        const names = list.map((v) => `${idx.productById.get(v.product_id)?.name ?? "Producto"} · ${v.name}`);
+        problems.push(`El SKU “${sku}” quedaría repetido en: ${names.join(", ")}.`);
+      }
+    }
+
     for (const v of variants) {
       const e = edits.get(v.id);
       if (!e) continue;
@@ -133,7 +155,11 @@ export async function renderPriceTable(view) {
         else if (!Number.isInteger(c.entry) || c.entry <= 0) problems.push(`${label}: la entrada debe ser un número entero mayor a 0.`);
         else change.entry = c.entry;
       }
-      if ("price" in change || "cost" in change || "entry" in change) changes.push(change);
+      if ("sku" in e) {
+        if (c.sku != null && c.sku.length > 64) problems.push(`${label}: el SKU puede tener hasta 64 caracteres.`);
+        else if (c.sku !== (v.sku ?? null)) change.sku = c.sku;
+      }
+      if ("price" in change || "cost" in change || "entry" in change || "sku" in change) changes.push(change);
     }
     return { changes, problems };
   }
@@ -147,9 +173,10 @@ export async function renderPriceTable(view) {
       const p = idx.productById.get(v.product_id);
       if (!p) return false;
       if (category && String(p.category_id) !== category) return false;
-      if (query && !normalizeText(`${p.name} ${v.name}`).includes(query)) return false;
+      if (query && !normalizeText(`${p.name} ${v.name} ${v.sku ?? ""}`).includes(query)) return false;
       if (show === "stock" && !v.track_stock) return false;
       if (show === "nocost" && v.cost != null) return false;
+      if (show === "nosku" && v.sku != null) return false;
       if (show === "changed" && !edits.has(v.id)) return false;
       return true;
     });
@@ -160,6 +187,8 @@ export async function renderPriceTable(view) {
     const e = edits.get(v.id) ?? {};
     const c = current(v);
 
+    const sku = h("input", { class: "input input-sku", maxlength: "64", placeholder: "—",
+      value: "sku" in e ? e.sku : (v.sku ?? ""), "aria-label": `SKU de ${p.name} ${v.name}` });
     const price = h("input", { class: "input input-num input-sm", type: "number", min: "0", step: "0.01",
       value: "price" in e ? e.price : String(v.price), "aria-label": `Precio de ${p.name} ${v.name}` });
     const cost = h("input", { class: "input input-num input-sm", type: "number", min: "0", step: "0.01", placeholder: "—",
@@ -177,6 +206,7 @@ export async function renderPriceTable(view) {
         : h("span", { class: "muted", "aria-hidden": "true" }, "↳")),
       h("td", {}, firstOfProduct ? (idx.categoryName.get(p.category_id) ?? "—") : ""),
       h("td", {}, v.name, v.is_active ? null : h("span", { class: "muted" }, " (inactiva)")),
+      h("td", {}, sku),
       h("td", {}, price),
       h("td", {}, cost),
       marginCell,
@@ -194,13 +224,14 @@ export async function renderPriceTable(view) {
     price.addEventListener("input", () => onInput("price", price));
     cost.addEventListener("input", () => onInput("cost", cost));
     entry?.addEventListener("input", () => onInput("entry", entry));
+    sku.addEventListener("input", () => onInput("sku", sku));
     return tr;
   }
 
   function renderTable() {
     const list = visibleVariants();
     if (!list.length) {
-      mount(tbody, h("tr", {}, h("td", { colspan: "8", class: "empty" }, "No hay variantes que coincidan con los filtros.")));
+      mount(tbody, h("tr", {}, h("td", { colspan: "9", class: "empty" }, "No hay variantes que coincidan con los filtros.")));
     } else {
       let lastProduct = null;
       mount(tbody, list.map((v) => {
@@ -210,7 +241,8 @@ export async function renderPriceTable(view) {
       }));
     }
     const noCost = variants.filter((v) => v.cost == null).length;
-    info.textContent = `${list.length} de ${variants.length} variantes · ${noCost} sin costo · ${variants.filter((v) => v.track_stock).length} controlan stock`;
+    const noSku = variants.filter((v) => v.sku == null).length;
+    info.textContent = `${list.length} de ${variants.length} variantes · ${noCost} sin costo · ${noSku} sin SKU · ${variants.filter((v) => v.track_stock).length} controlan stock`;
   }
 
   // ---------- Barra de guardado ----------
@@ -237,6 +269,7 @@ export async function renderPriceTable(view) {
       const parts = [];
       if ("price" in c) parts.push(`precio ${formatPrice(c.v.price)} → ${formatPrice(c.price)}`);
       if ("cost" in c) parts.push(`costo ${c.v.cost == null ? "sin costo" : formatPrice(c.v.cost)} → ${c.cost == null ? "sin costo" : formatPrice(c.cost)}`);
+      if ("sku" in c) parts.push(`SKU ${c.v.sku ?? "sin SKU"} → ${c.sku ?? "sin SKU"}`);
       if ("entry" in c) parts.push(`entrada +${c.entry} (stock ${c.v.stock} → ${c.v.stock + c.entry})`);
       const warn = "price" in c && c.price === 0 && c.v.is_active ? " ⚠ precio 0" : "";
       return h("li", {}, h("strong", {}, c.label), `: ${parts.join(" · ")}${warn}`);
@@ -270,8 +303,26 @@ export async function renderPriceTable(view) {
     const failed = [];
     let ok = 0;
 
+    // Si un SKU pasa de una variante a otra (por ejemplo, un intercambio), primero
+    // se libera el SKU viejo para no chocar con la regla de SKU único.
+    const wanted = new Set(changes.filter((c) => "sku" in c && c.sku != null).map((c) => c.sku));
+    const released = new Set();
+    for (const c of changes) {
+      if ("sku" in c && c.v.sku != null && wanted.has(c.v.sku)) {
+        try { await api.saveVariantSku(c.v.id, null); released.add(c.v.id); }
+        catch (err) { console.error(err); }
+      }
+    }
+
     for (const c of changes) {
       const errs = [];
+      if ("sku" in c) {
+        try { await api.saveVariantSku(c.v.id, c.sku); }
+        catch (err) {
+          console.error(err);
+          errs.push(`SKU: ${errorMessage(err)}${released.has(c.v.id) ? ` (quedó sin SKU; antes era “${c.v.sku}”)` : ""}`);
+        }
+      }
       if ("price" in c) {
         try { await api.updateVariant(c.v.id, { price: c.price }); }
         catch (err) { console.error(err); errs.push(`precio: ${errorMessage(err)}`); }
@@ -374,7 +425,7 @@ export async function renderPriceTable(view) {
   fillCategories();
   mount(view,
     h("div", { class: "page-header" }, h("h2", {}, "Precios y stock")),
-    h("p", { class: "muted" }, "Editá precios, costos y entradas de stock de todas las variantes. Nada se guarda hasta que revisás y confirmás."),
+    h("p", { class: "muted" }, "Editá SKU, precios, costos y entradas de stock de todas las variantes. Nada se guarda hasta que revisás y confirmás."),
     h("div", { class: "toolbar" }, search, categoryFilter, showFilter, sheetButton),
     info,
     notice,
@@ -382,7 +433,7 @@ export async function renderPriceTable(view) {
     h("div", { class: "table-wrap" },
       h("table", { class: "table table-edit price-table" },
         h("thead", {}, h("tr", {},
-          ["Producto", "Categoría", "Variante", "Precio", "Costo", "Margen", "Stock", "Entrada"].map((t) => h("th", {}, t))
+          ["Producto", "Categoría", "Variante", "SKU", "Precio", "Costo", "Margen", "Stock", "Entrada"].map((t) => h("th", {}, t))
         )),
         tbody
       )

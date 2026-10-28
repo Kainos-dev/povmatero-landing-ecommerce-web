@@ -233,6 +233,7 @@ export async function renderProductEdit(view, productId) {
 
   function variantRow(v) {
     const name = h("input", { class: "input", maxlength: "80", value: v.name, "aria-label": "Nombre de la variante" });
+    const sku = h("input", { class: "input input-sku", maxlength: "64", placeholder: "—", value: v.sku ?? "", "aria-label": "SKU" });
     const price = h("input", { class: "input input-num", type: "number", min: "0", step: "0.01", value: String(v.price), "aria-label": "Precio" });
     const cost = h("input", { class: "input input-num", type: "number", min: "0", step: "0.01", placeholder: "—", value: v.cost == null ? "" : String(v.cost), "aria-label": "Costo" });
     const track = h("input", { type: "checkbox", checked: v.track_stock, "aria-label": "Controla stock" });
@@ -255,6 +256,7 @@ export async function renderProductEdit(view, productId) {
 
     const tr = h("tr", { class: v.is_active ? "" : "row-inactive" },
       h("td", {}, name),
+      h("td", {}, sku),
       h("td", {}, price),
       h("td", {}, cost),
       h("td", { class: "center" }, track),
@@ -265,7 +267,7 @@ export async function renderProductEdit(view, productId) {
     );
 
     const markDirty = () => { save.disabled = false; tr.classList.add("row-dirty"); };
-    [name, price, cost, sort].forEach((el) => el.addEventListener("input", markDirty));
+    [name, sku, price, cost, sort].forEach((el) => el.addEventListener("input", markDirty));
     [track, active].forEach((el) => el.addEventListener("change", markDirty));
 
     save.addEventListener("click", async () => {
@@ -284,13 +286,21 @@ export async function renderProductEdit(view, productId) {
         return;
       }
 
+      const pending = [];
       try {
         if (parsed.cost !== v.cost) await api.saveVariantCost(v.id, parsed.cost);
-        toast(`Variante “${parsed.fields.name}” guardada.`);
       } catch (err) {
         console.error(err);
-        toast(`La variante se guardó, pero el costo no: ${errorMessage(err)}`, "error");
+        pending.push(`el costo no (${errorMessage(err).replace(/\.$/, "")})`);
       }
+      try {
+        if (api.normalizeSku(sku.value) !== (v.sku ?? null)) await api.saveVariantSku(v.id, sku.value);
+      } catch (err) {
+        console.error(err);
+        pending.push(`el SKU no (${errorMessage(err).replace(/\.$/, "")})`);
+      }
+      if (pending.length) toast(`La variante se guardó, pero ${pending.join(" y ")}.`, "error");
+      else toast(`Variante “${parsed.fields.name}” guardada.`);
       await loadVariants();
     });
 
@@ -301,6 +311,7 @@ export async function renderProductEdit(view, productId) {
     const name = h("input", { class: "input", maxlength: "80", placeholder: "Ej. 500gr, Chica, Negro", "aria-label": "Nombre de la nueva variante" });
     const price = h("input", { class: "input input-num", type: "number", min: "0", step: "0.01", placeholder: "Precio", "aria-label": "Precio" });
     const cost = h("input", { class: "input input-num", type: "number", min: "0", step: "0.01", placeholder: "Costo (opcional)", "aria-label": "Costo" });
+    const sku = h("input", { class: "input", maxlength: "64", placeholder: "Opcional", "aria-label": "SKU de la nueva variante" });
     const track = h("input", { type: "checkbox", checked: true });
     const submit = h("button", { type: "submit", class: "btn-primary btn-inline" }, "Agregar variante");
 
@@ -315,6 +326,7 @@ export async function renderProductEdit(view, productId) {
         field("Nombre", name),
         field("Precio", price),
         field("Costo", cost),
+        field("SKU", sku),
         h("label", { class: "check" }, track, h("span", {}, "Controla stock"))
       ),
       h("div", { class: "actions" }, submit, useSingle)
@@ -339,13 +351,21 @@ export async function renderProductEdit(view, productId) {
         return;
       }
 
+      const pending = [];
       try {
         if (parsed.cost !== null) await api.saveVariantCost(created.id, parsed.cost);
-        toast(`Variante “${parsed.fields.name}” agregada.`);
       } catch (err) {
         console.error(err);
-        toast(`La variante se agregó, pero el costo no: ${errorMessage(err)}`, "error");
+        pending.push(`el costo no (${errorMessage(err).replace(/\.$/, "")})`);
       }
+      try {
+        if (api.normalizeSku(sku.value) !== null) await api.saveVariantSku(created.id, sku.value);
+      } catch (err) {
+        console.error(err);
+        pending.push(`el SKU no (${errorMessage(err).replace(/\.$/, "")})`);
+      }
+      if (pending.length) toast(`La variante se agregó, pero ${pending.join(" y ")}.`, "error");
+      else toast(`Variante “${parsed.fields.name}” agregada.`);
       await loadVariants();
     });
 
@@ -373,7 +393,7 @@ export async function renderProductEdit(view, productId) {
       ? h("div", { class: "table-wrap" },
           h("table", { class: "table table-edit" },
             h("thead", {}, h("tr", {},
-              ["Variante", "Precio", "Costo", "Controla stock", "Activa", "Orden", "Stock", ""].map((t) => h("th", {}, t))
+              ["Variante", "SKU", "Precio", "Costo", "Controla stock", "Activa", "Orden", "Stock", ""].map((t) => h("th", {}, t))
             )),
             h("tbody", {}, currentVariants.map(variantRow))
           )

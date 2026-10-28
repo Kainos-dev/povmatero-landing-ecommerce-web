@@ -79,31 +79,62 @@ export async function listVariants(productId) {
       .in("variant_id", variants.map((v) => v.id))
   );
   const costByVariant = new Map(costs.map((c) => [c.variant_id, Number(c.cost)]));
+  const skuByVariant = await listSkus(variants.map((v) => v.id));
 
   return variants.map((v) => ({
     ...v,
     price: Number(v.price),
     cost: costByVariant.has(v.id) ? costByVariant.get(v.id) : null,
+    sku: skuByVariant.get(v.id) ?? null,
   }));
 }
 
-// Todas las variantes con su costo y su ID de la hoja WEB (si vino de la importación).
-// Para la tabla de precios y stock.
+// Todas las variantes con su costo, SKU e ID de la hoja WEB (si vino de la importación).
+// Para la tabla de precios y stock y la importación de costos.
 export async function listAllVariantsWithCosts() {
   const [variants, costs, links] = await Promise.all([
     supabase.from("product_variants").select(VARIANT_COLUMNS).order("product_id").order("sort_order").order("id").then(check),
     supabase.from("variant_costs").select("variant_id, cost").then(check),
-    supabase.from("variant_internal").select("variant_id, legacy_sheet_id").then(check),
+    supabase.from("variant_internal").select("variant_id, sku, legacy_sheet_id").then(check),
   ]);
   const costByVariant = new Map(costs.map((c) => [c.variant_id, Number(c.cost)]));
-  const sheetByVariant = new Map(links.filter((l) => l.legacy_sheet_id != null).map((l) => [l.variant_id, l.legacy_sheet_id]));
+  const internal = new Map(links.map((l) => [l.variant_id, l]));
 
   return variants.map((v) => ({
     ...v,
     price: Number(v.price),
     cost: costByVariant.has(v.id) ? costByVariant.get(v.id) : null,
-    sheet_id: sheetByVariant.get(v.id) ?? null,
+    sku: internal.get(v.id)?.sku ?? null,
+    sheet_id: internal.get(v.id)?.legacy_sheet_id ?? null,
   }));
+}
+
+// ---------- SKU (interno, por variante) ----------
+// El SKU vive en variant_internal (solo admins), junto con el ID de la hoja WEB.
+// Se compara siempre recortando espacios, respetando mayúsculas y minúsculas.
+export function normalizeSku(value) {
+  const s = String(value ?? "").trim();
+  return s === "" ? null : s;
+}
+
+async function listSkus(variantIds) {
+  if (!variantIds.length) return new Map();
+  const rows = check(
+    await supabase.from("variant_internal").select("variant_id, sku").in("variant_id", variantIds)
+  );
+  return new Map(rows.map((r) => [r.variant_id, r.sku]));
+}
+
+// Guarda (o borra con null) el SKU de una variante. Solo toca la columna sku:
+// el resto de variant_internal (por ejemplo legacy_sheet_id) queda igual.
+export async function saveVariantSku(variantId, sku) {
+  const value = normalizeSku(sku);
+  const updated = check(
+    await supabase.from("variant_internal").update({ sku: value }).eq("variant_id", variantId).select("variant_id")
+  );
+  if (updated.length === 0 && value !== null) {
+    check(await supabase.from("variant_internal").insert({ variant_id: variantId, sku: value }));
+  }
 }
 
 // El stock nunca se envía: empieza en 0 y solo cambia con movimientos.

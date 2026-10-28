@@ -388,6 +388,10 @@ report (orden, seccion, clave, estado, detalle) as (
   select 12, 'resumen', 'categorías', (select count(*) from public.categories)::text,
          (select string_agg(slug || case when is_active then '' else ' (inactiva)' end, ', ' order by sort_order)
             from public.categories)
+  union all
+  select 13, 'resumen', 'variantes con SKU', (select count(*) from public.variant_internal where sku is not null)::text,
+         coalesce('ejemplos: ' || (select string_agg(sku, ', ') from (select sku from public.variant_internal
+                                     where sku is not null order by sku limit 5) s), 'ninguna todavía')
   -- ---------- Detalle ----------
   union all
   select 100, 'falta producto', slug, 'no está en la base', category_slug || ' · ' || name

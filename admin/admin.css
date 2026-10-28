@@ -143,7 +143,7 @@ body {
   align-items: center;
   gap: 24px;
 }
-.admin-nav { display: flex; gap: 16px; }
+.admin-nav { display: flex; flex-wrap: wrap; gap: 6px 16px; }
 .admin-nav a {
   color: var(--text-secondary);
   text-decoration: none;
@@ -210,6 +210,7 @@ body {
 textarea.input { resize: vertical; }
 .input-num { max-width: 140px; }
 .input-sm { max-width: 80px; }
+.input-sku { min-width: 110px; max-width: 160px; }
 
 .hint { color: var(--text-muted); font-size: var(--font-size-xs); }
 
