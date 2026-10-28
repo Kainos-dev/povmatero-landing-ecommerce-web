@@ -59,6 +59,11 @@ export async function setProductsActive(ids, isActive) {
   return rows.map((r) => r.id);
 }
 
+// Vínculo de cada producto con su id en js/products.js (solo los importados de ahí).
+export async function listProductLegacyIds() {
+  return check(await supabase.from("product_internal").select("product_id, legacy_id"));
+}
+
 // ---------- Variantes ----------
 // Devuelve las variantes del producto con su costo interno (null si no tiene).
 export async function listVariants(productId) {

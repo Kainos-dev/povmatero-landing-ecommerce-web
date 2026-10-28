@@ -324,6 +324,7 @@ input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--text); }
 }
 .badge-ok { background: #16351f; color: #8fe0a5; }
 .badge-warn { background: #3a2a10; color: #f0c674; }
+.badge-error { background: #5c1d1d; color: #ffd6d6; }
 
 .notice-warn {
   background: #3a2a10;

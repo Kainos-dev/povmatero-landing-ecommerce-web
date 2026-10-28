@@ -4,6 +4,7 @@ import { renderProductEdit } from "./views/productEdit.js";
 import { renderPriceTable } from "./views/priceTable.js";
 import { renderImageMigration } from "./views/imageMigration.js";
 import { renderCostImport } from "./views/costImport.js";
+import { renderCatalogReview } from "./views/catalogReview.js";
 
 const DEFAULT_ROUTE = "#/productos";
 
@@ -14,6 +15,7 @@ const routes = [
   [/^#\/precios\/?$/,          (view) => renderPriceTable(view)],
   [/^#\/imagenes\/?$/,         (view) => renderImageMigration(view)],
   [/^#\/importar-costos\/?$/,  (view) => renderCostImport(view)],
+  [/^#\/revision\/?$/,         (view) => renderCatalogReview(view)],
 ];
 
 let container = null;
