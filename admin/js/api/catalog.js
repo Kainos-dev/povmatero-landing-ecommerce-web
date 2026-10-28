@@ -87,6 +87,25 @@ export async function listVariants(productId) {
   }));
 }
 
+// Todas las variantes con su costo y su ID de la hoja WEB (si vino de la importación).
+// Para la tabla de precios y stock.
+export async function listAllVariantsWithCosts() {
+  const [variants, costs, links] = await Promise.all([
+    supabase.from("product_variants").select(VARIANT_COLUMNS).order("product_id").order("sort_order").order("id").then(check),
+    supabase.from("variant_costs").select("variant_id, cost").then(check),
+    supabase.from("variant_internal").select("variant_id, legacy_sheet_id").then(check),
+  ]);
+  const costByVariant = new Map(costs.map((c) => [c.variant_id, Number(c.cost)]));
+  const sheetByVariant = new Map(links.filter((l) => l.legacy_sheet_id != null).map((l) => [l.variant_id, l.legacy_sheet_id]));
+
+  return variants.map((v) => ({
+    ...v,
+    price: Number(v.price),
+    cost: costByVariant.has(v.id) ? costByVariant.get(v.id) : null,
+    sheet_id: sheetByVariant.get(v.id) ?? null,
+  }));
+}
+
 // El stock nunca se envía: empieza en 0 y solo cambia con movimientos.
 export async function createVariant(productId, fields) {
   return check(

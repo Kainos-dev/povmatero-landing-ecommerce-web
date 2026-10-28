@@ -256,6 +256,24 @@ input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--text); }
 .bulk-bar[hidden] { display: none; }
 .bulk-confirm { display: flex; flex-direction: column; gap: 8px; }
 
+/* Barra de guardado de la tabla de precios y stock */
+.save-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin: 8px 0 12px;
+  padding: 10px 12px;
+  border: 1px solid #2a2a2a;
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: var(--font-size-sm);
+  max-height: 70vh;
+  overflow-y: auto;
+}
+.save-bar[hidden] { display: none; }
+.change-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.price-table a { color: var(--text); font-weight: 500; }
+
 /* ---------- Tablas ---------- */
 .table-wrap { overflow-x: auto; }
 
