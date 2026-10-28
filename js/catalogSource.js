@@ -1,8 +1,12 @@
 // Fuente del catálogo de la tienda.
 //
-// Por defecto usa la fuente actual (js/products.js + hoja WEB).
-// Con ?fuente=supabase lee la vista public.storefront_catalog, que solo
-// devuelve productos, variantes y categorías publicados (activos).
+// Por defecto lee Supabase (vista public.storefront_catalog: solo productos,
+// variantes y categorías publicados). Si Supabase falla, tarda demasiado o
+// todavía no hay nada publicado, usa la fuente anterior (js/products.js +
+// hoja WEB), así la tienda nunca queda vacía durante la transición.
+//
+//   ?fuente=supabase  solo Supabase, sin respaldo (para probar)
+//   ?fuente=legacy    solo la fuente anterior
 //
 // Las dos fuentes entregan el mismo formato que ya usan catalog.js, modal.js
 // y cart.js:
@@ -14,6 +18,8 @@ import { getYerbas, transformarYerbas } from "./yerbas.js";
 
 const SUPABASE_JS_URL = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/+esm";
 const REQUEST_TIMEOUT_MS = 10000;
+// Con respaldo disponible no conviene esperar tanto antes de usarlo.
+const AUTO_TIMEOUT_MS = 6000;
 
 // Mismas fotos de respaldo que usa hoy la tienda cuando falta la imagen.
 const YERBA_PLACEHOLDER = "images/yerbas/canarias-tradicional.png";
@@ -22,21 +28,41 @@ const PRODUCT_PLACEHOLDER = "images/Logo.png";
 const SINGLE_VARIANT_NAME = "Único";
 
 const VIEW_COLUMNS = [
-  "product_id", "product_name", "description", "category_slug", "cover_image",
+  "product_id", "product_name", "description", "category_slug", "category_name", "cover_image",
   "variant_name", "price", "track_stock", "stock", "variant_image",
   "product_sort", "variant_sort",
 ].join(", ");
 
 export function getCatalogSourceName() {
   const param = new URLSearchParams(window.location.search).get("fuente");
-  return param === "supabase" ? "supabase" : "legacy";
+  return param === "supabase" || param === "legacy" ? param : "auto";
 }
 
-// Devuelve { source, getCategory(category) } donde category es "all",
-// "yerbas" o el slug de una categoría. "all" no incluye yerbas (como hoy).
+// Devuelve { source, categories, getCategory(category) } donde category es
+// "all", "yerbas" o el slug de una categoría. "all" no incluye yerbas (como hoy).
+// categories: [{ slug, name }] con productos publicados (null en la fuente anterior).
 export async function loadCatalog() {
   const source = getCatalogSourceName();
-  return source === "supabase" ? loadSupabaseCatalog() : loadLegacyCatalog();
+  if (source === "legacy") return loadLegacyCatalog();
+  if (source === "supabase") return loadSupabaseCatalog(REQUEST_TIMEOUT_MS);
+
+  try {
+    // El límite cubre también la descarga de la librería de Supabase.
+    const catalog = await withTimeout(loadSupabaseCatalog(AUTO_TIMEOUT_MS), AUTO_TIMEOUT_MS);
+    if (catalog.productCount > 0) return catalog;
+    console.warn("Catálogo: Supabase no tiene productos publicados; se usa la fuente anterior.");
+  } catch (error) {
+    console.warn("Catálogo: no se pudo leer Supabase; se usa la fuente anterior.", error);
+  }
+  return loadLegacyCatalog();
+}
+
+function withTimeout(promise, ms) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`Supabase no respondió en ${ms / 1000} s`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
 // ---------------------------------------------------------------------
@@ -45,6 +71,7 @@ export async function loadCatalog() {
 function loadLegacyCatalog() {
   return {
     source: "legacy",
+    categories: null,
     async getCategory(category) {
       if (category === "yerbas") {
         // Igual que antes: se consulta la hoja en cada visita al filtro.
@@ -60,12 +87,22 @@ function loadLegacyCatalog() {
 // ---------------------------------------------------------------------
 // Supabase: una sola consulta, después se filtra en memoria
 // ---------------------------------------------------------------------
-async function loadSupabaseCatalog() {
-  const rows = await fetchStorefrontRows();
+async function loadSupabaseCatalog(timeoutMs) {
+  const rows = await fetchStorefrontRows(timeoutMs);
   const products = mapRowsToProducts(rows);
+
+  // Categorías con al menos un producto publicado, en el orden en que aparecen.
+  const categories = [];
+  for (const row of rows) {
+    if (!categories.some((c) => c.slug === row.category_slug)) {
+      categories.push({ slug: row.category_slug, name: row.category_name ?? row.category_slug });
+    }
+  }
 
   return {
     source: "supabase",
+    productCount: products.length,
+    categories,
     async getCategory(category) {
       if (category === "all") return products.filter((p) => p.category !== "yerbas");
       return products.filter((p) => p.category === category);
@@ -73,7 +110,7 @@ async function loadSupabaseCatalog() {
   };
 }
 
-async function fetchStorefrontRows() {
+async function fetchStorefrontRows(timeoutMs) {
   const [{ createClient }, { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY }] = await Promise.all([
     import(SUPABASE_JS_URL),
     import("./lib/supabaseConfig.js"),
@@ -86,7 +123,7 @@ async function fetchStorefrontRows() {
   });
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const { data, error } = await supabase

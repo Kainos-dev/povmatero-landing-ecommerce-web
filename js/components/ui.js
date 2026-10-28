@@ -117,11 +117,11 @@ export function initFiltersToggle(UI) {
   };
 
   // cerrar cuando se selecciona filtro (mobile)
-  UI.filterChips.forEach(btn => {
-    btn.addEventListener("click", () => {
-      UI.filtersContent.classList.remove("open");
-      UI.filtersToggle.classList.remove("open");
-    });
+  // (también para los botones de categorías que se agregan después de cargar)
+  UI.filtersContent.addEventListener("click", (e) => {
+    if (!e.target.closest(".filter-chip")) return;
+    UI.filtersContent.classList.remove("open");
+    UI.filtersToggle.classList.remove("open");
   });
 
 }

@@ -16,7 +16,7 @@ const UI = initUI();
 const cart = initCart(UI);
 const modal = initModal(UI, cart);
 
-// Catálogo: fuente actual por defecto, Supabase solo con ?fuente=supabase.
+// Catálogo: Supabase por defecto, con respaldo en la fuente anterior (ver catalogSource.js).
 const catalogPromise = loadCatalog();
 const EMPTY_STATE_HTML = UI.emptyState.innerHTML;
 
