@@ -8,7 +8,7 @@ export function initModal(UI, cart) {
   }
 
   function getStockText(product, selectedVariant) {
-    if (!product.variants || product.category !== "yerbas") return "";
+    if (!product.variants) return "";
 
     const variant = product.variants.find(v => v.name === selectedVariant);
     if (!variant) return "";
@@ -19,6 +19,12 @@ export function initModal(UI, cart) {
     if (variant.stock === 1) return "Última unidad disponible";
 
     return `Stock disponible: ${variant.stock}`;
+  }
+
+  // Muestra el aviso de stock si alguna variante lo informa
+  // (yerbas de la hoja o variantes de Supabase que controlan stock).
+  function hasStockInfo(product) {
+    return (product.variants ?? []).some(v => v.stock != null);
   }
 
   function open(product) {
@@ -59,7 +65,7 @@ export function initModal(UI, cart) {
               product.variants
                 ? `
                   ${
-                    product.category === "yerbas"
+                    hasStockInfo(product)
                       ? `
                         <p class="modal-stock" id="modalStock">
                           ${selectedVariant ? getStockText(product, selectedVariant) : ""}
@@ -130,9 +136,9 @@ export function initModal(UI, cart) {
             }
           }
 
-          // 🔥 STOCK (solo yerbas)
+          // STOCK (solo si la variante lo informa)
           const stockEl = UI.modalBody.querySelector("#modalStock");
-          if (product.category === "yerbas" && variantData && stockEl) {
+          if (variantData && stockEl) {
             stockEl.textContent = getStockText(product, variantName);
           }
 
@@ -174,8 +180,9 @@ export function initModal(UI, cart) {
 
           finalPrice = variantData.price ?? product.price;
 
-          // 🔥 stock solo yerbas
-          if (product.category === "yerbas" && variantData.stock != null && variantData.stock <= 0) {
+          // Sin stock: solo variantes que informan stock (yerbas de la hoja o
+          // variantes de Supabase con control de stock).
+          if (variantData.stock != null && variantData.stock <= 0) {
             showToast("Sin stock disponible");
             return;
           }
