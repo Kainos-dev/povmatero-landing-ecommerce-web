@@ -1,6 +1,7 @@
 import * as api from "../api/catalog.js";
 import { h, mount, field, showError, toast, errorMessage, slugify, SLUG_RE } from "../ui.js";
 import { renderStockPanel } from "./stockPanel.js";
+import { renderImagesPanel } from "./imagesPanel.js";
 
 function backLink() {
   return h("a", { href: "#/productos", class: "back-link" }, "← Volver a productos");
@@ -193,6 +194,18 @@ export async function renderProductEdit(view, productId) {
   // Panel de stock (una variante a la vez)
   // ------------------------------------------------------------------
   const stockSection = h("section", { class: "card stock-panel", hidden: true });
+
+  // Sección de imágenes: se redibuja solo si cambian las variantes (nombres o estado),
+  // para no interrumpir una subida en curso cuando se guarda stock o precios.
+  const imagesSection = h("section", { class: "card" });
+  let imagesVariantsKey = null;
+
+  function refreshImages() {
+    const key = JSON.stringify(currentVariants.map((v) => [v.id, v.name, v.is_active]));
+    if (key === imagesVariantsKey) return;
+    imagesVariantsKey = key;
+    renderImagesPanel(imagesSection, { product, variants: currentVariants });
+  }
   let stockVariantId = null;
   let stockTab = "entrada";
 
@@ -379,6 +392,7 @@ export async function renderProductEdit(view, productId) {
 
     // Si el panel de stock estaba abierto, se redibuja con los datos recién leídos.
     if (stockVariantId !== null) openStock(stockVariantId, stockTab, { scroll: false });
+    refreshImages();
   }
 
   // ------------------------------------------------------------------
@@ -393,7 +407,7 @@ export async function renderProductEdit(view, productId) {
     productForm(),
     isNew
       ? h("p", { class: "muted" }, "Después de crear el producto vas a poder agregar sus variantes y precios.")
-      : [publishSection(), variantsSection, stockSection]
+      : [publishSection(), variantsSection, stockSection, imagesSection]
   );
 
   if (!isNew) await loadVariants();

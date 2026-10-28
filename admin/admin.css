@@ -370,6 +370,54 @@ input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--text); }
 .qty-pos { color: #8fe0a5; }
 .qty-neg { color: #ff9a8f; }
 
+/* ---------- Imágenes ---------- */
+.image-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.image-card {
+  background: var(--surface);
+  border: 1px solid #1f1f1f;
+  border-radius: var(--radius);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.image-thumb {
+  aspect-ratio: 1 / 1;
+  background: #1a1a1a;
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.image-thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
+
+.image-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.image-src {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.image-add {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  border-top: 1px solid #1f1f1f;
+  padding-top: 14px;
+}
+.image-add-form { display: flex; flex-direction: column; gap: 10px; }
+
+.btn-danger { color: #ff9a8f; }
+.btn-danger-solid { background: #c0392b; color: #fff; }
+
 /* ---------- Notificaciones ---------- */
 .toast {
   position: fixed;
