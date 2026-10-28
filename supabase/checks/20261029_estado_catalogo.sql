@@ -392,6 +392,14 @@ report (orden, seccion, clave, estado, detalle) as (
   select 13, 'resumen', 'variantes con SKU', (select count(*) from public.variant_internal where sku is not null)::text,
          coalesce('ejemplos: ' || (select string_agg(sku, ', ') from (select sku from public.variant_internal
                                      where sku is not null order by sku limit 5) s), 'ninguna todavía')
+  union all
+  -- El stock solo cambia con movimientos y arranca en 0: debe ser igual a la suma.
+  select 14, 'resumen', 'stock igual a la suma de movimientos',
+         (select count(*) from public.product_variants v
+           where v.stock = coalesce((select sum(m.quantity) from public.inventory_movements m where m.variant_id = v.id), 0))::text
+         || ' de ' || (select count(*) from public.product_variants)::text,
+         'unidades en stock ' || (select coalesce(sum(stock), 0) from public.product_variants)
+         || ' · último movimiento ' || coalesce((select to_char(max(created_at), 'DD/MM/YYYY HH24:MI') from public.inventory_movements), 'ninguno')
   -- ---------- Detalle ----------
   union all
   select 100, 'falta producto', slug, 'no está en la base', category_slug || ' · ' || name
@@ -412,6 +420,14 @@ report (orden, seccion, clave, estado, detalle) as (
   union all
   select 500, 'publicado', p.slug, 'visible en la tienda', p.name
     from public.products p where p.is_active
+  union all
+  select 600, 'stock descuadrado', p.slug || ' · ' || v.name, 'stock ' || v.stock,
+         'suma de movimientos ' || coalesce(s.total, 0)
+    from public.product_variants v
+    join public.products p on p.id = v.product_id
+    left join (select variant_id, sum(quantity) as total from public.inventory_movements group by variant_id) s
+      on s.variant_id = v.id
+   where v.stock <> coalesce(s.total, 0)
 )
 select seccion, clave, estado, detalle
 from report
