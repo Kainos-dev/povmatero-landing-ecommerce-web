@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Panel · povmatero</title>
+  <link rel="icon" href="/images/iconoPestaña.ico" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <!-- Rutas absolutas: funcionan tanto en /admin como en /admin/ -->
+  <link rel="stylesheet" href="/css/base/variables.css" />
+  <link rel="stylesheet" href="/css/base/reset.css" />
+  <link rel="stylesheet" href="/admin/admin.css" />
+</head>
+<body>
+
+  <!-- Cargando -->
+  <section class="view view-center" id="viewLoading">
+    <p class="muted">Cargando…</p>
+  </section>
+
+  <!-- Login -->
+  <section class="view view-center" id="viewLogin" hidden>
+    <form class="login-card" id="loginForm" novalidate>
+      <h1 class="brand">POVMATERO</h1>
+      <p class="muted">Panel de administración</p>
+
+      <label class="field">
+        <span>Email</span>
+        <input type="email" name="email" autocomplete="username" required />
+      </label>
+
+      <label class="field">
+        <span>Contraseña</span>
+        <input type="password" name="password" autocomplete="current-password" required />
+      </label>
+
+      <p class="form-error" id="loginError" role="alert" hidden></p>
+
+      <button type="submit" class="btn-primary" id="loginButton">Ingresar</button>
+    </form>
+  </section>
+
+  <!-- Panel -->
+  <section class="view" id="viewPanel" hidden>
+    <header class="admin-header">
+      <span class="brand brand-sm">POVMATERO</span>
+      <div class="admin-user">
+        <span id="userEmail"></span>
+        <span class="role-badge" id="userRole"></span>
+        <button type="button" class="btn-ghost" id="logoutButton">Cerrar sesión</button>
+      </div>
+    </header>
+
+    <main class="admin-main">
+      <h2>Panel de administración</h2>
+      <p class="muted">Acceso verificado. La gestión de productos, variantes y stock se agrega en el próximo paso.</p>
+    </main>
+  </section>
+
+  <script type="module" src="/admin/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,139 @@
+/* Panel de administración — usa las variables de marca de la tienda */
+
+body {
+  font-family: var(--font);
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+  background: var(--surface);
+  color: var(--text);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+[hidden] { display: none !important; }
+
+.muted { color: var(--text-secondary); font-size: var(--font-size-sm); }
+
+.brand {
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  font-size: var(--font-size-xl);
+}
+.brand-sm { font-size: var(--font-size-base); }
+
+/* Vistas */
+.view { min-height: 100vh; }
+.view-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+}
+
+/* Login */
+.login-card {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 32px 24px;
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  text-align: center;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.field input {
+  font: inherit;
+  font-size: var(--font-size-base);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid #2a2a2a;
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  transition: border-color var(--t);
+}
+.field input:focus { outline: none; border-color: var(--text-secondary); }
+
+.form-error {
+  color: #ff8a80;
+  font-size: var(--font-size-sm);
+}
+
+/* Botones */
+.btn-primary,
+.btn-ghost {
+  font: inherit;
+  cursor: pointer;
+  border-radius: var(--radius);
+  transition: opacity var(--t), background var(--t);
+}
+
+.btn-primary {
+  background: var(--text);
+  color: var(--surface);
+  border: none;
+  padding: 12px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+}
+.btn-primary:disabled { opacity: 0.6; cursor: default; }
+
+.btn-ghost {
+  background: none;
+  color: var(--text-secondary);
+  border: 1px solid #2a2a2a;
+  padding: 6px 12px;
+  font-size: var(--font-size-sm);
+}
+.btn-ghost:hover { color: var(--text); }
+.btn-ghost:disabled { opacity: 0.6; cursor: default; }
+
+/* Panel */
+.admin-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 24px;
+  border-bottom: 1px solid #1f1f1f;
+}
+
+.admin-user {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.role-badge {
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--details);
+  color: var(--text);
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.05em;
+}
+
+.admin-main {
+  padding: 32px 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.admin-main h2 {
+  font-size: var(--font-size-lg);
+  font-weight: 500;
+  margin-bottom: 8px;
+}
