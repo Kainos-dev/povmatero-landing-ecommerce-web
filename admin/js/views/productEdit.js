@@ -1,5 +1,6 @@
 import * as api from "../api/catalog.js";
 import { h, mount, field, showError, toast, errorMessage, slugify, SLUG_RE } from "../ui.js";
+import { renderStockPanel } from "./stockPanel.js";
 
 function backLink() {
   return h("a", { href: "#/productos", class: "back-link" }, "← Volver a productos");
@@ -188,6 +189,35 @@ export async function renderProductEdit(view, productId) {
   // ------------------------------------------------------------------
   const variantsSection = h("section", { class: "card" });
 
+  // ------------------------------------------------------------------
+  // Panel de stock (una variante a la vez)
+  // ------------------------------------------------------------------
+  const stockSection = h("section", { class: "card stock-panel", hidden: true });
+  let stockVariantId = null;
+  let stockTab = "entrada";
+
+  function closeStock() {
+    stockVariantId = null;
+    stockSection.hidden = true;
+    mount(stockSection);
+  }
+
+  function openStock(variantId, tab = "entrada", { scroll = true } = {}) {
+    const variant = currentVariants?.find((v) => v.id === variantId);
+    if (!variant || !variant.track_stock) { closeStock(); return; }
+
+    stockVariantId = variantId;
+    stockTab = tab;
+    stockSection.hidden = false;
+    renderStockPanel(stockSection, {
+      variant,
+      initialTab: tab,
+      onChanged: async (currentTab) => { stockTab = currentTab; await loadVariants(); },
+      onClose: closeStock,
+    });
+    if (scroll) stockSection.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }
+
   function variantRow(v) {
     const name = h("input", { class: "input", maxlength: "80", value: v.name, "aria-label": "Nombre de la variante" });
     const price = h("input", { class: "input input-num", type: "number", min: "0", step: "0.01", value: String(v.price), "aria-label": "Precio" });
@@ -196,9 +226,18 @@ export async function renderProductEdit(view, productId) {
     const active = h("input", { type: "checkbox", checked: v.is_active, "aria-label": "Activa" });
     const sort = h("input", { class: "input input-num input-sm", type: "number", step: "1", value: String(v.sort_order), "aria-label": "Orden" });
     const save = h("button", { type: "button", class: "btn-primary btn-sm", disabled: true }, "Guardar");
+    const stockButton = h("button", {
+      type: "button",
+      class: "btn-ghost btn-sm",
+      disabled: !v.track_stock,
+      title: v.track_stock
+        ? "Registrar entradas, salidas y ajustes"
+        : "Esta variante no controla stock. Marcá “Controla stock” y guardá para usarlo.",
+      onClick: () => openStock(v.id),
+    }, "Stock");
 
     const stock = v.track_stock
-      ? h("span", { title: "El stock se modifica registrando movimientos." }, String(v.stock))
+      ? h("span", { title: "El stock se modifica con el botón Stock." }, String(v.stock))
       : h("span", { class: "muted", title: "Esta variante se vende sin controlar stock." }, "No controla");
 
     const tr = h("tr", { class: v.is_active ? "" : "row-inactive" },
@@ -209,7 +248,7 @@ export async function renderProductEdit(view, productId) {
       h("td", { class: "center" }, active),
       h("td", {}, sort),
       h("td", { class: "num" }, stock),
-      h("td", {}, save)
+      h("td", {}, h("div", { class: "row-actions" }, save, stockButton))
     );
 
     const markDirty = () => { save.disabled = false; tr.classList.add("row-dirty"); };
@@ -332,11 +371,14 @@ export async function renderProductEdit(view, productId) {
       title,
       h("p", { class: "muted" },
         "Cada variante tiene su propio precio y stock. Si el producto tiene un solo modelo, creá una variante llamada “Único”. ",
-        "El costo es interno y nunca se muestra en la tienda. El stock se carga con movimientos (próxima etapa)."),
+        "El costo es interno y nunca se muestra en la tienda. El stock se carga con el botón “Stock” de cada variante."),
       warning,
       table,
       newVariantForm()
     );
+
+    // Si el panel de stock estaba abierto, se redibuja con los datos recién leídos.
+    if (stockVariantId !== null) openStock(stockVariantId, stockTab, { scroll: false });
   }
 
   // ------------------------------------------------------------------
@@ -351,7 +393,7 @@ export async function renderProductEdit(view, productId) {
     productForm(),
     isNew
       ? h("p", { class: "muted" }, "Después de crear el producto vas a poder agregar sus variantes y precios.")
-      : [publishSection(), variantsSection]
+      : [publishSection(), variantsSection, stockSection]
   );
 
   if (!isNew) await loadVariants();
