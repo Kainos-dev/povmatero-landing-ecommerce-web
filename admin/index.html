@@ -45,7 +45,12 @@
   <!-- Panel -->
   <section class="view" id="viewPanel" hidden>
     <header class="admin-header">
-      <span class="brand brand-sm">POVMATERO</span>
+      <div class="admin-header-left">
+        <span class="brand brand-sm">POVMATERO</span>
+        <nav class="admin-nav">
+          <a href="#/productos">Productos</a>
+        </nav>
+      </div>
       <div class="admin-user">
         <span id="userEmail"></span>
         <span class="role-badge" id="userRole"></span>
@@ -53,10 +58,7 @@
       </div>
     </header>
 
-    <main class="admin-main">
-      <h2>Panel de administración</h2>
-      <p class="muted">Acceso verificado. La gestión de productos, variantes y stock se agrega en el próximo paso.</p>
-    </main>
+    <main class="admin-main" id="adminContent"></main>
   </section>
 
   <script type="module" src="/admin/js/main.js"></script>

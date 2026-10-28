@@ -1,4 +1,5 @@
 import { getCurrentUser, signIn, signOut, getAdminRole, onSignedOut } from "./auth.js";
+import { startRouter, stopRouter } from "./router.js";
 
 const views = {
   loading: document.getElementById("viewLoading"),
@@ -20,6 +21,7 @@ function show(name) {
 }
 
 function showLogin(message = "") {
+  stopRouter();
   loginError.textContent = message;
   loginError.hidden = !message;
   loginButton.disabled = false;
@@ -31,6 +33,7 @@ function showPanel(user, role) {
   userEmail.textContent = user.email ?? "";
   userRole.textContent = ROLE_LABELS[role] ?? role;
   show("panel");
+  startRouter(document.getElementById("adminContent"));
 }
 
 // Verifica que el usuario logueado sea admin. Si no lo es, cierra la sesión.
