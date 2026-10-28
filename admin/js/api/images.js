@@ -168,3 +168,89 @@ export async function deleteImage(image, productId) {
     return { source, fileRemoved: false, reason: err?.message || "error al borrar el archivo" };
   }
 }
+
+// ---------- Migración de imágenes del repo a Storage ----------
+// Cada archivo del repo se sube UNA vez por producto, con un nombre fijo que sale
+// de su ruta original: images/2572/negro.webp → products/<id>/2572-negro.webp.
+// Así, si la migración se corta y se vuelve a correr, no se duplican archivos.
+// Los archivos originales del sitio nunca se tocan.
+
+const CONTENT_TYPES = { webp: "image/webp", jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", avif: "image/avif" };
+
+export async function listAllImages() {
+  return check(
+    await supabase
+      .from("product_images")
+      .select(IMAGE_COLUMNS)
+      .order("product_id")
+      .order("sort_order")
+      .order("id")
+  );
+}
+
+export function migrationPath(productId, repoPath) {
+  const rest = repoPath.replace(/^images\//, "");
+  const ext = (rest.match(/\.([a-z0-9]+)$/i)?.[1] ?? "").toLowerCase();
+  const base = rest.replace(/\.[^.]+$/, "")
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return `products/${productId}/${base || "imagen"}.${ext}`;
+}
+
+export function publicUrlFor(path) {
+  return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
+}
+
+// Comprueba que una URL responda con una imagen. Devuelve { ok, status, type, bytes }.
+export async function checkImageUrl(url) {
+  try {
+    const res = await fetch(url, { method: "HEAD", cache: "no-store" });
+    const type = res.headers.get("content-type") ?? "";
+    const bytes = Number(res.headers.get("content-length") ?? 0) || null;
+    return { ok: res.ok && (type === "" || type.startsWith("image/")), status: res.status, type, bytes };
+  } catch {
+    return { ok: false, status: 0, type: "", bytes: null };
+  }
+}
+
+// Sube el archivo del repo a Storage (si ya estaba subido, lo reutiliza) y verifica
+// que la URL pública cargue. Devuelve { url, path, reused }.
+export async function uploadRepoFile(productId, repoPath) {
+  const problem = validateRepoPath(repoPath);
+  if (problem) throw new Error(problem);
+
+  const res = await fetch(`/${encodeURI(repoPath)}`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`No se encontró el archivo en el sitio (${res.status}).`);
+  const blob = await res.blob();
+  if (blob.size > 5 * 1024 * 1024) throw new Error("El archivo pesa más de 5 MB (límite del bucket).");
+
+  const path = migrationPath(productId, repoPath);
+  const ext = path.split(".").pop();
+  const contentType = CONTENT_TYPES[ext] ?? blob.type;
+
+  let reused = false;
+  const { error } = await supabase.storage.from(BUCKET).upload(path, blob, {
+    contentType,
+    cacheControl: "31536000",
+    upsert: false,
+  });
+  if (error) {
+    const exists = String(error.statusCode ?? error.status ?? "") === "409" || /already exists|duplicate/i.test(error.message ?? "");
+    if (!exists) throw error;
+    reused = true;   // subido en una ejecución anterior: mismo nombre = mismo archivo de origen
+  }
+
+  const url = publicUrlFor(path);
+  const probe = await checkImageUrl(url);
+  if (!probe.ok) throw new Error(`El archivo se subió pero la URL pública no carga (estado ${probe.status || "sin respuesta"}).`);
+  return { url, path, reused };
+}
+
+// Cambia la ruta de una imagen solo si sigue siendo la original (por si se editó mientras tanto).
+export async function replaceImageSrc(id, oldSrc, newSrc) {
+  const rows = check(
+    await supabase.from("product_images").update({ src: newSrc }).eq("id", id).eq("src", oldSrc).select("id")
+  );
+  if (!rows.length) throw notSaved("actualizar la ruta de la imagen");
+  return rows[0];
+}

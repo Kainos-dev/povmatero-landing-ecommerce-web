@@ -14,6 +14,7 @@
 --   * products.js → product_internal.legacy_id
 --   * yerbas      → variant_internal.legacy_sheet_id de sus variantes
 --   * si no hay vínculo, por slug
+--   * imágenes: con su ruta del repo o ya migradas a Storage (pantalla Imágenes)
 -- Datos esperados generados desde el script de importación el 28/10/2026.
 -- =====================================================================
 with
@@ -339,8 +340,14 @@ matched_variants as (
 ),
 matched_images as (
   select ei.*, m.product_id,
+         -- Vale la ruta del repo o su copia migrada a Storage
+         -- (images/2572/negro.webp → .../product-images/products/<id>/2572-negro.webp).
          exists (select 1 from public.product_images im
-                  where im.product_id = m.product_id and im.src = ei.src) as found
+                  where im.product_id = m.product_id
+                    and (im.src = ei.src
+                         or im.src like '%/storage/v1/object/public/product-images/products/' || m.product_id || '/'
+                            || regexp_replace(lower(regexp_replace(substr(ei.src, 8), '\.[^.]+$', '')), '[^a-z0-9]+', '-', 'g')
+                            || lower(substring(ei.src from '\.[^.]+$')))) as found
   from exp_images ei
   join matched m on m.slug = ei.product_slug
 ),
