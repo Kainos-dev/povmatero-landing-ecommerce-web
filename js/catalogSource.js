@@ -54,7 +54,10 @@ function withTimeout(promise, ms) {
 // después se filtra en memoria
 // ---------------------------------------------------------------------
 async function loadSupabaseCatalog(timeoutMs) {
-  const { rows, galleryRows, categoryRows } = await fetchStorefrontRows(timeoutMs);
+  const fetched = await fetchStorefrontRows(timeoutMs);
+  const { galleryRows, categoryRows } = fetched;
+  // Solo presentaciones comercializables: sin precio válido no se muestran.
+  const rows = fetched.rows.filter((r) => Number(r.price) > 0);
   const products = mapRowsToProducts(rows, galleryRows);
   const order = new Map(categoryRows.map((c, i) => [c.slug, i]));
 

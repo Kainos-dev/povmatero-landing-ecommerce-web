@@ -18,7 +18,8 @@ function parseVariant({ name, price, cost, track, active, sort }) {
 
   if (price.value === "") return { error: `Ingresá un precio para “${variantName}”.` };
   const priceValue = Number(price.value);
-  if (!Number.isFinite(priceValue) || priceValue < 0) return { error: "El precio debe ser un número mayor o igual a 0." };
+  // Solo presentaciones comercializables: sin precio de venta no se crean.
+  if (!Number.isFinite(priceValue) || priceValue <= 0) return { error: "El precio debe ser un número mayor a 0." };
 
   let costValue = null;
   if (cost.value !== "") {

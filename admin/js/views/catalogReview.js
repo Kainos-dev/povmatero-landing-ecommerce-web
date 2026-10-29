@@ -40,12 +40,17 @@ export function reviewCatalog({ categories, products, variants, images, legacyId
     const vs = variantsByProduct.get(p.id) ?? [];
     const active = vs.filter((v) => v.is_active);
     const sellable = active.filter((v) => v.price > 0);
+    // Presentaciones activas sin precio: no se venden (la tienda las oculta).
+    const unpriced = active.filter((v) => !(v.price > 0));
     const imgs = imagesByProduct.get(p.id) ?? [];
     const category = categoryById.get(p.category_id);
     const isYerba = category?.slug === "yerbas";
     const issues = [];
 
     if (!vs.length) issues.push(issue("block", "Sin precio cargado"));
+    if (unpriced.length && sellable.length) {
+      issues.push(issue("warn", `${unpriced.map((v) => v.name).join(", ")}: sin precio, no se vende (desactivala)`));
+    }
     else if (!sellable.length) issues.push(issue("block", "Ninguna variante activa con precio mayor a 0"));
     if (!category) issues.push(issue("block", "Sin categoría"));
     else if (!category.is_active) issues.push(issue("block", `Categoría "${category.name}" desactivada`));
@@ -105,6 +110,7 @@ export function reviewCatalog({ categories, products, variants, images, legacyId
       imageCount: imgs.length,
       withoutSku: vs.filter((v) => !v.sku).length,
       withoutCost: vs.filter((v) => v.cost == null).length,
+      unpriced,
       issues,
       blocked: issues.some((i) => i.level === "block"),
     };
@@ -281,13 +287,43 @@ export async function renderCatalogReview(view, { compare = false, filterValue =
       ? `Faltan en la base ${missingSheet.length} presentaciones de la hoja WEB con precio: ${missingSheet.map((r) => `${r.Nombre} ${r.Peso}`).join(", ")}.`
       : "Todas las presentaciones de la hoja WEB con precio están en la base."),
     sheetWithoutPrice.length
-      ? h("li", {}, `${sheetWithoutPrice.length} presentaciones de la hoja no tienen precio y no se importaron (hoy la tienda tampoco las muestra): ${sheetWithoutPrice.map((r) => `${r.Nombre} ${r.Peso}`).join(", ")}. Si se venden, cargales precio y agregalas como variante.`)
+      ? h("li", {}, `${sheetWithoutPrice.length} filas de la hoja no tienen precio de venta: son presentaciones que no se venden, no se importan y no reciben stock (${sheetWithoutPrice.map((r) => `${r.Nombre} ${r.Peso}`).join(", ")}).`)
       : null));
+
+  // Presentaciones activas sin precio: no se venden. Se desactivan (no se borran:
+  // así se conserva su historial y sus relaciones).
+  const unpriced = rows.flatMap((r) => r.unpriced.map((v) => ({ v, product: r.product })));
+  const unpricedBox = h("section", { class: "card", hidden: !unpriced.length });
+  function renderUnpriced(confirming = false, busy = false) {
+    if (!unpriced.length) return;
+    const yes = h("button", { type: "button", class: "btn-primary btn-inline", disabled: busy }, busy ? "Desactivando…" : "Confirmar");
+    yes.addEventListener("click", async () => {
+      renderUnpriced(true, true);
+      let ok = 0;
+      for (const { v } of unpriced) {
+        try { await api.updateVariant(v.id, { is_active: false }); ok++; }
+        catch (err) { console.error(err); }
+      }
+      toast(ok === unpriced.length ? `${ok} presentaciones desactivadas.` : `Se desactivaron ${ok} de ${unpriced.length}.`, ok === unpriced.length ? "ok" : "error");
+      await renderCatalogReview(view, { compare, filterValue: filter.value });
+    });
+    mount(unpricedBox,
+      h("h2", {}, "Presentaciones sin precio"),
+      h("p", {}, `${unpriced.length} ${unpriced.length === 1 ? "presentación activa no tiene" : "presentaciones activas no tienen"} precio de venta: no se venden y la tienda no las muestra. `,
+        "Si no las comercializás, desactivalas: no se borran, se conserva su historial."),
+      h("ul", { class: "change-list" }, unpriced.map(({ v, product }) => h("li", {}, h("a", { href: `#/productos/${product.id}` }, product.name), ` · ${v.name}`))),
+      confirming
+        ? h("div", { class: "confirm-box" }, h("p", {}, "Se van a desactivar estas presentaciones (is_active = no). Precio, stock e historial no cambian."),
+            h("div", { class: "actions" }, yes, h("button", { type: "button", class: "btn-ghost", disabled: busy, onClick: () => renderUnpriced(false) }, "Cancelar")))
+        : h("div", { class: "actions" }, h("button", { type: "button", class: "btn-ghost", onClick: () => renderUnpriced(true) }, `Desactivar ${unpriced.length}`)));
+  }
+  renderUnpriced();
 
   mount(view,
     h("div", { class: "page-header" },
       h("h1", {}, "Revisión del catálogo"),
       h("div", { class: "actions" }, csvButton)),
+    unpricedBox,
     h("section", { class: "card" },
       h("p", {}, `${rows.length} productos (${published} publicados, ${rows.length - published} en borrador) y ${variantCount} variantes.`),
       h("ul", { class: "change-list" },

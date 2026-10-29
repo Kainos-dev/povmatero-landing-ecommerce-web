@@ -149,7 +149,7 @@ export async function renderPriceTable(view) {
       const change = { v, label };
 
       if ("price" in e) {
-        if (c.price == null || Number.isNaN(c.price) || c.price < 0) problems.push(`${label}: el precio debe ser un número mayor o igual a 0.`);
+        if (c.price == null || Number.isNaN(c.price) || c.price <= 0) problems.push(`${label}: el precio debe ser un número mayor a 0 (si no se vende, desactivá la presentación).`);
         else if (round2(c.price) !== v.price) change.price = round2(c.price);
       }
       if ("cost" in e) {

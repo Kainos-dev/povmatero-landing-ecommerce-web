@@ -11,6 +11,12 @@ const IMPORT_REASON = "Carga inicial de stock (hoja WEB)";
 const ENTRY_REASON = "Ingreso de mercadería";
 const ADJUST_REASON = "Conteo físico";
 
+// Precio de la hoja: "$5,600" → 5600; vacío o inválido → 0 (no comercializable).
+export function sheetPrice(text) {
+  const n = Number(String(text ?? "").replace("$", "").replace(/,/g, "").trim());
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
 // "12" → 12; vacío o inválido → null.
 function readCount(text) {
   const t = String(text ?? "").trim();
@@ -263,7 +269,10 @@ export async function renderStockTable(view) {
     try {
       const res = await fetch(SHEET_URL, { cache: "no-store" });
       if (!res.ok) throw new Error(`La hoja respondió ${res.status}.`);
-      const sheet = await res.json();
+      // Las filas sin precio de venta válido son presentaciones que no se venden: se ignoran.
+      const allRows = await res.json();
+      const sheet = allRows.filter((s) => sheetPrice(s.Precio) > 0);
+      const ignored = allRows.length - sheet.length;
       const sheetById = new Map(sheet.map((s) => [Number(s.ID), s]));
       const sheetByName = new Map();
       for (const s of sheet) {
@@ -276,10 +285,11 @@ export async function renderStockTable(view) {
       const missing = [], invalid = [];
       sheetInfo.clear();
       for (const r of idx.rows) {
-        if (!idx.isYerba(r)) continue;
+        if (!idx.isYerba(r) || !(r.v.price > 0)) continue;   // sin precio: no se vende, no recibe stock
         const label = `${r.p.name} ${r.v.name}`;
         const m = matchSheetRow(r.v, r.p.name, sheetById, sheetByName);
         if (!m.row) {
+          // Puede ser una fila sin precio (no se vende) o que no esté en la hoja.
           missing.push(label + (m.by === "ambiguous" ? " (más de una fila con ese nombre)" : ""));
           sheetInfo.set(r.v.id, "no está en la hoja");
           continue;
@@ -304,7 +314,8 @@ export async function renderStockTable(view) {
         same ? h("p", {}, same === 1 ? "1 ya coincide con la hoja." : `${same} ya coinciden con la hoja.`) : null,
         kept ? h("p", {}, `${kept === 1 ? "1 ya tiene stock cargado distinto al de la hoja: no se toca" : `${kept} ya tienen stock cargado distinto al de la hoja: no se tocan`}. Si la hoja es la correcta, escribí la cantidad a mano.`) : null,
         missing.length ? h("p", {}, `No están en la hoja: ${missing.join(", ")}.`) : null,
-        invalid.length ? h("p", {}, `Stock no válido en la hoja: ${invalid.join(", ")}.`) : null));
+        invalid.length ? h("p", {}, `Stock no válido en la hoja: ${invalid.join(", ")}.`) : null,
+        ignored ? h("p", { class: "muted" }, `${ignored} ${ignored === 1 ? "fila de la hoja no tiene" : "filas de la hoja no tienen"} precio de venta: son presentaciones que no se venden y se ignoran.`) : null));
       if (filled) showFilter.value = "changed";
       renderTable();
       renderBar();
