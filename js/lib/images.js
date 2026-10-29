@@ -14,10 +14,15 @@ const QUALITY = 75;
 const OPTIMIZER_ENABLED =
   location.protocol === "https:" && !/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
 
+// Archivos del sitio con ruta absoluta (/images/...): así funcionan igual en
+// la portada y en /producto/<slug>, y el optimizador los acepta.
 function sourceFor(src) {
-  if (/^https?:\/\//.test(src)) return src;
-  // Archivos del sitio: el optimizador los pide con ruta absoluta (/images/...).
+  if (/^(https?:)?\/\//.test(src) || /^(data|blob):/.test(src)) return src;
   return "/" + String(src).replace(/^\.?\//, "");
+}
+
+export function absoluteSrc(src) {
+  return src ? sourceFor(src) : src;
 }
 
 function closestWidth(width) {
@@ -26,7 +31,8 @@ function closestWidth(width) {
 
 // URL optimizada para un ancho (se redondea al ancho permitido más cercano).
 export function optimizedSrc(src, width) {
-  if (!src || !OPTIMIZER_ENABLED) return src;
+  if (!src) return src;
+  if (!OPTIMIZER_ENABLED) return sourceFor(src);
   return `/_vercel/image?url=${encodeURIComponent(sourceFor(src))}&w=${closestWidth(width)}&q=${QUALITY}`;
 }
 
@@ -40,7 +46,7 @@ export function optimizedSrcset(src, widths) {
 // cuando la imagen cambia de foto: siempre vale la última original indicada.
 export function withFallback(img, originalSrc) {
   if (!OPTIMIZER_ENABLED || !originalSrc) return;
-  img.dataset.originalSrc = originalSrc;
+  img.dataset.originalSrc = sourceFor(originalSrc);
   if (img.dataset.fallbackReady) return;
   img.dataset.fallbackReady = "1";
   img.addEventListener("error", () => {

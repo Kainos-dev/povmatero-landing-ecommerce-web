@@ -1,6 +1,6 @@
 import { escapeHtml } from "../lib/html.js";
 import { optimizedSrc, optimizedSrcset, withFallback, warmImage } from "../lib/images.js";
-import { modalImageWidth } from "./modal.js";
+import { modalImageWidth } from "./productDetail.js";
 
 function formatPrice(price) {
   return "$" + price.toLocaleString("es-AR");
@@ -94,7 +94,50 @@ function enableLift(card) {
   });
 }
 
-export function renderCatalog(products, UI, modal, cart) {
+// Dirección de la página de cada producto.
+export function productPath(product) {
+  return `/producto/${encodeURIComponent(product.slug)}`;
+}
+
+// Arma una card (la usan el catálogo y el carrusel de similares).
+// La foto, el nombre y «Ver más» son enlaces reales a la página del producto
+// (se pueden abrir en otra pestaña; js/router.js los navega sin recargar).
+export function createProductCard(product, { eager = false, sizes = CARD_SIZES } = {}) {
+  const card = document.createElement("div");
+  card.className = product.category === "yerbas" ? "product-card product-card--yerba" : "product-card";
+
+  const href = escapeHtml(productPath(product));
+  const srcset = optimizedSrcset(product.image, CARD_WIDTHS);
+
+  card.innerHTML = `
+    <a class="card-image-wrap" href="${href}" tabindex="-1" aria-hidden="true">
+      <img src="${escapeHtml(optimizedSrc(product.image, 640))}"${srcset ? ` srcset="${escapeHtml(srcset)}" sizes="${sizes}"` : ""} alt="${escapeHtml(product.name)}" class="card-img" loading="${eager ? "eager" : "lazy"}" decoding="async"${eager ? ' fetchpriority="high"' : ""}/>
+    </a>
+
+    <div class="card-body">
+      <p class="card-name"><a href="${href}">${escapeHtml(product.name)}</a></p>
+      ${product.category === "yerbas" ? yerbaPricesHtml(product) : `
+      <p class="card-category">${escapeHtml(product.categoryName ?? product.category)}</p>
+      <p class="card-price">${formatPrice(product.price)}</p>`}
+      <a class="btn-add" href="${href}">Ver más</a>
+    </div>
+  `;
+
+  enableLift(card);
+
+  const img = card.querySelector(".card-img");
+  withFallback(img, product.image);
+  revealWhenLoaded(img);
+
+  // Al acercar el mouse o tocar la tarjeta se adelanta la foto grande de la ficha.
+  const warm = () => warmImage(product.image, modalImageWidth());
+  card.addEventListener("pointerenter", warm, { once: true });
+  card.addEventListener("touchstart", warm, { once: true, passive: true });
+
+  return card;
+}
+
+export function renderCatalog(products, UI) {
   UI.productGrid.innerHTML = "";
 
   if (!products.length) {
@@ -106,55 +149,8 @@ export function renderCatalog(products, UI, modal, cart) {
 
   const randomized = shuffle(products);
   const fragment = document.createDocumentFragment();
-
-randomized.forEach((product, index) => {
-    const card = document.createElement("div");
-    card.className = product.category === "yerbas" ? "product-card product-card--yerba" : "product-card";
-
-    const eager = index < EAGER_CARDS;
-    const srcset = optimizedSrcset(product.image, CARD_WIDTHS);
-
-    card.innerHTML = `
-      <div class="card-image-wrap">
-        <img src="${escapeHtml(optimizedSrc(product.image, 640))}"${srcset ? ` srcset="${escapeHtml(srcset)}" sizes="${CARD_SIZES}"` : ""} alt="${escapeHtml(product.name)}" class="card-img" loading="${eager ? "eager" : "lazy"}" decoding="async"${eager ? ' fetchpriority="high"' : ""}/>
-      </div>
-
-      <div class="card-body">
-        <p class="card-name">${escapeHtml(product.name)}</p>
-        ${product.category === "yerbas" ? yerbaPricesHtml(product) : `
-        <p class="card-category">${escapeHtml(product.categoryName ?? product.category)}</p>
-        <p class="card-price">${formatPrice(product.price)}</p>`}
-        <button class="btn-add">Ver más</button>
-      </div>
-    `;
-
-    enableLift(card);
-
-    const img = card.querySelector(".card-img");
-    withFallback(img, product.image);
-    revealWhenLoaded(img);
-
-    // Al acercar el mouse o tocar la tarjeta se adelanta la foto grande de la ficha.
-    const warm = () => warmImage(product.image, modalImageWidth());
-    card.addEventListener("pointerenter", warm, { once: true });
-    card.addEventListener("touchstart", warm, { once: true, passive: true });
-
-    // MODAL
-    img.onclick = () => {
-      modal.open(product);
-    };
-
-    card.querySelector(".card-name").onclick = () => {
-      modal.open(product);
-    };
-
-    // CARRITO
-    card.querySelector(".btn-add").onclick = () => {
-      modal.open(product);
-    };
-
-    fragment.appendChild(card);
+  randomized.forEach((product, index) => {
+    fragment.appendChild(createProductCard(product, { eager: index < EAGER_CARDS }));
   });
-
   UI.productGrid.appendChild(fragment);
 }

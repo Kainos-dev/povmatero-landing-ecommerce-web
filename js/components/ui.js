@@ -56,11 +56,21 @@ export function showToast(message) {
   }, 2000);
 }
 
+// Ir a una sección de la portada desde cualquier página: en la portada se
+// desplaza; desde una página de producto, js/router.js vuelve primero al inicio.
+export function goToHomeSection(section) {
+  if (document.documentElement.classList.contains("route-product")) {
+    document.dispatchEvent(new CustomEvent("povmatero:go-home", { detail: { section } }));
+  } else {
+    scrollToUnderHeader(document.getElementById(section));
+  }
+}
+
 export function initFooter(UI) {
   document.getElementById("footerAllProducts")?.addEventListener("click", (e) => {
     e.preventDefault();
 
-    scrollToUnderHeader(document.getElementById("productos"));
+    goToHomeSection("productos");
 
     document.querySelectorAll(".filter-chip").forEach(btn => {
       btn.classList.remove("active");
@@ -162,6 +172,7 @@ export function initMobileMenu() {
 
   const contacto = document.getElementById("mobileContacto");
   const about = document.getElementById("mobileAbout");
+  const productos = document.getElementById("mobileProductos");
 
   function open() {
     menu.classList.add("open");
@@ -174,6 +185,14 @@ export function initMobileMenu() {
   openBtn?.addEventListener("click", open);
   closeBtn?.addEventListener("click", close);
   overlay?.addEventListener("click", close);
+
+  // Productos: cierra el menú y lleva al título del catálogo (desde cualquier página)
+  productos?.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation(); // no lo procesa el enrutador como enlace común
+    close();
+    goToHomeSection("productos");
+  });
 
   // abrir modales
   contacto?.addEventListener("click", (e) => {

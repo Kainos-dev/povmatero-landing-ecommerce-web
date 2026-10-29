@@ -5,7 +5,8 @@
 // La tienda ya no consulta js/products.js ni la hoja WEB de Google Sheets.
 //
 // Formato que usan catalog.js, modal.js y cart.js:
-//   { id, name, category, categoryName, description, price, image, gallery, variants? }
+//   { id, slug, name, category, categoryName, description, price, image, gallery, variants? }
+//   slug:     identificador legible y único (products.slug): URL /producto/<slug>
 //   variants: [{ name, price, image, stock }]   (stock null = no se controla)
 //   stock:    solo en productos simples (sin variantes), mismo criterio
 //   gallery:  [src] todas las fotos del producto: portada, generales (en su orden)
@@ -24,7 +25,7 @@ const PRODUCT_PLACEHOLDER = "images/Logo.png";
 const SINGLE_VARIANT_NAME = "Único";
 
 const VIEW_COLUMNS = [
-  "product_id", "product_name", "description", "category_slug", "category_name", "cover_image",
+  "product_id", "product_slug", "product_name", "description", "category_slug", "category_name", "cover_image",
   "variant_name", "price", "track_stock", "stock", "variant_image",
   "product_sort", "variant_sort",
 ].join(",");
@@ -152,6 +153,7 @@ export function mapRowsToProducts(rows, galleryRows = []) {
     if (!product) {
       product = {
         id: row.product_id,
+        slug: row.product_slug,
         name: row.product_name,
         category: row.category_slug,
         categoryName: row.category_name ?? row.category_slug,

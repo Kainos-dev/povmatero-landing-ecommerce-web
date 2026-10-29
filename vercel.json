@@ -1,9 +1,22 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "images": {
-    "sizes": [128, 256, 384, 640, 828, 1080, 1200, 1600],
-    "qualities": [75],
-    "formats": ["image/webp"],
+    "sizes": [
+      128,
+      256,
+      384,
+      640,
+      828,
+      1080,
+      1200,
+      1600
+    ],
+    "qualities": [
+      75
+    ],
+    "formats": [
+      "image/webp"
+    ],
     "minimumCacheTTL": 2678400,
     "remotePatterns": [
       {
@@ -13,15 +26,38 @@
       }
     ],
     "localPatterns": [
-      { "pathname": "^/images/.*$", "search": "" }
+      {
+        "pathname": "^/images/.*$",
+        "search": ""
+      }
     ]
   },
   "headers": [
     {
       "source": "/images/(.*)",
       "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=86400, stale-while-revalidate=604800" }
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, stale-while-revalidate=604800"
+        }
       ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/producto/:slug",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(facebookexternalhit|Facebot|WhatsApp|Twitterbot|Slackbot|TelegramBot|Discordbot|LinkedInBot|Pinterest|SkypeUriPreview|Embedly|redditbot|Applebot).*"
+        }
+      ],
+      "destination": "/api/producto-meta?slug=:slug"
+    },
+    {
+      "source": "/producto/:slug",
+      "destination": "/index.html"
     }
   ]
 }

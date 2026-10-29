@@ -6,65 +6,83 @@
   <meta name="description" content="Articulos seleccionados para armar y mejorar tu kit matero.">
   <meta property="og:title" content="povmatero">
   <meta property="og:description" content="Todo para tu kit matero.">
-  <meta property="og:image" content="images/Logo.jpeg">
+  <meta property="og:image" content="https://povmatero-landing-ecommerce-web.vercel.app/images/Logo.jpeg">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://povmatero-landing-ecommerce-web.vercel.app/">
+  <link rel="canonical" href="https://povmatero-landing-ecommerce-web.vercel.app/">
   <meta name="theme-color" content="#000000" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <title>povmatero</title>
 
-  <!-- Intro (preloader) solo la primera vez de cada visita -->
-  <script>try{if(sessionStorage.getItem("povmatero-intro-seen"))document.documentElement.classList.add("intro-seen")}catch(e){}</script>
+  <!-- Antes de pintar: ¿portada o página de producto (/producto/<slug>)?
+       La intro (preloader) se muestra solo la primera vez de cada visita y no
+       en las páginas de producto. El fondo del hero solo se precarga en la portada. -->
+  <script>
+    (function () {
+      var d = document.documentElement, product = /^\/producto\/[a-z0-9-]+\/?$/.test(location.pathname), seen = false;
+      try { seen = !!sessionStorage.getItem("povmatero-intro-seen"); } catch (e) {}
+      if (product || seen) d.classList.add("intro-seen");
+      if (product) { d.classList.add("route-product"); return; }
+      [["/images/fondoDesktop.webp", "(min-width: 768px)"], ["/images/fondoMobile.webp", "(max-width: 767px)"]].forEach(function (x) {
+        var l = document.createElement("link");
+        l.rel = "preload"; l.as = "image"; l.type = "image/webp"; l.href = x[0]; l.media = x[1];
+        l.setAttribute("fetchpriority", "high");
+        document.head.appendChild(l);
+      });
+    })();
+  </script>
 
   <!-- Catálogo: se pide a Supabase en paralelo con el resto de la página.
        Mismas URLs que CATALOG_URLS en js/catalogSource.js (si cambian allá, copiarlas acá). -->
   <link rel="preconnect" href="https://gubrehbalkfvzwsndbcv.supabase.co" crossorigin />
-  <link rel="preload" as="fetch" crossorigin="anonymous" fetchpriority="high" href="https://gubrehbalkfvzwsndbcv.supabase.co/rest/v1/storefront_catalog?select=product_id,product_name,description,category_slug,category_name,cover_image,variant_name,price,track_stock,stock,variant_image,product_sort,variant_sort&amp;order=product_sort.asc,product_id.asc,variant_sort.asc&amp;apikey=sb_publishable_cMxTBYTgJm1wQ2FkJ37uZg_XNyogu7M" />
+  <link rel="preload" as="fetch" crossorigin="anonymous" fetchpriority="high" href="https://gubrehbalkfvzwsndbcv.supabase.co/rest/v1/storefront_catalog?select=product_id,product_slug,product_name,description,category_slug,category_name,cover_image,variant_name,price,track_stock,stock,variant_image,product_sort,variant_sort&amp;order=product_sort.asc,product_id.asc,variant_sort.asc&amp;apikey=sb_publishable_cMxTBYTgJm1wQ2FkJ37uZg_XNyogu7M" />
   <link rel="preload" as="fetch" crossorigin="anonymous" href="https://gubrehbalkfvzwsndbcv.supabase.co/rest/v1/product_images?select=product_id,src,is_cover,sort_order&amp;variant_id=is.null&amp;order=product_id.asc,sort_order.asc,id.asc&amp;apikey=sb_publishable_cMxTBYTgJm1wQ2FkJ37uZg_XNyogu7M" />
   <link rel="preload" as="fetch" crossorigin="anonymous" href="https://gubrehbalkfvzwsndbcv.supabase.co/rest/v1/categories?select=slug,sort_order&amp;order=sort_order.asc&amp;apikey=sb_publishable_cMxTBYTgJm1wQ2FkJ37uZg_XNyogu7M" />
 
-  <!-- Fondo del hero (lo primero que se ve) -->
-  <link rel="preload" as="image" type="image/webp" href="images/fondoDesktop.webp" media="(min-width: 768px)" fetchpriority="high" />
-  <link rel="preload" as="image" type="image/webp" href="images/fondoMobile.webp" media="(max-width: 767px)" fetchpriority="high" />
 
   <!-- Estilos: enlazados directo (css/main.css los importaba en cadena) -->
-  <link rel="stylesheet" href="css/base/variables.css">
-  <link rel="stylesheet" href="css/base/reset.css">
-  <link rel="stylesheet" href="css/base/base.css">
-  <link rel="stylesheet" href="css/layout/header.css">
-  <link rel="stylesheet" href="css/layout/hero.css">
-  <link rel="stylesheet" href="css/layout/filters.css">
-  <link rel="stylesheet" href="css/layout/catalog.css">
-  <link rel="stylesheet" href="css/layout/footer.css">
-  <link rel="stylesheet" href="css/components/productCard.css">
-  <link rel="stylesheet" href="css/components/cart.css">
-  <link rel="stylesheet" href="css/components/modal.css">
-  <link rel="stylesheet" href="css/components/toast.css">
-  <link rel="stylesheet" href="css/components/breadcrumb.css">
-  <link rel="stylesheet" href="css/components/emptyState.css">
-  <link rel="stylesheet" href="css/components/account.css">
-  <link rel="stylesheet" href="css/components/brand.css">
-  <link rel="stylesheet" href="css/components/lightbox.css">
-  <link rel="stylesheet" href="css/pages/productPage.css">
-  <link rel="stylesheet" href="css/pages/sobreNosotros.css">
-  <link rel="stylesheet" href="css/responsive/responsive.css">
+  <link rel="stylesheet" href="/css/base/variables.css">
+  <link rel="stylesheet" href="/css/base/reset.css">
+  <link rel="stylesheet" href="/css/base/base.css">
+  <link rel="stylesheet" href="/css/layout/header.css">
+  <link rel="stylesheet" href="/css/layout/hero.css">
+  <link rel="stylesheet" href="/css/layout/filters.css">
+  <link rel="stylesheet" href="/css/layout/catalog.css">
+  <link rel="stylesheet" href="/css/layout/footer.css">
+  <link rel="stylesheet" href="/css/components/productCard.css">
+  <link rel="stylesheet" href="/css/components/cart.css">
+  <link rel="stylesheet" href="/css/components/modal.css">
+  <link rel="stylesheet" href="/css/components/toast.css">
+  <link rel="stylesheet" href="/css/components/breadcrumb.css">
+  <link rel="stylesheet" href="/css/components/emptyState.css">
+  <link rel="stylesheet" href="/css/components/account.css">
+  <link rel="stylesheet" href="/css/components/brand.css">
+  <link rel="stylesheet" href="/css/components/lightbox.css">
+  <link rel="stylesheet" href="/css/pages/productPage.css">
+  <link rel="stylesheet" href="/css/pages/product.css">
+  <link rel="stylesheet" href="/css/pages/sobreNosotros.css">
+  <link rel="stylesheet" href="/css/responsive/responsive.css">
 
   <!-- Módulos de la tienda: se descargan todos juntos en vez de uno tras otro -->
-  <link rel="modulepreload" href="js/main.js">
-  <link rel="modulepreload" href="js/catalogSource.js">
-  <link rel="modulepreload" href="js/lib/supabaseConfig.js">
-  <link rel="modulepreload" href="js/lib/html.js">
-  <link rel="modulepreload" href="js/lib/images.js">
-  <link rel="modulepreload" href="js/lib/scroll.js">
-  <link rel="modulepreload" href="js/lib/swipe.js">
-  <link rel="modulepreload" href="js/components/lightbox.js">
-  <link rel="modulepreload" href="js/components/ui.js">
-  <link rel="modulepreload" href="js/components/catalog.js">
-  <link rel="modulepreload" href="js/components/modal.js">
-  <link rel="modulepreload" href="js/components/cart.js">
-  <link rel="modulepreload" href="js/components/filters.js">
-  <link rel="modulepreload" href="js/components/account.js">
+  <link rel="modulepreload" href="/js/main.js">
+  <link rel="modulepreload" href="/js/catalogSource.js">
+  <link rel="modulepreload" href="/js/lib/supabaseConfig.js">
+  <link rel="modulepreload" href="/js/lib/html.js">
+  <link rel="modulepreload" href="/js/lib/images.js">
+  <link rel="modulepreload" href="/js/lib/scroll.js">
+  <link rel="modulepreload" href="/js/lib/swipe.js">
+  <link rel="modulepreload" href="/js/components/lightbox.js">
+  <link rel="modulepreload" href="/js/components/ui.js">
+  <link rel="modulepreload" href="/js/components/catalog.js">
+  <link rel="modulepreload" href="/js/components/modal.js">
+  <link rel="modulepreload" href="/js/components/cart.js">
+  <link rel="modulepreload" href="/js/components/filters.js">
+  <link rel="modulepreload" href="/js/components/account.js">
+  <link rel="modulepreload" href="/js/components/productDetail.js">
+  <link rel="modulepreload" href="/js/router.js">
 
-  <link rel="icon" href="images/iconoPestaña.ico" />
+  <link rel="icon" href="/images/iconoPestaña.ico" />
   <!-- Tipografía sin bloquear la primera pintura (display=swap) -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -83,7 +101,7 @@
   <header class="site-header">
     <div class="header-inner">
 
-      <a href="index.html" class="logo"><img src="images/Logo-header.webp" alt="povmatero" width="110" height="96" fetchpriority="high"></a>
+      <a href="/" class="logo"><img src="/images/Logo-header.webp" alt="povmatero" width="110" height="96" fetchpriority="high"></a>
 
       <!-- DESKTOP NAV -->
       <nav class="header-nav">
@@ -124,7 +142,7 @@
   <!-- =====================
        HERO
   ===================== -->
-  <section id="hero" class="hero">
+  <section id="hero" class="hero home-only">
     <div class="hero-inner">
       <p class="hero-eyebrow">Tienda Online — povmatero</p>
       <h1 class="hero-title">La vida, pero desde un <br><span class="povmatero-heroTitle">povmatero</span>.</h1>
@@ -135,7 +153,7 @@
   <!-- <section id="hero" class="hero"> -->
     <!-- VIDEO FONDO -->
     <!-- <video autoplay muted loop playsinline class="hero-video">
-      <source src="./mp4.mp4" type="video/webm">
+      <source src="/mp4.mp4" type="video/webm">
     </video> -->
     <!-- OVERLAY OSCURO -->
     <!-- <div class="hero-overlay"></div> -->
@@ -152,7 +170,7 @@
   <!-- =====================
        CATEGORY FILTERS
   ===================== -->
-  <section id="productos" class="products-header">
+  <section id="productos" class="products-header home-only">
 
     <div class="filters-inner">
       <p class="filters-eyebrow">CATÁLOGO DE PRODUCTOS - POVMATERO</p>
@@ -161,7 +179,7 @@
 
   </section>
 
-  <section class="filters-section">
+  <section class="filters-section home-only">
 
     <div class="filters-inner">
 
@@ -189,7 +207,7 @@
   <!-- =====================
        PRODUCT GRID (Las card se integran con js)
   ===================== -->
-  <main class="catalog-section">
+  <main class="catalog-section home-only">
     <div class="product-grid" id="productGrid" aria-busy="true">
       <!-- Lugar reservado mientras carga el catálogo (se reemplaza al llegar los productos) -->
       <div class="product-card skeleton-card" aria-hidden="true"><div class="card-image-wrap"></div><div class="card-body"><span></span><span></span></div></div>
@@ -199,6 +217,31 @@
     </div>
     <div class="empty-state" id="emptyState" style="display:none;">
       <p>Próximamente vas a poder encontrar productos también en esta sección.</p>
+    </div>
+  </main>
+
+  <!-- =====================
+       PÁGINA DE PRODUCTO (/producto/<slug>; la arma js/router.js)
+  ===================== -->
+  <main class="pdp" id="productPage" aria-hidden="true">
+    <div class="pdp-inner">
+      <nav class="pdp-nav" aria-label="Ubicación">
+        <a href="/#productos" class="pdp-back" id="pdpBack"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><polyline points="15 5 8 12 15 19"/></svg><span>Volver al catálogo</span></a>
+        <span class="pdp-crumb" id="pdpCrumb"></span>
+      </nav>
+      <div class="pdp-detail" id="pdpDetail">
+        <p class="pdp-loading" role="status">Cargando producto…</p>
+      </div>
+      <section class="pdp-related" id="pdpRelated" hidden aria-labelledby="pdpRelatedTitle">
+        <div class="pdp-related-head">
+          <h2 class="pdp-related-title" id="pdpRelatedTitle">TAMBIÉN TE PUEDE INTERESAR</h2>
+          <div class="pdp-related-arrows">
+            <button type="button" class="pdp-related-arrow prev" aria-label="Ver productos anteriores"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><polyline points="15 5 8 12 15 19"/></svg></button>
+            <button type="button" class="pdp-related-arrow next" aria-label="Ver más productos"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><polyline points="9 5 16 12 9 19"/></svg></button>
+          </div>
+        </div>
+        <div class="pdp-related-track" id="pdpRelatedTrack"></div>
+      </section>
     </div>
   </main>
 
@@ -380,7 +423,7 @@
       <div class="about-header">
 
         <div class="about-logo">
-          <img src="images/Logo-header.webp" alt="povmatero" width="110" height="96" loading="lazy">
+          <img src="/images/Logo-header.webp" alt="povmatero" width="110" height="96" loading="lazy">
         </div>
 
         <p class="about-title-header">SOBRE NOSOTROS</p>
@@ -431,6 +474,7 @@
       </button>
 
       <!-- <nav class="mobile-menu-links"> -->
+        <a href="/#productos" id="mobileProductos">Productos</a>
         <a href="#" id="mobileContacto">Contacto</a>
         <a href="#" id="mobileAbout">Sobre Nosotros</a>
       <!-- </nav> -->
@@ -455,7 +499,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/main.js"></script>
+  <script type="module" src="/js/main.js"></script>
 
 </body>
 </html> 

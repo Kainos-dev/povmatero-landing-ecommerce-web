@@ -1,0 +1,201 @@
+/* =========================
+   PÁGINA DE PRODUCTO (/producto/<slug>)
+   La ficha reutiliza los estilos del modal (galería, variantes, precio):
+   acá solo se adapta a página. Prefijo .pdp (css/pages/productPage.css es de
+   un diseño anterior y no se usa).
+========================= */
+
+/* Qué se ve según la ruta (la clase la pone el <head> y js/router.js) */
+html:not(.route-product) .pdp { display: none; }
+.route-product .home-only { display: none !important; }
+
+/* Navbar: negro sólido y fijo en las páginas de producto (en la portada
+   sigue transparente sobre el hero) */
+.route-product .site-header { background: #000; }
+
+.pdp {
+  background: var(--bg);
+  padding: 84px 24px 96px;
+  min-height: 70vh;
+}
+
+.pdp-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* Volver + categoría */
+.pdp-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.pdp-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: -4px;
+  padding: 6px 4px;
+  color: #000;
+  border-radius: var(--radius);
+  transition: color var(--t);
+}
+.pdp-back:hover { color: var(--details); }
+.pdp-crumb::before { content: "/"; margin-right: 12px; color: #c9c9c9; }
+.pdp-crumb:empty { display: none; }
+
+/* Ficha: foto sobre blanco + información sobre negro (como las cards) */
+.pdp-detail {
+  background: #000;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 30px 60px -36px rgba(0, 0, 0, 0.45);
+}
+.pdp-loading { padding: 80px 24px; text-align: center; color: var(--text-secondary); font-size: var(--font-size-sm); }
+
+.pdp .modal-content { height: auto; }
+.pdp .modal-image { height: auto; min-height: 0; background: #fff; }
+.pdp .modal-stage,
+.pdp .has-gallery .modal-stage { flex: none; height: min(66vh, 600px); }
+.pdp .modal-info {
+  height: auto;
+  overflow: visible;
+  padding: 48px 40px;
+  gap: 14px;
+  justify-content: center;
+}
+.pdp .modal-title {
+  font-size: clamp(22px, 2.1vw, 30px);
+  font-weight: 300;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+.pdp .modal-close { display: none; }
+
+@media (min-width: 768px) {
+  .pdp .modal-content { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); }
+}
+
+/* Presentación única (sin selector) */
+.modal-single-variant {
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.modal-variants[hidden] { display: none !important; }
+
+/* Producto no disponible */
+.pdp-message {
+  padding: 72px 24px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+.pdp-message .btn-add {
+  display: inline-block;
+  width: auto;
+  margin-top: 20px;
+  padding: 12px 28px;
+  border: 1px solid #2a2a2a;
+}
+
+/* =========================
+   TAMBIÉN TE PUEDE INTERESAR
+========================= */
+.pdp-related { margin-top: 56px; }
+
+.pdp-related-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  margin-bottom: 12px;
+}
+/* Mismo estilo que «CATÁLOGO DE PRODUCTOS - POVMATERO» */
+.pdp-related-title {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  font-weight: 400;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.pdp-related-arrows {
+  position: absolute;
+  right: 0;
+  display: flex;
+  gap: 8px;
+}
+.pdp-related-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid #d9d9d9;
+  color: #000;
+  transition: border-color var(--t), color var(--t), opacity var(--t);
+}
+.pdp-related-arrow:hover:not(:disabled) { border-color: var(--details); color: var(--details); }
+.pdp-related-arrow:disabled { opacity: 0.3; cursor: default; }
+.pdp-related-arrow[hidden] { display: none; }
+@media (hover: none), (pointer: coarse) {
+  .pdp-related-arrows { display: none; }
+}
+
+/* Carril horizontal: deslizable con el dedo, con la rueda horizontal o con
+   las flechas. Se reserva aire arriba y abajo para la card que crece. */
+.pdp-related-track {
+  display: flex;
+  gap: 24px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 4px;
+  padding: 20px 4px 32px;
+  margin: 0 -4px;
+  scrollbar-width: thin;
+  scrollbar-color: #d9d9d9 transparent;
+}
+.pdp-related-track > .product-card {
+  flex: 0 0 calc((100% - 72px) / 4);
+  scroll-snap-align: start;
+}
+@media (max-width: 1023px) {
+  .pdp-related-track > .product-card { flex-basis: calc((100% - 48px) / 3); }
+}
+
+/* Foco visible con el marrón de la marca */
+.pdp-back:focus-visible,
+.pdp-related-arrow:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: 2px;
+}
+
+/* =========================
+   CELULAR
+========================= */
+@media (max-width: 767px) {
+  .pdp { padding: 76px 16px 96px; }
+  .pdp-detail { border-radius: 16px; }
+  .pdp .modal-image { min-height: 0; }
+  .pdp .modal-stage,
+  .pdp .has-gallery .modal-stage { height: auto; aspect-ratio: 1 / 1; }
+  .pdp .modal-info { padding: 20px 18px 24px; }
+  .pdp-related { margin-top: 40px; }
+  .pdp-related-track { gap: 16px; padding: 16px 16px 28px; margin: 0 -16px; scroll-padding-inline: 16px; }
+  .pdp-related-track > .product-card { flex-basis: 72%; }
+  /* El botón «Agregar al carrito» queda fijo abajo (ver responsive.css):
+     se deja lugar para que no tape el final de la página */
+  .route-product body { padding-bottom: 64px; }
+}

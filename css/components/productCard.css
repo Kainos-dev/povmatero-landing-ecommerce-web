@@ -28,6 +28,7 @@
 
 /* Image: tall portrait ratio dominates the card */
 .card-image-wrap {
+  display: block; /* es un enlace a la página del producto */
   aspect-ratio: 3 / 2;
   overflow: hidden;
   background: #f2f2f2; /* fondo neutro mientras llega la foto */
@@ -213,4 +214,14 @@
 @media (prefers-reduced-motion: reduce) {
   .product-card { transition: box-shadow 0.2s ease; }
   .product-card.is-lifted { --lift: 1; }
+}
+
+/* Enlaces de la card (nombre y «Ver más» llevan a la página del producto) */
+.card-name a { color: inherit; }
+a.btn-add { display: block; text-align: center; }
+.card-name a:focus-visible,
+a.btn-add:focus-visible,
+a.card-image-wrap:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: 2px;
 }

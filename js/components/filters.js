@@ -35,8 +35,15 @@ export function initFilters(UI, catalogPromise, render, showError) {
   // catálogo: el título «CATÁLOGO DE PRODUCTOS», justo debajo del encabezado.
   // Desde ahí se ven la barra de categorías y los productos (o el aviso de
   // categoría vacía, que queda inmediatamente debajo).
+  // En celular el desplegable de categorías se cierra al elegir una: el
+  // desplazamiento espera a que termine (≈0,24 s) para no competir con esa
+  // animación.
   function scrollToResults() {
-    requestAnimationFrame(() => scrollToUnderHeader(document.getElementById("productos")));
+    requestAnimationFrame(async () => {
+      const closing = UI.filtersContent?.getAnimations?.() ?? [];
+      await Promise.all(closing.map((a) => a.finished.catch(() => {})));
+      scrollToUnderHeader(document.getElementById("productos"));
+    });
   }
 
   function chips() {
