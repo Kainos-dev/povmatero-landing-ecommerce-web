@@ -54,7 +54,6 @@ html:not(.route-product) .pdp { display: none; }
   background: #000;
   border-radius: 20px;
   overflow: hidden;
-  box-shadow: 0 30px 60px -36px rgba(0, 0, 0, 0.45);
 }
 .pdp-loading { padding: 80px 24px; text-align: center; color: var(--text-secondary); font-size: var(--font-size-sm); }
 
