@@ -184,7 +184,7 @@ export async function renderProductEdit(view, productId) {
       h("p", {}, active
         ? "Publicado: listo para mostrarse en la tienda."
         : "Borrador: no se muestra en la tienda."),
-      h("p", { class: "muted" }, "La tienda muestra los productos publicados desde acá. Mientras no haya ninguno publicado, sigue mostrando el catálogo anterior."),
+      h("p", { class: "muted" }, "La tienda muestra solo los productos publicados desde acá."),
       error,
       h("div", { class: "actions" }, button)
     );

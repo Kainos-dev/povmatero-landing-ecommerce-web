@@ -152,6 +152,20 @@ export async function saveVariantSku(variantId, sku) {
   }
 }
 
+// Vínculo de una variante con su fila (columna ID) de la hoja WEB. Solo se usa
+// para la importación inicial de stock; nunca se pisa un vínculo existente.
+export async function saveVariantSheetLink(variantId, sheetId) {
+  const updated = check(
+    await supabase.from("variant_internal").update({ legacy_sheet_id: sheetId })
+      .eq("variant_id", variantId).is("legacy_sheet_id", null).select("variant_id")
+  );
+  if (updated.length) return;
+  const existing = check(await supabase.from("variant_internal").select("variant_id").eq("variant_id", variantId));
+  if (!existing.length) {
+    check(await supabase.from("variant_internal").insert({ variant_id: variantId, legacy_sheet_id: sheetId }));
+  }
+}
+
 // El stock nunca se envía: empieza en 0 y solo cambia con movimientos.
 export async function createVariant(productId, fields) {
   return check(

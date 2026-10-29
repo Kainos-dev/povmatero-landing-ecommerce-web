@@ -82,13 +82,15 @@ export function reviewCatalog({ categories, products, variants, images, legacyId
       if (v.track_stock && Number.isInteger(ss) && ss !== v.stock) issues.push(issue("warn", `${v.name}: stock ${v.stock}, en la hoja ${ss}`));
     }
 
-    // Listo para publicar: sin bloqueos, con foto propia ya en Storage y con algo
+    // Listo para publicar: sin bloqueos, con fotos ya en Storage (o, en yerbas, la
+    // imagen genérica) y con algo
     // que se pueda comprar hoy (variante sin control de stock o con stock > 0).
     const repoCount = imgs.filter((i) => imageSource(i.src) === "repo").length;
     const buyableNow = sellable.some((v) => !v.track_stock || v.stock > 0);
     const blockedNow = issues.some((i) => i.level === "block");
     const notReady = blockedNow ? "Tiene problemas que impiden publicar"
-      : !imgs.length ? "Sin imágenes"
+      // Las yerbas sin foto propia usan la imagen genérica de yerba: no bloquea.
+      : !imgs.length && !isYerba ? "Sin imágenes"
       : repoCount ? "Imágenes sin migrar a Storage"
       : !buyableNow ? (isYerba ? "Sin stock cargado" : "Controla stock y no tiene: desactivá el control (solo las yerbas lo usan)")
       : null;
@@ -293,7 +295,7 @@ export async function renderCatalogReview(view, { compare = false, filterValue =
           ? `${blocked.length} ${blocked.length === 1 ? "producto no se puede publicar" : "productos no se pueden publicar"} todavía.`
           : "Ningún producto tiene problemas que impidan publicarlo."),
         h("li", {}, `${withWarnings.length} con observaciones para revisar.`),
-        h("li", {}, `${readyDrafts.length} ${readyDrafts.length === 1 ? "borrador está listo" : "borradores están listos"} para publicar (sin problemas, con fotos en Storage y con algo para vender hoy).`),
+        h("li", {}, `${readyDrafts.length} ${readyDrafts.length === 1 ? "borrador está listo" : "borradores están listos"} para publicar (sin problemas, con fotos en Storage o imagen genérica de yerba, y con algo para vender hoy).`),
         h("li", {}, `${noSku} variantes sin SKU y ${noCost} sin costo (son datos internos: no impiden publicar).`)),
       h("p", { class: "muted" }, "Solo cambia datos si usás “Publicar”, y siempre con confirmación.")),
     h("section", { class: "card" },

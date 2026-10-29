@@ -1,29 +1,21 @@
-// Fuente del catálogo de la tienda.
+// Fuente del catálogo de la tienda: Supabase es la única fuente.
 //
-// Por defecto lee Supabase (vista public.storefront_catalog: solo productos,
-// variantes y categorías publicados). Si Supabase falla, tarda demasiado o
-// todavía no hay nada publicado, usa la fuente anterior (js/products.js +
-// hoja WEB), así la tienda nunca queda vacía durante la transición.
+// Lee la vista public.storefront_catalog (solo productos, variantes y
+// categorías publicados), la galería de imágenes y el orden de las categorías.
+// La tienda ya no consulta js/products.js ni la hoja WEB de Google Sheets.
 //
-//   ?fuente=supabase  solo Supabase, sin respaldo (para probar)
-//   ?fuente=legacy    solo la fuente anterior
-//
-// Las dos fuentes entregan el mismo formato que ya usan catalog.js, modal.js
-// y cart.js:
-//   { id, name, category, description, price, image, variants? }
+// Formato que usan catalog.js, modal.js y cart.js:
+//   { id, name, category, categoryName, description, price, image, gallery, variants? }
 //   variants: [{ name, price, image, stock }]   (stock null = no se controla)
 //   stock:    solo en productos simples (sin variantes), mismo criterio
-//   gallery:  [src] portada + imágenes generales del producto (solo Supabase)
-
-import { products as legacyProducts } from "./products.js";
-import { getYerbas, transformarYerbas } from "./yerbas.js";
+//   gallery:  [src] portada + imágenes generales del producto
 
 const SUPABASE_JS_URL = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/+esm";
 const REQUEST_TIMEOUT_MS = 10000;
-// Con respaldo disponible no conviene esperar tanto antes de usarlo.
-const AUTO_TIMEOUT_MS = 6000;
+// Si falla (por ejemplo, un corte de red momentáneo), se reintenta una vez.
+const RETRY_DELAY_MS = 1500;
 
-// Mismas fotos de respaldo que usa hoy la tienda cuando falta la imagen.
+// Imagen genérica cuando un producto no tiene foto (archivos propios del sitio).
 const YERBA_PLACEHOLDER = "images/yerbas/canarias-tradicional.png";
 const PRODUCT_PLACEHOLDER = "images/Logo.png";
 
@@ -35,56 +27,26 @@ const VIEW_COLUMNS = [
   "product_sort", "variant_sort",
 ].join(", ");
 
-export function getCatalogSourceName() {
-  const param = new URLSearchParams(window.location.search).get("fuente");
-  return param === "supabase" || param === "legacy" ? param : "auto";
-}
-
-// Devuelve { source, categories, getCategory(category) } donde category es
-// "all", "yerbas" o el slug de una categoría. "all" no incluye yerbas (como hoy).
-// categories: [{ slug, name }] con productos publicados, en el orden definido en
-// el panel (null en la fuente anterior).
+// Devuelve { source, categories, productCount, getCategory(category) } donde
+// category es "all", "yerbas" o el slug de una categoría. "all" no incluye yerbas.
+// categories: [{ slug, name }] con productos publicados, en el orden del panel.
 export async function loadCatalog() {
-  const source = getCatalogSourceName();
-  if (source === "legacy") return loadLegacyCatalog();
-  if (source === "supabase") return loadSupabaseCatalog(REQUEST_TIMEOUT_MS);
-
   try {
-    // El límite cubre también la descarga de la librería de Supabase.
-    const catalog = await withTimeout(loadSupabaseCatalog(AUTO_TIMEOUT_MS), AUTO_TIMEOUT_MS);
-    if (catalog.productCount > 0) return catalog;
-    console.warn("Catálogo: Supabase no tiene productos publicados; se usa la fuente anterior.");
+    return await withTimeout(loadSupabaseCatalog(REQUEST_TIMEOUT_MS), REQUEST_TIMEOUT_MS);
   } catch (error) {
-    console.warn("Catálogo: no se pudo leer Supabase; se usa la fuente anterior.", error);
+    console.warn("Catálogo: primer intento fallido, se reintenta.", error);
+    await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+    return withTimeout(loadSupabaseCatalog(REQUEST_TIMEOUT_MS), REQUEST_TIMEOUT_MS);
   }
-  return loadLegacyCatalog();
 }
 
+// El límite cubre también la descarga de la librería de Supabase.
 function withTimeout(promise, ms) {
   let timer;
   const timeout = new Promise((_, reject) => {
     timer = setTimeout(() => reject(new Error(`Supabase no respondió en ${ms / 1000} s`)), ms);
   });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
-}
-
-// ---------------------------------------------------------------------
-// Fuente actual: products.js + hoja WEB (sin cambios de comportamiento)
-// ---------------------------------------------------------------------
-function loadLegacyCatalog() {
-  return {
-    source: "legacy",
-    categories: null,
-    async getCategory(category) {
-      if (category === "yerbas") {
-        // Igual que antes: se consulta la hoja en cada visita al filtro.
-        return transformarYerbas(await getYerbas());
-      }
-      return category === "all"
-        ? legacyProducts
-        : legacyProducts.filter((p) => p.category === category);
-    },
-  };
 }
 
 // ---------------------------------------------------------------------

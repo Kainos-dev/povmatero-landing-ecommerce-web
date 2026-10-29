@@ -5,6 +5,7 @@ import { renderPriceTable } from "./views/priceTable.js";
 import { renderImageMigration } from "./views/imageMigration.js";
 import { renderCostImport } from "./views/costImport.js";
 import { renderCatalogReview } from "./views/catalogReview.js";
+import { renderStockTable } from "./views/stockTable.js";
 
 const DEFAULT_ROUTE = "#/productos";
 
@@ -13,6 +14,7 @@ const routes = [
   [/^#\/productos\/nuevo\/?$/, (view) => renderProductEdit(view, null)],
   [/^#\/productos\/(\d+)\/?$/, (view, m) => renderProductEdit(view, Number(m[1]))],
   [/^#\/precios\/?$/,          (view) => renderPriceTable(view)],
+  [/^#\/stock\/?$/,            (view) => renderStockTable(view)],
   [/^#\/imagenes\/?$/,         (view) => renderImageMigration(view)],
   [/^#\/importar-costos\/?$/,  (view) => renderCostImport(view)],
   [/^#\/revision\/?$/,         (view) => renderCatalogReview(view)],

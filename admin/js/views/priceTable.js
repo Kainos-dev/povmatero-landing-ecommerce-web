@@ -5,8 +5,6 @@ import { normalizeSku } from "../api/catalog.js";
 import { registerMovement } from "../api/inventory.js";
 import { h, mount, formatPrice, errorMessage, normalizeText, toast } from "../ui.js";
 
-// Hoja WEB de yerbas (la misma que usa hoy la tienda). Solo se lee.
-const SHEET_URL = "https://opensheet.elk.sh/1TFmZ1hbO5bXh5MGktpUzM7MJTZwyoknVLyVHRNBbwso/WEB";
 const DEFAULT_REASON = "Carga inicial de stock";
 // Regla actual: solo las yerbas controlan stock (sus cantidades vienen de la hoja WEB).
 const STOCK_CATEGORY = "yerbas";
@@ -60,8 +58,6 @@ export async function renderPriceTable(view) {
     h("option", { value: "nosku" }, "Sin SKU"),
     h("option", { value: "changed" }, "Solo con cambios sin guardar")
   );
-  const sheetButton = h("button", { type: "button", class: "btn-ghost", title: "Completa la columna Entrada de las presentaciones de yerba con el stock de la hoja WEB. No guarda nada." },
-    "Traer stock de la hoja WEB");
   const ruleButton = h("button", { type: "button", class: "btn-ghost", title: "Marca qué variantes controlan stock: solo las yerbas. No guarda nada." },
     "Solo yerbas controlan stock");
   const info = h("p", { class: "muted" });
@@ -395,48 +391,6 @@ export async function renderPriceTable(view) {
       extra);
   }
 
-  // ---------- Stock desde la hoja WEB ----------
-  sheetButton.addEventListener("click", async () => {
-    sheetButton.disabled = true;
-    sheetButton.textContent = "Leyendo la hoja…";
-    try {
-      const res = await fetch(SHEET_URL, { cache: "no-store" });
-      if (!res.ok) throw new Error(`La hoja respondió ${res.status}.`);
-      const rows = await res.json();
-      const stockById = new Map(rows.map((r) => [Number(r.ID), Number(String(r.Stock ?? "").trim() || 0)]));
-
-      let filled = 0, same = 0, lower = 0, notFound = 0;
-      for (const v of variants) {
-        if (v.sheet_id == null || !idx.isYerba(v) || !current(v).track) continue;
-        if (!stockById.has(v.sheet_id)) { notFound++; continue; }
-        const target = stockById.get(v.sheet_id);
-        if (!Number.isInteger(target) || target < 0) { notFound++; continue; }
-        const diff = target - v.stock;
-        if (diff > 0) { setEdit(v, "entry", String(diff)); filled++; }
-        else if (diff === 0) same++;
-        else lower++;
-      }
-
-      renderNotice(h("div", { class: "notice-info" },
-        h("p", {}, filled
-          ? `Hoja WEB: se completó la entrada de ${filled} ${filled === 1 ? "presentación" : "presentaciones"} (stock de la hoja menos el stock actual). Todavía no se guardó nada: revisá y confirmá.`
-          : "Hoja WEB leída: no hay entradas para cargar."),
-        same ? h("p", {}, `${same} ya coinciden con la hoja.`) : null,
-        lower ? h("p", {}, `${lower} tienen más stock que la hoja: no se tocan (si hace falta, usá un ajuste desde el producto).`) : null,
-        notFound ? h("p", {}, `${notFound} no se encontraron en la hoja o tienen un stock no válido.`) : null
-      ));
-      if (filled) showFilter.value = "changed";
-      renderTable();
-      renderBar();
-    } catch (err) {
-      console.error(err);
-      renderNotice(h("p", { class: "form-error" }, `No se pudo leer la hoja WEB: ${err?.message || err}`));
-    } finally {
-      sheetButton.disabled = false;
-      sheetButton.textContent = "Traer stock de la hoja WEB";
-    }
-  });
-
   // ---------- Regla: solo las yerbas controlan stock ----------
   ruleButton.addEventListener("click", () => {
     let on = 0, off = 0;
@@ -472,8 +426,8 @@ export async function renderPriceTable(view) {
   fillCategories();
   mount(view,
     h("div", { class: "page-header" }, h("h2", {}, "Precios y stock")),
-    h("p", { class: "muted" }, "Editá SKU, precios, costos, control de stock y entradas de stock de todas las variantes. Nada se guarda hasta que revisás y confirmás."),
-    h("div", { class: "toolbar" }, search, categoryFilter, showFilter, ruleButton, sheetButton),
+    h("p", { class: "muted" }, "Editá SKU, precios, costos, control de stock y entradas de stock de todas las variantes. Nada se guarda hasta que revisás y confirmás. Para contar stock o hacer la importación inicial desde la hoja, usá la pantalla Stock."),
+    h("div", { class: "toolbar" }, search, categoryFilter, showFilter, ruleButton),
     info,
     notice,
     bar,
