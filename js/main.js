@@ -32,6 +32,9 @@ function showError() {
 
 const filters = initFilters(UI, catalogPromise, render, showError);
 
+// Carrito guardado en el navegador: se rearma con el catálogo actual.
+catalogPromise.then((catalog) => cart.restore(catalog.products)).catch(() => {});
+
 // Render inicial ("Todo")
 filters.show("all");
 

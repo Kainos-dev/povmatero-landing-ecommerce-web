@@ -93,7 +93,7 @@ export function initModal(UI, cart) {
                   <div class="modal-variants">
                     ${product.variants.map((v) => `
                       <button
-                        class="variant-btn"
+                        class="variant-btn${v.stock != null && v.stock <= 0 ? " out" : ""}"
                         data-name="${escapeHtml(v.name)}"
                         data-img="${escapeHtml((product.category === "yerbas" ? product.image : v.image) ?? "")}"
                       >
@@ -174,22 +174,31 @@ export function initModal(UI, cart) {
 
           btn.classList.add("active");
 
-          // habilitar botón
+          // Botón según el stock de la presentación elegida
           const addBtn = UI.modalBody.querySelector("#modalAdd");
 
           if (addBtn) {
-            addBtn.disabled = false;
-            addBtn.textContent = "Agregar al carrito";
+            const stock = stockFor(product, variantName);
+            const out = stock != null && stock <= 0;
+            addBtn.disabled = out;
+            addBtn.textContent = out ? "Sin stock" : "Agregar al carrito";
           }
         };
       });
+
+      // Yerbas: todas las presentaciones comparten foto, así que se abre con la
+      // primera disponible elegida (se ve el precio y el stock de entrada).
+      if (product.category === "yerbas" && product.variants && !selectedVariant) {
+        const first = product.variants.find(v => v.stock == null || v.stock > 0) ?? product.variants[0];
+        [...UI.modalBody.querySelectorAll(".variant-btn")].find(b => b.dataset.name === first?.name)?.onclick();
+      }
 
       // =========================
       // CARRITO
       // =========================
       UI.modalBody.querySelector("#modalAdd").onclick = () => {
         if (product.variants && !selectedVariant) {
-          showToast("Seleccione una variante.");
+          showToast("Elegí una presentación.");
           return;
         }
 
@@ -222,7 +231,7 @@ export function initModal(UI, cart) {
           return;
         }
 
-        showToast(`${product.name} ${selectedVariant || ""} agregado/a.`);
+        showToast(`${[product.name, selectedVariant].filter(Boolean).join(" ")}: agregado al carrito.`);
       };
     }
 
@@ -239,6 +248,11 @@ export function initModal(UI, cart) {
   UI.modalOverlay.onclick = (e) => {
     if (e.target === UI.modalOverlay) close();
   };
+
+  // Esc cierra la ficha
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && UI.modalOverlay.classList.contains("open")) close();
+  });
 
   return { open };
 }

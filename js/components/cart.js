@@ -1,5 +1,18 @@
 import { escapeHtml } from "../lib/html.js";
 
+// El carrito se guarda en este navegador (producto, presentación y cantidad) y,
+// al volver, se reconstruye con el catálogo actual: precios, fotos y stock al día.
+const STORAGE_KEY = "povmatero-cart-v1";
+
+function readSaved() {
+  try {
+    const data = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]");
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
 export function initCart(UI) {
 
   let cart = [];
@@ -80,6 +93,42 @@ export function initCart(UI) {
 
     // estado vacío
     UI.cartEmptyMsg.classList.toggle("hidden", cart.length > 0);
+
+    save();
+  }
+
+  function save() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(cart.map(i => ({ id: i.id, variant: i.variant ?? null, qty: i.qty }))));
+    } catch {
+      // Sin almacenamiento disponible (modo privado): el carrito dura lo que la pestaña.
+    }
+  }
+
+  // Rearma el carrito guardado con los productos publicados de ahora. Lo que ya no
+  // está publicado o no tiene stock se quita; la cantidad se ajusta al stock.
+  function restore(products) {
+    const saved = readSaved();
+    if (!saved.length || cart.length) return;
+    const byId = new Map(products.map(p => [p.id, p]));
+    for (const s of saved) {
+      const product = byId.get(s.id);
+      if (!product) continue;
+      let price = product.price, stock = product.stock ?? null, image = product.image;
+      if (product.variants) {
+        const v = product.variants.find(x => x.name === s.variant);
+        if (!v) continue;
+        price = v.price;
+        stock = v.stock ?? null;
+        if (product.category !== "yerbas" && v.image) image = v.image;
+      } else if (s.variant) {
+        continue;
+      }
+      const qty = Math.min(Math.max(1, Math.floor(Number(s.qty) || 1)), stock ?? Infinity);
+      if (!(price > 0) || qty < 1) continue;
+      cart.push({ ...product, image, variant: s.variant ?? null, price, maxQty: stock, qty });
+    }
+    update();
   }
 
   function add(product) {
@@ -151,5 +200,13 @@ export function initCart(UI) {
 
   UI.whatsappBtn.onclick = sendWhatsApp;
 
-  return { add };
+  // Esc cierra el carrito
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && UI.cartPanel.classList.contains("open")) {
+      UI.cartPanel.classList.remove("open");
+      UI.cartOverlay.classList.remove("open");
+    }
+  });
+
+  return { add, restore };
 }

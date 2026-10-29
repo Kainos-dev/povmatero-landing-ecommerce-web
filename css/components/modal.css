@@ -222,3 +222,6 @@
 @media (max-width: 767px) {
   .modal-thumb { width: 40px; height: 40px; }
 }
+
+/* Presentación sin stock: se puede ver, pero no comprar */
+.variant-btn.out { text-decoration: line-through; opacity: 0.55; }

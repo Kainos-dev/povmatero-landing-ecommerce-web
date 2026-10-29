@@ -74,6 +74,7 @@ async function loadSupabaseCatalog(timeoutMs) {
   return {
     source: "supabase",
     productCount: products.length,
+    products,
     categories,
     async getCategory(category) {
       if (category === "all") return products.filter((p) => p.category !== "yerbas");
