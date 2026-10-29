@@ -25,10 +25,15 @@
 
   /* Halo de los modales: resplandor blanco difuso detrás de la caja,
      para separarla del fondo oscurecido (sutil, sin mancha blanca) */
-  --modal-halo: 0 0 0 1px rgba(255, 255, 255, 0.06),
-                0 0 48px 4px rgba(255, 255, 255, 0.09),
-                0 0 140px 28px rgba(255, 255, 255, 0.05);
+  --modal-halo: 0 0 0 1px rgba(255, 255, 255, 0.08),
+                0 0 64px 10px rgba(255, 255, 255, 0.15),
+                0 0 190px 56px rgba(255, 255, 255, 0.08);
   --modal-backdrop-blur: blur(4px); /* el mismo que ya usa «Contacto» */
+
+  /* Foco accesible con el marrón de la marca. El aro claro de afuera lo hace
+     visible sobre fondos negros, donde el marrón solo casi no se distingue. */
+  --focus-outline: 2px solid var(--details);
+  --focus-ring: 0 0 0 4px rgba(255, 255, 255, 0.35);
 
   /* Transitions */
   --t:             0.2s ease;

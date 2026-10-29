@@ -31,13 +31,12 @@ export function initFilters(UI, catalogPromise, render, showError) {
   }
 
   // Primero se aplica el filtro; en el cuadro siguiente (ya con la grilla
-  // nueva y la barra de categorías cerrada en celular) se va al inicio de los
-  // resultados, o al aviso de categoría vacía.
+  // nueva y la barra de categorías cerrada en celular) se va al comienzo del
+  // catálogo: el título «CATÁLOGO DE PRODUCTOS», justo debajo del encabezado.
+  // Desde ahí se ven la barra de categorías y los productos (o el aviso de
+  // categoría vacía, que queda inmediatamente debajo).
   function scrollToResults() {
-    requestAnimationFrame(() => {
-      const target = UI.productGrid.children.length ? UI.productGrid : UI.emptyState;
-      scrollToUnderHeader(target);
-    });
+    requestAnimationFrame(() => scrollToUnderHeader(document.getElementById("productos")));
   }
 
   function chips() {

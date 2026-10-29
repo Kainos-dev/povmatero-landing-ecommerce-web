@@ -1,4 +1,4 @@
-import { scrollBehavior } from "../lib/scroll.js";
+import { scrollToUnderHeader } from "../lib/scroll.js";
 
 export function initUI() {
   return {
@@ -60,7 +60,7 @@ export function initFooter(UI) {
   document.getElementById("footerAllProducts")?.addEventListener("click", (e) => {
     e.preventDefault();
 
-    document.getElementById("productos")?.scrollIntoView({ behavior: scrollBehavior() });
+    scrollToUnderHeader(document.getElementById("productos"));
 
     document.querySelectorAll(".filter-chip").forEach(btn => {
       btn.classList.remove("active");

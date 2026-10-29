@@ -10,6 +10,7 @@ import { initFiltersToggle } from './components/ui.js';
 import { initAboutModal } from './components/ui.js';
 import { initMobileMenu } from './components/ui.js';
 import { initAccount } from "./components/account.js";
+import { enhanceAnchorLinks } from "./lib/scroll.js";
 
 const UI = initUI();
 
@@ -50,6 +51,7 @@ initAboutModal();
 initMobileMenu();
 
 initAccount();
+enhanceAnchorLinks();
 
 // Intro (preloader): se muestra la primera vez de cada visita y se oculta
 // apenas pasa la animación (antes esperaba 2,8 s fijos después de cargar todo

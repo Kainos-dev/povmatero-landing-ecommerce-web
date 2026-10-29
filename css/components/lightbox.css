@@ -1,0 +1,105 @@
+/* =========================
+   VISOR AMPLIADO DE FOTOS (js/components/lightbox.js)
+   Fondo negro casi opaco, foto lo más grande posible, controles mínimos.
+========================= */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 5000; /* sobre el modal de producto (3000) */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.94);
+  -webkit-backdrop-filter: var(--modal-backdrop-blur);
+  backdrop-filter: var(--modal-backdrop-blur);
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.25s ease, visibility 0s linear 0.25s;
+}
+.lightbox.open {
+  visibility: visible;
+  opacity: 1;
+  transition: opacity 0.25s ease, visibility 0s;
+}
+
+.lightbox-stage {
+  position: absolute;
+  inset: 56px 16px 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: pan-y;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.lightbox-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+  transform: scale(0.98);
+  transition: opacity 0.2s ease, transform 0.25s ease;
+}
+.lightbox.open .lightbox-img { transform: none; }
+.lightbox-img.is-loading { opacity: 0.35; }
+
+.lightbox-close,
+.lightbox-arrow {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+  border-radius: 50%;
+  transition: background var(--t), color var(--t);
+}
+.lightbox-close {
+  top: 10px;
+  right: 10px;
+  width: 44px;
+  height: 44px;
+}
+.lightbox-arrow {
+  top: 50%;
+  width: 48px;
+  height: 48px;
+  margin-top: -24px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.lightbox-arrow.prev { left: 16px; }
+.lightbox-arrow.next { right: 16px; }
+.lightbox-close:hover,
+.lightbox-arrow:hover { background: rgba(255, 255, 255, 0.16); }
+.lightbox-arrow[hidden] { display: none; }
+
+/* En pantallas táctiles se navega deslizando: sin flechas encima de la foto */
+@media (hover: none), (pointer: coarse) {
+  .lightbox-arrow { display: none; }
+  .lightbox-stage { inset: 56px 0 56px; }
+}
+
+.lightbox-counter {
+  position: absolute;
+  bottom: 18px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.15em;
+  color: var(--text-secondary);
+}
+.lightbox-counter[hidden] { display: none; }
+
+/* Foco visible con el marrón de la marca (ver --focus-outline en variables.css) */
+.lightbox-close:focus-visible,
+.lightbox-arrow:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: 2px;
+  box-shadow: var(--focus-ring);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lightbox, .lightbox-img { transition: none; }
+}

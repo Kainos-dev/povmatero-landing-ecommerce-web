@@ -84,6 +84,11 @@
 }
 .account-modal.open .account-box { transform: none; }
 
+/* La caja recibe el foco al abrir (punto de partida para lectores de pantalla),
+   pero no es un control: sin contorno. Así no aparece el anillo azul del
+   navegador alrededor del modal en celulares. */
+.account-box:focus { outline: none; }
+
 .account-close {
   position: absolute;
   top: 12px;
@@ -179,7 +184,7 @@
 .account-field input:focus {
   outline: none;
   border-color: var(--text-secondary);
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.06);
+  box-shadow: 0 0 0 3px var(--details); /* foco marrón de la marca */
 }
 .account-field input[aria-invalid="true"] { border-color: #ff8a80; }
 .account-input-wrap input { padding-right: 76px; }
@@ -320,4 +325,14 @@
 
 @media (prefers-reduced-motion: reduce) {
   .account-modal, .account-box { transition: none; }
+}
+
+/* Foco visible de los controles del modal: marrón de la marca (solo con
+   teclado o cuando el navegador lo indica; sin bordes permanentes). */
+.account-modal button:focus-visible,
+.account-modal a:focus-visible,
+.account-check input:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: 2px;
+  box-shadow: var(--focus-ring);
 }

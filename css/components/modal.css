@@ -73,13 +73,6 @@
   overflow: hidden;       
 }
 
-.modal-image img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-  transition: opacity 0.2s ease;
-}
-
 /* INFO */
 .modal-info {
   height: 100%;
@@ -192,33 +185,93 @@
 .modal-content > * {
   min-height: 0;
 }
-/* GALERÍA (miniaturas sobre la imagen principal) */
+/* =========================
+   GALERÍA
+   Foto principal (clic → visor ampliado), flechas con mouse, deslizamiento
+   táctil y tira de miniaturas cuadradas debajo (solo con 2 o más fotos).
+========================= */
 .modal-image { position: relative; }
+.modal-image.has-gallery { flex-direction: column; }
 
-.modal-thumbs {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
+.modal-stage {
+  position: relative;
   display: flex;
-  gap: 6px;
-  padding: 8px;
-  overflow-x: auto;
+  align-items: center;
   justify-content: center;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.25), transparent);
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  cursor: zoom-in;
+  touch-action: pan-y; /* el scroll vertical sigue siendo del navegador */
+  -webkit-tap-highlight-color: transparent;
 }
+.has-gallery .modal-stage { flex: 1 1 auto; height: auto; }
+
+.modal-stage img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+  transition: opacity 0.2s ease, transform 0.25s ease;
+}
+
+/* Flechas laterales: solo con mouse (en táctil se desliza) */
+.gallery-arrow {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin-top: -20px;
+  border-radius: 50%;
+  color: #000;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+  opacity: 0;
+  transition: opacity var(--t), background var(--t);
+}
+.gallery-arrow.prev { left: 12px; }
+.gallery-arrow.next { right: 12px; }
+.gallery-arrow:hover { background: #fff; }
+@media (hover: hover) and (pointer: fine) {
+  .gallery-arrow { display: flex; }
+  .modal-stage:hover .gallery-arrow,
+  .gallery-arrow:focus-visible { opacity: 1; }
+}
+
+/* Miniaturas cuadradas debajo de la foto */
+.modal-thumbs {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: #fff;
+}
+.modal-thumbs::-webkit-scrollbar { display: none; }
 
 .modal-thumb {
   flex: 0 0 auto;
-  width: 52px;
-  height: 52px;
+  width: 56px;
+  aspect-ratio: 1 / 1;
   padding: 0;
   border: 2px solid transparent;
   background: #fff;
   cursor: pointer;
-  opacity: 0.75;
+  opacity: 0.6;
   transition: opacity var(--t), border-color var(--t);
 }
+
+/* Centradas si entran; si no, la tira se desplaza sin cortar las primeras */
+.modal-thumb:first-child { margin-left: auto; }
+.modal-thumb:last-child { margin-right: auto; }
 
 .modal-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .modal-thumb:hover { opacity: 1; }
@@ -227,8 +280,21 @@
 .btn-add:disabled { opacity: 0.5; pointer-events: none; }
 
 @media (max-width: 767px) {
-  .modal-thumb { width: 40px; height: 40px; }
+  .modal-thumb { width: 44px; }
+  .modal-thumbs { padding: 8px 12px; }
+  /* Lugar para la tira de miniaturas sin achicar la foto */
+  .modal-image.has-gallery { min-height: 262px; }
 }
 
 /* Presentación sin stock: se puede ver, pero no comprar */
 .variant-btn.out { text-decoration: line-through; opacity: 0.55; }
+
+/* Foco visible en la galería: marrón de la marca */
+.modal-stage:focus-visible,
+.modal-thumb:focus-visible,
+.gallery-arrow:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: 2px;
+  box-shadow: var(--focus-ring);
+}
+.modal-stage:focus-visible { outline-offset: -4px; }

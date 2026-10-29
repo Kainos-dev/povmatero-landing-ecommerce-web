@@ -1,6 +1,10 @@
 import { showToast } from "./ui.js";
 import { escapeHtml } from "../lib/html.js";
-import { optimizedSrc, withFallback } from "../lib/images.js";
+import { optimizedSrc, withFallback, warmImage } from "../lib/images.js";
+import { attachSwipe } from "../lib/swipe.js";
+import { openLightbox, closeLightbox, isLightboxOpen } from "./lightbox.js";
+
+const ARROW = (points) => `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><polyline points="${points}"/></svg>`;
 
 // Ancho de la foto principal de la ficha: al menos el ancho máximo que puede
 // ocupar (90vw en celular, 65vw en escritorio) para que el modal mida lo mismo
@@ -12,6 +16,9 @@ export function modalImageWidth() {
 const THUMB_WIDTH = 128;
 
 export function initModal(UI, cart) {
+
+  // Navegación de la galería de la ficha abierta (null si tiene una sola foto).
+  let galleryNav = null;
 
   function formatPrice(price) {
     if (!price) return "";
@@ -44,21 +51,34 @@ export function initModal(UI, cart) {
 
     let selectedImage = product.image;
     let selectedVariant = null;
-    const gallery = product.gallery ?? [];
+    // Galería: todas las fotos del producto (ver catalogSource.js). Es siempre
+    // la misma lista; elegir una variante solo cambia cuál se está viendo.
+    const gallery = product.gallery?.length ? product.gallery : [product.image];
+    const multi = gallery.length > 1;
     const simpleOutOfStock = !product.variants && product.stock != null && product.stock <= 0;
 
     function render() {
       UI.modalBody.innerHTML = `
         <div class="modal-content vertical">
 
-          <div class="modal-image">
-            <img src="${escapeHtml(optimizedSrc(selectedImage, modalImageWidth()))}" alt="${escapeHtml(product.name)}" decoding="async" />
+          <div class="modal-image${multi ? " has-gallery" : ""}">
+            <div class="modal-stage" role="button" tabindex="0" aria-label="Ampliar imagen de ${escapeHtml(product.name)}">
+              <img src="${escapeHtml(optimizedSrc(selectedImage, modalImageWidth()))}" alt="${escapeHtml(product.name)}" decoding="async" draggable="false" />
+              ${
+                multi
+                  ? `
+                    <button type="button" class="gallery-arrow prev" aria-label="Imagen anterior">${ARROW("15 5 8 12 15 19")}</button>
+                    <button type="button" class="gallery-arrow next" aria-label="Imagen siguiente">${ARROW("9 5 16 12 9 19")}</button>
+                  `
+                  : ""
+              }
+            </div>
             ${
-              gallery.length > 1
+              multi
                 ? `
-                  <div class="modal-thumbs">
-                    ${gallery.map((src) => `
-                      <button type="button" class="modal-thumb${src === selectedImage ? " active" : ""}" data-src="${escapeHtml(src)}" aria-label="Ver imagen">
+                  <div class="modal-thumbs" role="group" aria-label="Fotos del producto">
+                    ${gallery.map((src, i) => `
+                      <button type="button" class="modal-thumb${src === selectedImage ? " active" : ""}" data-src="${escapeHtml(src)}" aria-label="Ver foto ${i + 1} de ${gallery.length}" aria-pressed="${src === selectedImage}">
                         <img src="${escapeHtml(optimizedSrc(src, THUMB_WIDTH))}" alt="" decoding="async" />
                       </button>
                     `).join("")}
@@ -123,9 +143,24 @@ export function initModal(UI, cart) {
         </div>
       `;
 
-      const mainImg = UI.modalBody.querySelector(".modal-image > img");
+      const stage = UI.modalBody.querySelector(".modal-stage");
+      const mainImg = stage.querySelector("img");
+      const thumbsStrip = UI.modalBody.querySelector(".modal-thumbs");
       withFallback(mainImg, selectedImage);
       UI.modalBody.querySelectorAll(".modal-thumb").forEach(t => withFallback(t.querySelector("img"), t.dataset.src));
+
+      // Miniatura activa: borde marrón y, si la tira tiene scroll, a la vista.
+      function syncThumbs(src) {
+        UI.modalBody.querySelectorAll(".modal-thumb").forEach(t => {
+          const active = t.dataset.src === src;
+          t.classList.toggle("active", active);
+          t.setAttribute("aria-pressed", String(active));
+          if (active && thumbsStrip) {
+            const left = t.offsetLeft - (thumbsStrip.clientWidth - t.offsetWidth) / 2;
+            thumbsStrip.scrollTo({ left: Math.max(0, left), behavior: "smooth" });
+          }
+        });
+      }
 
       function showImage(src) {
         if (!src || src === selectedImage) return;
@@ -136,16 +171,53 @@ export function initModal(UI, cart) {
           mainImg.style.opacity = 1;
         }, 120);
         selectedImage = src;
-        UI.modalBody.querySelectorAll(".modal-thumb").forEach(t => {
-          t.classList.toggle("active", t.dataset.src === src);
-        });
+        syncThumbs(src);
       }
 
       // =========================
       // GALERÍA
       // =========================
+      function step(delta) {
+        if (!multi) return;
+        const n = gallery.length;
+        const current = Math.max(0, gallery.indexOf(selectedImage));
+        const next = gallery[(current + delta + n) % n];
+        showImage(next);
+        // Solo se adelanta la siguiente foto en la misma dirección.
+        warmImage(gallery[(gallery.indexOf(next) + delta + n) % n], modalImageWidth());
+      }
+      galleryNav = multi ? step : null;
+
       UI.modalBody.querySelectorAll(".modal-thumb").forEach(thumb => {
         thumb.onclick = () => showImage(thumb.dataset.src);
+      });
+
+      UI.modalBody.querySelector(".gallery-arrow.prev")?.addEventListener("click", (e) => { e.stopPropagation(); step(-1); });
+      UI.modalBody.querySelector(".gallery-arrow.next")?.addEventListener("click", (e) => { e.stopPropagation(); step(1); });
+
+      // Celular: deslizar a izquierda/derecha (el scroll vertical sigue libre).
+      attachSwipe(stage, {
+        canSwipe: () => multi,
+        onMove: (dx) => { mainImg.style.transform = dx ? `translateX(${dx}px)` : ""; },
+        onSwipe: (dir) => step(dir),
+      });
+
+      // Tocar o hacer clic en la foto abre el visor ampliado.
+      function openViewer() {
+        openLightbox({
+          images: gallery,
+          index: Math.max(0, gallery.indexOf(selectedImage)),
+          alt: product.name,
+          onChange: (src) => showImage(src),
+          returnFocus: stage,
+        });
+      }
+      stage.addEventListener("click", (e) => {
+        if (e.target.closest(".gallery-arrow")) return;
+        openViewer();
+      });
+      stage.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openViewer(); }
       });
 
       // =========================
@@ -253,6 +325,8 @@ export function initModal(UI, cart) {
   }
 
   function close() {
+    closeLightbox();
+    galleryNav = null;
     UI.modalOverlay.classList.remove("open");
   }
 
@@ -262,9 +336,15 @@ export function initModal(UI, cart) {
     if (e.target === UI.modalOverlay) close();
   };
 
-  // Esc cierra la ficha
+  // Esc cierra la ficha; ← → recorren sus fotos. Con el visor abierto, las
+  // teclas las atiende el visor (ver lightbox.js).
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && UI.modalOverlay.classList.contains("open")) close();
+    if (!UI.modalOverlay.classList.contains("open") || isLightboxOpen()) return;
+    if (e.key === "Escape") close();
+    else if (galleryNav && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+      e.preventDefault();
+      galleryNav(e.key === "ArrowLeft" ? -1 : 1);
+    }
   });
 
   return { open };

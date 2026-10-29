@@ -8,7 +8,8 @@
 //   { id, name, category, categoryName, description, price, image, gallery, variants? }
 //   variants: [{ name, price, image, stock }]   (stock null = no se controla)
 //   stock:    solo en productos simples (sin variantes), mismo criterio
-//   gallery:  [src] portada + imágenes generales del producto
+//   gallery:  [src] todas las fotos del producto: portada, generales (en su orden)
+//             y las de sus variantes. Es la misma lista elija la variante que elija.
 
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from "./lib/supabaseConfig.js";
 
@@ -181,8 +182,13 @@ export function mapRowsToProducts(rows, galleryRows = []) {
     // sin variantes, pero conserva su stock (null = no lo controla).
     const single = variants.length === 1 && variants[0].name === SINGLE_VARIANT_NAME;
 
-    // Galería: la portada primero y después las demás imágenes generales, sin repetir.
-    const gallery = [...new Set([image, ...(galleryByProduct.get(product.id) ?? [])])];
+    // Galería: la portada primero, después las imágenes generales y al final
+    // las fotos de las variantes (en el orden de las variantes), sin repetir.
+    const gallery = [...new Set([
+      image,
+      ...(galleryByProduct.get(product.id) ?? []),
+      ...variants.map((v) => v.image).filter(Boolean),
+    ])];
 
     return {
       ...product,

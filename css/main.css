@@ -19,6 +19,7 @@
 @import url('./components/emptyState.css');
 @import url('./components/account.css');
 @import url('./components/brand.css');
+@import url('./components/lightbox.css');
 
 /* PAGES */
 @import url('./pages/productPage.css');

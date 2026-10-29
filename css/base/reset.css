@@ -1,8 +1,8 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-/* Scroll suave nativo: solo afecta enlaces y desplazamientos por código
-   (no la rueda ni el dedo). scroll-padding deja lugar al encabezado fijo. */
-html { scroll-behavior: smooth; scroll-padding-top: 60px; }
-@media (prefers-reduced-motion: reduce) {
-  html { scroll-behavior: auto; }
-}
+/* Los desplazamientos suaves (cambio de categoría, enlaces internos) los anima
+   js/lib/scroll.js, que respeta prefers-reduced-motion. Sin scroll-behavior:
+   smooth acá: se mezclaba con el reacomodo automático del navegador al
+   cambiar el catálogo y dejaba la página en posiciones erráticas.
+   scroll-padding deja lugar al encabezado fijo (anclas y foco con teclado). */
+html { scroll-padding-top: 60px; }
