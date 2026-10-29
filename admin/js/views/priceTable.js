@@ -8,6 +8,8 @@ import { h, mount, formatPrice, errorMessage, normalizeText, toast } from "../ui
 // Hoja WEB de yerbas (la misma que usa hoy la tienda). Solo se lee.
 const SHEET_URL = "https://opensheet.elk.sh/1TFmZ1hbO5bXh5MGktpUzM7MJTZwyoknVLyVHRNBbwso/WEB";
 const DEFAULT_REASON = "Carga inicial de stock";
+// Regla actual: solo las yerbas controlan stock (sus cantidades vienen de la hoja WEB).
+const STOCK_CATEGORY = "yerbas";
 
 function round2(n) {
   return Math.round(n * 100) / 100;
@@ -43,7 +45,8 @@ export async function renderPriceTable(view) {
     return;
   }
 
-  // Ediciones pendientes por variante: { price?, cost?, entry? } como texto del input.
+  // Ediciones pendientes por variante: { price?, cost?, entry?, sku?, track? }
+  // (track: "true" / "false"; el resto, como texto del input).
   const edits = new Map();
   let saving = false;
   let lastErrors = [];
@@ -57,8 +60,10 @@ export async function renderPriceTable(view) {
     h("option", { value: "nosku" }, "Sin SKU"),
     h("option", { value: "changed" }, "Solo con cambios sin guardar")
   );
-  const sheetButton = h("button", { type: "button", class: "btn-ghost", title: "Completa la columna Entrada con el stock de la hoja WEB. No guarda nada." },
+  const sheetButton = h("button", { type: "button", class: "btn-ghost", title: "Completa la columna Entrada de las presentaciones de yerba con el stock de la hoja WEB. No guarda nada." },
     "Traer stock de la hoja WEB");
+  const ruleButton = h("button", { type: "button", class: "btn-ghost", title: "Marca qué variantes controlan stock: solo las yerbas. No guarda nada." },
+    "Solo yerbas controlan stock");
   const info = h("p", { class: "muted" });
   const notice = h("div");
   const tbody = h("tbody");
@@ -74,6 +79,7 @@ export async function renderPriceTable(view) {
     const productById = new Map(products.map((p) => [p.id, p]));
     const categoryName = new Map(categories.map((c) => [c.id, c.name]));
     const categorySort = new Map(categories.map((c) => [c.id, c.sort_order]));
+    const categorySlug = new Map(categories.map((c) => [c.id, c.slug]));
 
     // Orden de la tabla: categoría, orden del producto, nombre, orden de la variante.
     const key = (v) => {
@@ -88,7 +94,9 @@ export async function renderPriceTable(view) {
       }
       return 0;
     });
-    return { productById, categoryName };
+    // ¿La variante es de una yerba? (por la categoría de su producto)
+    const isYerba = (v) => categorySlug.get(productById.get(v.product_id)?.category_id) === STOCK_CATEGORY;
+    return { productById, categoryName, isYerba };
   }
   let idx = index();
 
@@ -99,7 +107,8 @@ export async function renderPriceTable(view) {
     const cost = "cost" in e ? readNumber(e.cost) : v.cost;
     const entry = "entry" in e ? readNumber(e.entry) : null;
     const sku = "sku" in e ? normalizeSku(e.sku) : v.sku;
-    return { price, cost, entry, sku };
+    const track = "track" in e ? e.track === "true" : v.track_stock;
+    return { price, cost, entry, sku, track };
   }
 
   function setEdit(v, key, value) {
@@ -107,6 +116,7 @@ export async function renderPriceTable(view) {
     const original = key === "price" ? String(v.price)
       : key === "cost" ? (v.cost == null ? "" : String(v.cost))
       : key === "sku" ? (v.sku ?? "")
+      : key === "track" ? String(v.track_stock)
       : "";
     if (String(value).trim() === original) delete e[key];
     else e[key] = value;
@@ -150,8 +160,9 @@ export async function renderPriceTable(view) {
         if (Number.isNaN(c.cost) || (c.cost != null && c.cost < 0)) problems.push(`${label}: el costo debe ser un número mayor o igual a 0 (o vacío).`);
         else if ((c.cost == null ? null : round2(c.cost)) !== v.cost) change.cost = c.cost == null ? null : round2(c.cost);
       }
+      if ("track" in e && c.track !== v.track_stock) change.track = c.track;
       if ("entry" in e && c.entry != null) {
-        if (!v.track_stock) problems.push(`${label}: no controla stock.`);
+        if (!c.track) problems.push(`${label}: no controla stock.`);
         else if (!Number.isInteger(c.entry) || c.entry <= 0) problems.push(`${label}: la entrada debe ser un número entero mayor a 0.`);
         else change.entry = c.entry;
       }
@@ -159,7 +170,7 @@ export async function renderPriceTable(view) {
         if (c.sku != null && c.sku.length > 64) problems.push(`${label}: el SKU puede tener hasta 64 caracteres.`);
         else if (c.sku !== (v.sku ?? null)) change.sku = c.sku;
       }
-      if ("price" in change || "cost" in change || "entry" in change || "sku" in change) changes.push(change);
+      if (["price", "cost", "entry", "sku", "track"].some((k) => k in change)) changes.push(change);
     }
     return { changes, problems };
   }
@@ -174,7 +185,7 @@ export async function renderPriceTable(view) {
       if (!p) return false;
       if (category && String(p.category_id) !== category) return false;
       if (query && !normalizeText(`${p.name} ${v.name} ${v.sku ?? ""}`).includes(query)) return false;
-      if (show === "stock" && !v.track_stock) return false;
+      if (show === "stock" && !current(v).track) return false;
       if (show === "nocost" && v.cost != null) return false;
       if (show === "nosku" && v.sku != null) return false;
       if (show === "changed" && !edits.has(v.id)) return false;
@@ -195,7 +206,8 @@ export async function renderPriceTable(view) {
       value: "cost" in e ? e.cost : (v.cost == null ? "" : String(v.cost)), "aria-label": `Costo de ${p.name} ${v.name}` });
     const marginCell = h("td", { class: "num muted" }, margin(c.price, c.cost));
 
-    const entry = v.track_stock
+    const track = h("input", { type: "checkbox", checked: c.track, "aria-label": `Controla stock ${p.name} ${v.name}` });
+    const entry = c.track
       ? h("input", { class: "input input-num input-sm", type: "number", min: "1", step: "1", placeholder: "+",
           value: e.entry ?? "", "aria-label": `Entrada de stock de ${p.name} ${v.name}` })
       : null;
@@ -210,7 +222,8 @@ export async function renderPriceTable(view) {
       h("td", {}, price),
       h("td", {}, cost),
       marginCell,
-      h("td", { class: "num" }, v.track_stock ? String(v.stock) : h("span", { class: "muted" }, "No controla")),
+      h("td", { class: "center" }, track),
+      h("td", { class: "num" }, c.track ? String(v.stock) : h("span", { class: "muted" }, "No controla")),
       h("td", {}, entry ?? "")
     );
 
@@ -225,13 +238,19 @@ export async function renderPriceTable(view) {
     cost.addEventListener("input", () => onInput("cost", cost));
     entry?.addEventListener("input", () => onInput("entry", entry));
     sku.addEventListener("input", () => onInput("sku", sku));
+    track.addEventListener("change", () => {
+      setEdit(v, "track", String(track.checked));
+      if (!track.checked) setEdit(v, "entry", "");   // sin control, no hay entradas
+      renderTable();
+      renderBar();
+    });
     return tr;
   }
 
   function renderTable() {
     const list = visibleVariants();
     if (!list.length) {
-      mount(tbody, h("tr", {}, h("td", { colspan: "9", class: "empty" }, "No hay variantes que coincidan con los filtros.")));
+      mount(tbody, h("tr", {}, h("td", { colspan: "10", class: "empty" }, "No hay variantes que coincidan con los filtros.")));
     } else {
       let lastProduct = null;
       mount(tbody, list.map((v) => {
@@ -270,6 +289,7 @@ export async function renderPriceTable(view) {
       if ("price" in c) parts.push(`precio ${formatPrice(c.v.price)} → ${formatPrice(c.price)}`);
       if ("cost" in c) parts.push(`costo ${c.v.cost == null ? "sin costo" : formatPrice(c.v.cost)} → ${c.cost == null ? "sin costo" : formatPrice(c.cost)}`);
       if ("sku" in c) parts.push(`SKU ${c.v.sku ?? "sin SKU"} → ${c.sku ?? "sin SKU"}`);
+      if ("track" in c) parts.push(c.track ? "pasa a controlar stock" : "deja de controlar stock");
       if ("entry" in c) parts.push(`entrada +${c.entry} (stock ${c.v.stock} → ${c.v.stock + c.entry})`);
       const warn = "price" in c && c.price === 0 && c.v.is_active ? " ⚠ precio 0" : "";
       return h("li", {}, h("strong", {}, c.label), `: ${parts.join(" · ")}${warn}`);
@@ -323,15 +343,20 @@ export async function renderPriceTable(view) {
           errs.push(`SKU: ${errorMessage(err)}${released.has(c.v.id) ? ` (quedó sin SKU; antes era “${c.v.sku}”)` : ""}`);
         }
       }
-      if ("price" in c) {
-        try { await api.updateVariant(c.v.id, { price: c.price }); }
-        catch (err) { console.error(err); errs.push(`precio: ${errorMessage(err)}`); }
+      let variantFailed = false;
+      const fields = {};
+      if ("price" in c) fields.price = c.price;
+      if ("track" in c) fields.track_stock = c.track;
+      if (Object.keys(fields).length) {
+        try { await api.updateVariant(c.v.id, fields); }
+        catch (err) { console.error(err); variantFailed = true; errs.push(`${"price" in c ? "precio" : "control de stock"}: ${errorMessage(err)}`); }
       }
       if ("cost" in c) {
         try { await api.saveVariantCost(c.v.id, c.cost); }
         catch (err) { console.error(err); errs.push(`costo: ${errorMessage(err)}`); }
       }
-      if ("entry" in c) {
+      // Si no se pudo activar el control de stock, la entrada no se registra.
+      if ("entry" in c && !(variantFailed && "track" in c)) {
         try { await registerMovement({ variantId: c.v.id, type: "entrada", quantity: c.entry, reason }); }
         catch (err) { console.error(err); errs.push(`entrada: ${errorMessage(err)}`); }
       }
@@ -382,7 +407,7 @@ export async function renderPriceTable(view) {
 
       let filled = 0, same = 0, lower = 0, notFound = 0;
       for (const v of variants) {
-        if (v.sheet_id == null || !v.track_stock) continue;
+        if (v.sheet_id == null || !idx.isYerba(v) || !current(v).track) continue;
         if (!stockById.has(v.sheet_id)) { notFound++; continue; }
         const target = stockById.get(v.sheet_id);
         if (!Number.isInteger(target) || target < 0) { notFound++; continue; }
@@ -412,6 +437,28 @@ export async function renderPriceTable(view) {
     }
   });
 
+  // ---------- Regla: solo las yerbas controlan stock ----------
+  ruleButton.addEventListener("click", () => {
+    let on = 0, off = 0;
+    const withStock = [];
+    for (const v of variants) {
+      const want = idx.isYerba(v);
+      if (current(v).track === want) continue;
+      setEdit(v, "track", String(want));
+      if (!want) { setEdit(v, "entry", ""); off++; if (v.stock > 0) withStock.push(`${idx.productById.get(v.product_id)?.name} · ${v.name} (${v.stock})`); }
+      else on++;
+    }
+    renderNotice(h("div", { class: "notice-info" },
+      h("p", {}, on || off
+        ? `Regla aplicada en la tabla: ${off} ${off === 1 ? "variante deja" : "variantes dejan"} de controlar stock${on ? ` y ${on} de yerba ${on === 1 ? "pasa" : "pasan"} a controlarlo` : ""}. Todavía no se guardó nada: revisá y confirmá.`
+        : "Ya se cumple la regla: solo las yerbas controlan stock."),
+      withStock.length ? h("p", {}, `Tienen stock registrado (queda guardado, pero la tienda deja de mostrarlo): ${withStock.join(", ")}.`) : null,
+      h("p", { class: "muted" }, "No se crean movimientos de inventario. Cada producto se puede volver a activar desde su ficha o con la casilla de esta tabla.")));
+    if (on || off) showFilter.value = "changed";
+    renderTable();
+    renderBar();
+  });
+
   // Aviso al cerrar o recargar la pestaña con cambios sin guardar.
   const beforeUnload = (e) => { if (edits.size && view.isConnected) { e.preventDefault(); e.returnValue = ""; } };
   window.addEventListener("beforeunload", beforeUnload);
@@ -425,15 +472,15 @@ export async function renderPriceTable(view) {
   fillCategories();
   mount(view,
     h("div", { class: "page-header" }, h("h2", {}, "Precios y stock")),
-    h("p", { class: "muted" }, "Editá SKU, precios, costos y entradas de stock de todas las variantes. Nada se guarda hasta que revisás y confirmás."),
-    h("div", { class: "toolbar" }, search, categoryFilter, showFilter, sheetButton),
+    h("p", { class: "muted" }, "Editá SKU, precios, costos, control de stock y entradas de stock de todas las variantes. Nada se guarda hasta que revisás y confirmás."),
+    h("div", { class: "toolbar" }, search, categoryFilter, showFilter, ruleButton, sheetButton),
     info,
     notice,
     bar,
     h("div", { class: "table-wrap" },
       h("table", { class: "table table-edit price-table" },
         h("thead", {}, h("tr", {},
-          ["Producto", "Categoría", "Variante", "SKU", "Precio", "Costo", "Margen", "Stock", "Entrada"].map((t) => h("th", {}, t))
+          ["Producto", "Categoría", "Variante", "SKU", "Precio", "Costo", "Margen", "Controla stock", "Stock", "Entrada"].map((t) => h("th", {}, t))
         )),
         tbody
       )

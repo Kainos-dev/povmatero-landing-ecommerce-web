@@ -90,7 +90,7 @@ export function reviewCatalog({ categories, products, variants, images, legacyId
     const notReady = blockedNow ? "Tiene problemas que impiden publicar"
       : !imgs.length ? "Sin imágenes"
       : repoCount ? "Imágenes sin migrar a Storage"
-      : !buyableNow ? "Sin stock cargado"
+      : !buyableNow ? (isYerba ? "Sin stock cargado" : "Controla stock y no tiene: desactivá el control (solo las yerbas lo usan)")
       : null;
 
     return {

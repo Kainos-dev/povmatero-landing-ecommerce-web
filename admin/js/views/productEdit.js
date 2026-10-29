@@ -65,6 +65,9 @@ export async function renderProductEdit(view, productId) {
   const isNew = !product;
   let currentVariants = null; // se completa al cargar las variantes
   const reload = () => renderProductEdit(view, product.id);
+  // Por ahora solo las yerbas controlan stock: es el valor inicial de la casilla
+  // (se puede activar a mano en cualquier producto).
+  const tracksStockByDefault = () => categories.find((c) => c.id === product?.category_id)?.slug === "yerbas";
 
   // ------------------------------------------------------------------
   // Datos del producto
@@ -320,7 +323,7 @@ export async function renderProductEdit(view, productId) {
     const price = h("input", { class: "input input-num", type: "number", min: "0", step: "0.01", placeholder: "Precio", "aria-label": "Precio" });
     const cost = h("input", { class: "input input-num", type: "number", min: "0", step: "0.01", placeholder: "Costo (opcional)", "aria-label": "Costo" });
     const sku = h("input", { class: "input", maxlength: "64", placeholder: "Opcional", "aria-label": "SKU de la nueva variante" });
-    const track = h("input", { type: "checkbox", checked: true });
+    const track = h("input", { type: "checkbox", checked: tracksStockByDefault() });
     const submit = h("button", { type: "submit", class: "btn-primary btn-inline" }, "Agregar variante");
 
     // Mientras no tenga más de un modelo, se puede volver a "Producto simple".
@@ -388,7 +391,7 @@ export async function renderProductEdit(view, productId) {
     const price = h("input", { class: "input input-num", type: "number", min: "0", step: "0.01", placeholder: "Precio", value: v ? String(v.price) : "", "aria-label": "Precio" });
     const cost = h("input", { class: "input input-num", type: "number", min: "0", step: "0.01", placeholder: "Opcional", value: v?.cost == null ? "" : String(v.cost), "aria-label": "Costo" });
     const sku = h("input", { class: "input input-sku", maxlength: "64", placeholder: "Opcional", value: v?.sku ?? "", "aria-label": "SKU" });
-    const track = h("input", { type: "checkbox", checked: v ? v.track_stock : true, "aria-label": "Controla stock" });
+    const track = h("input", { type: "checkbox", checked: v ? v.track_stock : tracksStockByDefault(), "aria-label": "Controla stock" });
     const submit = h("button", { type: "submit", class: "btn-primary btn-inline", disabled: !!v }, v ? "Guardar" : "Guardar precio");
 
     const stockInfo = !v
