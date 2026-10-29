@@ -1,11 +1,5 @@
 import { showToast } from "./ui.js";
-
-// Texto seguro para insertar en HTML (nombres e imágenes vienen de la base).
-function escapeHtml(value) {
-  return String(value ?? "").replace(/[&<>"']/g, (ch) => (
-    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]
-  ));
-}
+import { escapeHtml } from "../lib/html.js";
 
 export function initModal(UI, cart) {
 
@@ -48,7 +42,7 @@ export function initModal(UI, cart) {
         <div class="modal-content vertical">
 
           <div class="modal-image">
-            <img src="${escapeHtml(selectedImage)}" />
+            <img src="${escapeHtml(selectedImage)}" alt="${escapeHtml(product.name)}" />
             ${
               gallery.length > 1
                 ? `
@@ -65,13 +59,11 @@ export function initModal(UI, cart) {
           </div>
 
           <div class="modal-info">
-            <p class="modal-category">${product.category}</p>
+            <p class="modal-category">${escapeHtml(product.categoryName ?? product.category)}</p>
 
-            <h2 class="modal-title">${product.name}</h2>
+            <h2 class="modal-title">${escapeHtml(product.name)}</h2>
 
-            <p class="modal-description">
-              ${product.description || ""}
-            </p>
+            <p class="modal-description">${escapeHtml(product.description)}</p>
 
             <p class="modal-price" id="modalPrice">
               ${
@@ -105,7 +97,7 @@ export function initModal(UI, cart) {
                         data-name="${escapeHtml(v.name)}"
                         data-img="${escapeHtml((product.category === "yerbas" ? product.image : v.image) ?? "")}"
                       >
-                        ${v.name}
+                        ${escapeHtml(v.name)}
                       </button>
                     `).join("")}
                   </div>

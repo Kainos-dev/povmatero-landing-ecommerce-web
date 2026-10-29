@@ -4,7 +4,7 @@
 import * as api from "../api/catalog.js";
 import { isSimpleProduct } from "../api/catalog.js";
 import { listAllImages, imageSource } from "../api/images.js";
-import { h, mount, errorMessage, formatPrice } from "../ui.js";
+import { h, mount, errorMessage, formatPrice, toast } from "../ui.js";
 
 const SHEET_URL = "https://opensheet.elk.sh/1TFmZ1hbO5bXh5MGktpUzM7MJTZwyoknVLyVHRNBbwso/WEB";
 
@@ -82,9 +82,22 @@ export function reviewCatalog({ categories, products, variants, images, legacyId
       if (v.track_stock && Number.isInteger(ss) && ss !== v.stock) issues.push(issue("warn", `${v.name}: stock ${v.stock}, en la hoja ${ss}`));
     }
 
+    // Listo para publicar: sin bloqueos, con foto propia ya en Storage y con algo
+    // que se pueda comprar hoy (variante sin control de stock o con stock > 0).
+    const repoCount = imgs.filter((i) => imageSource(i.src) === "repo").length;
+    const buyableNow = sellable.some((v) => !v.track_stock || v.stock > 0);
+    const blockedNow = issues.some((i) => i.level === "block");
+    const notReady = blockedNow ? "Tiene problemas que impiden publicar"
+      : !imgs.length ? "Sin imágenes"
+      : repoCount ? "Imágenes sin migrar a Storage"
+      : !buyableNow ? "Sin stock cargado"
+      : null;
+
     return {
       product: p,
       category,
+      ready: !notReady,
+      notReady,
       variants: vs,
       activeCount: active.length,
       imageCount: imgs.length,
@@ -137,14 +150,17 @@ function downloadCsv(filename, header, rows) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export async function renderCatalogReview(view) {
+// compare: también compara con el catálogo anterior (js/products.js y hoja WEB).
+// Por defecto el panel trabaja solo con Supabase.
+export async function renderCatalogReview(view, { compare = false, filterValue = null } = {}) {
   mount(view, h("p", { class: "muted" }, "Revisando el catálogo…"));
 
   let result, sourceErrors;
   try {
+    const noSources = { legacyProducts: null, sheetRows: null, errors: [] };
     const [categories, products, variants, images, legacyIds, sources] = await Promise.all([
       api.listCategories(), api.listProducts(), api.listAllVariantsWithCosts(), listAllImages(),
-      api.listProductLegacyIds(), loadSources(),
+      compare ? api.listProductLegacyIds() : [], compare ? loadSources() : noSources,
     ]);
     sourceErrors = sources.errors;
     result = reviewCatalog({ categories, products, variants, images, legacyIds, ...sources });
@@ -162,17 +178,59 @@ export async function renderCatalogReview(view) {
   const noSku = rows.reduce((n, r) => n + r.withoutSku, 0);
   const noCost = rows.reduce((n, r) => n + r.withoutCost, 0);
 
+  const readyDrafts = rows.filter((r) => r.ready && !r.product.is_active);
   const filter = h("select", { class: "input", "aria-label": "Mostrar" },
+    h("option", { value: "ready" }, `Listos para publicar (${readyDrafts.length} en borrador)`),
     h("option", { value: "issues" }, "Con observaciones"),
     h("option", { value: "block" }, "Solo lo que impide publicar"),
     h("option", { value: "all" }, "Todos los productos"));
+  // Por defecto: los listos para publicar, si hay; si no, lo que tiene observaciones.
+  filter.value = filterValue ?? (readyDrafts.length ? "ready" : "issues");
   const tableBox = h("div", { class: "table-wrap" });
+  const publishBox = h("div");
+
+  // Publicar los borradores listos (con confirmación). Solo cambia "publicado".
+  function renderPublish(confirming = false, busy = false) {
+    if (filter.value !== "ready" || !readyDrafts.length) { mount(publishBox); return; }
+    if (!confirming) {
+      mount(publishBox, h("div", { class: "actions" },
+        h("button", { type: "button", class: "btn-primary btn-inline", onClick: () => renderPublish(true) },
+          `Publicar ${readyDrafts.length} ${readyDrafts.length === 1 ? "producto listo" : "productos listos"}`)));
+      return;
+    }
+    const yes = h("button", { type: "button", class: "btn-primary btn-inline", disabled: busy }, busy ? "Publicando…" : "Confirmar publicación");
+    yes.addEventListener("click", async () => {
+      renderPublish(true, true);
+      try {
+        const ids = readyDrafts.map((r) => r.product.id);
+        const saved = await api.setProductsActive(ids, true);
+        toast(saved.length === ids.length
+          ? `${saved.length} productos publicados.`
+          : `Se publicaron ${saved.length} de ${ids.length}. Revisá permisos o recargá.`, saved.length === ids.length ? "ok" : "error");
+      } catch (err) {
+        console.error(err);
+        toast(errorMessage(err), "error");
+      }
+      await renderCatalogReview(view, { compare, filterValue: "all" });
+    });
+    mount(publishBox, h("div", { class: "confirm-box" },
+      h("p", {}, `Se van a publicar ${readyDrafts.length} productos: van a aparecer en la tienda que lee Supabase. `,
+        "No se cambian precios, stock ni imágenes. Se pueden volver a borrador desde Productos."),
+      h("p", { class: "muted" }, readyDrafts.map((r) => r.product.name).join(", ")),
+      h("div", { class: "actions" }, yes,
+        h("button", { type: "button", class: "btn-ghost", disabled: busy, onClick: () => renderPublish(false) }, "Cancelar"))));
+  }
 
   function renderTable() {
+    renderPublish();
     const list = rows.filter((r) =>
-      filter.value === "all" ? true : filter.value === "block" ? r.blocked : r.issues.length > 0);
+      filter.value === "all" ? true
+      : filter.value === "ready" ? r.ready && !r.product.is_active
+      : filter.value === "block" ? r.blocked : r.issues.length > 0);
     if (!list.length) {
-      mount(tableBox, h("p", { class: "muted" }, "No hay productos para mostrar con este filtro."));
+      mount(tableBox, h("p", { class: "muted" }, filter.value === "ready"
+        ? "No hay borradores listos para publicar. Usá “Todos los productos” para ver qué le falta a cada uno."
+        : "No hay productos para mostrar con este filtro."));
       return;
     }
     mount(tableBox, h("table", { class: "table" },
@@ -182,7 +240,9 @@ export async function renderCatalogReview(view) {
       h("tbody", {}, list.map((r) => h("tr", {},
         h("td", {}, h("a", { href: `#/productos/${r.product.id}` }, r.product.name)),
         h("td", {}, r.category?.name ?? "—"),
-        h("td", {}, h("span", { class: `badge ${r.product.is_active ? "badge-ok" : ""}` }, r.product.is_active ? "Publicado" : "Borrador")),
+        h("td", {},
+          h("span", { class: `badge ${r.product.is_active ? "badge-ok" : ""}` }, r.product.is_active ? "Publicado" : "Borrador"),
+          r.product.is_active ? null : h("div", { class: "hint" }, r.ready ? "Listo para publicar" : r.notReady)),
         h("td", {}, !r.variants.length ? "—" : isSimpleProduct(r.variants) ? "Producto simple" : `${r.activeCount} de ${r.variants.length} activas`),
         h("td", {}, String(r.imageCount)),
         h("td", {}, r.issues.length
@@ -203,8 +263,15 @@ export async function renderCatalogReview(view) {
   });
 
   const sources = [];
+  if (!compare) {
+    sources.push(
+      h("p", { class: "muted" }, "Opcional, solo durante la transición: busca diferencias con js/products.js y la hoja WEB."),
+      h("div", { class: "actions" },
+        h("button", { type: "button", class: "btn-ghost", onClick: () => renderCatalogReview(view, { compare: true, filterValue: filter.value }) },
+          "Comparar con el catálogo anterior")));
+  }
   if (sourceErrors.length) sources.push(h("div", { class: "notice-warn" }, sourceErrors.map((e) => h("p", {}, e))));
-  sources.push(h("ul", { class: "change-list" },
+  if (compare) sources.push(h("ul", { class: "change-list" },
     !hasLegacy ? null : h("li", {}, missingLegacy.length
       ? `Faltan en la base ${missingLegacy.length} productos de js/products.js: ${missingLegacy.map((p) => p.name).join(", ")}.`
       : "Todos los productos de js/products.js están en la base."),
@@ -226,11 +293,13 @@ export async function renderCatalogReview(view) {
           ? `${blocked.length} ${blocked.length === 1 ? "producto no se puede publicar" : "productos no se pueden publicar"} todavía.`
           : "Ningún producto tiene problemas que impidan publicarlo."),
         h("li", {}, `${withWarnings.length} con observaciones para revisar.`),
+        h("li", {}, `${readyDrafts.length} ${readyDrafts.length === 1 ? "borrador está listo" : "borradores están listos"} para publicar (sin problemas, con fotos en Storage y con algo para vender hoy).`),
         h("li", {}, `${noSku} variantes sin SKU y ${noCost} sin costo (son datos internos: no impiden publicar).`)),
-      h("p", { class: "muted" }, "Esta pantalla solo lee: no cambia nada.")),
-    h("section", { class: "card" }, h("h2", {}, "Comparación con la tienda actual"), sources),
+      h("p", { class: "muted" }, "Solo cambia datos si usás “Publicar”, y siempre con confirmación.")),
     h("section", { class: "card" },
       h("div", { class: "toolbar" }, filter),
-      tableBox));
+      publishBox,
+      tableBox),
+    h("section", { class: "card" }, h("h2", {}, "Comparación con el catálogo anterior"), sources));
   renderTable();
 }

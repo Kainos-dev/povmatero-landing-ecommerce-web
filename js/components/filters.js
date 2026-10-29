@@ -51,15 +51,15 @@ export function initFilters(UI, catalogPromise, render, showError) {
       if (slug !== "all") btn.hidden = !available.has(slug);
     }
 
-    const existing = new Set(chips().map((b) => b.dataset.category));
-    const added = categories
-      .filter((c) => !existing.has(c.slug))
-      .sort((a, b) => a.name.localeCompare(b.name, "es"));
-    for (const c of added) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "filter-chip";
-      btn.dataset.category = c.slug;
+    // Mismo orden y nombres que en el panel; "Todo" queda primero.
+    for (const c of categories) {
+      let btn = chips().find((b) => b.dataset.category === c.slug);
+      if (!btn) {
+        btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "filter-chip";
+        btn.dataset.category = c.slug;
+      }
       btn.textContent = c.name;
       container.append(btn);
     }

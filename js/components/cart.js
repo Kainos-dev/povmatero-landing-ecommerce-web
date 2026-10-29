@@ -1,3 +1,5 @@
+import { escapeHtml } from "../lib/html.js";
+
 export function initCart(UI) {
 
   let cart = [];
@@ -20,11 +22,11 @@ export function initCart(UI) {
       div.className = "cart-item";
 
       div.innerHTML = `
-        <img src="${item.image}" class="cart-item-img"/>
+        <img src="${escapeHtml(item.image)}" alt="" class="cart-item-img"/>
 
         <div class="cart-item-info">
-          <p class="cart-item-name">${item.name}</p>
-          ${item.variant ? `<p class="cart-item-variant">Variante: ${item.variant}.</p>` : ""}
+          <p class="cart-item-name">${escapeHtml(item.name)}</p>
+          ${item.variant ? `<p class="cart-item-variant">Variante: ${escapeHtml(item.variant)}.</p>` : ""}
 
           <p class="cart-item-price">${formatPrice(item.price)}</p>
 

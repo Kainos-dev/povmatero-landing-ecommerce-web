@@ -1,3 +1,5 @@
+import { escapeHtml } from "../lib/html.js";
+
 function formatPrice(price) {
   return "$" + price.toLocaleString("es-AR");
 }
@@ -24,12 +26,12 @@ randomized.forEach(product => {
 
     card.innerHTML = `
       <div class="card-image-wrap">
-        <img src="${product.image}" class="card-img"/>
+        <img src="${escapeHtml(product.image)}" alt="${escapeHtml(product.name)}" class="card-img" loading="lazy"/>
       </div>
 
       <div class="card-body">
-        <p class="card-category">${product.category}</p>
-        <p class="card-name">${product.name}</p>
+        <p class="card-category">${escapeHtml(product.categoryName ?? product.category)}</p>
+        <p class="card-name">${escapeHtml(product.name)}</p>
           ${product.category !== "yerbas" ? `
         <p class="card-price">${formatPrice(product.price)}</p>
           ` : ""} 

@@ -1,5 +1,4 @@
 import { loadCatalog } from "./catalogSource.js";
-import { getYerbas, agruparYerbas } from "./yerbas.js";
 import { initUI } from "./components/ui.js";
 import { renderCatalog } from "./components/catalog.js";
 import { initModal } from "./components/modal.js";
@@ -52,39 +51,3 @@ document.addEventListener("DOMContentLoaded", () => {
     preloader.classList.add("hidden");
   }, 2800); // podés ajustar (2.5–3.2s ideal)
 });
-
-async function renderYerbas() {
-  const container = document.getElementById("products-container");
-  container.innerHTML = "";
-
-  const data = await getYerbas();
-  const grupos = agruparYerbas(data);
-
-  Object.keys(grupos).forEach(nombre => {
-    const variantes = grupos[nombre];
-
-    const card = document.createElement("div");
-    card.classList.add("product-card");
-
-    let variantesHTML = "";
-
-    variantes.forEach(v => {
-      variantesHTML += `
-        <div class="variante">
-          <span>${v.peso}</span>
-          <span>$${v.precio}</span>
-          <span>${v.stock > 0 ? `Quedan ${v.stock}` : "Sin stock"}</span>
-        </div>
-      `;
-    });
-
-    card.innerHTML = `
-      <h3>${nombre}</h3>
-      <div class="variantes">
-        ${variantesHTML}
-      </div>
-    `;
-
-    container.appendChild(card);
-  });
-}

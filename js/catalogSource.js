@@ -42,7 +42,8 @@ export function getCatalogSourceName() {
 
 // Devuelve { source, categories, getCategory(category) } donde category es
 // "all", "yerbas" o el slug de una categoría. "all" no incluye yerbas (como hoy).
-// categories: [{ slug, name }] con productos publicados (null en la fuente anterior).
+// categories: [{ slug, name }] con productos publicados, en el orden definido en
+// el panel (null en la fuente anterior).
 export async function loadCatalog() {
   const source = getCatalogSourceName();
   if (source === "legacy") return loadLegacyCatalog();
@@ -91,8 +92,9 @@ function loadLegacyCatalog() {
 // después se filtra en memoria
 // ---------------------------------------------------------------------
 async function loadSupabaseCatalog(timeoutMs) {
-  const { rows, galleryRows } = await fetchStorefrontRows(timeoutMs);
+  const { rows, galleryRows, categoryRows } = await fetchStorefrontRows(timeoutMs);
   const products = mapRowsToProducts(rows, galleryRows);
+  const order = new Map(categoryRows.map((c, i) => [c.slug, i]));
 
   // Categorías con al menos un producto publicado, en el orden en que aparecen.
   const categories = [];
@@ -101,6 +103,8 @@ async function loadSupabaseCatalog(timeoutMs) {
       categories.push({ slug: row.category_slug, name: row.category_name ?? row.category_slug });
     }
   }
+  // Orden del panel (categories.sort_order); las que no figuran, al final.
+  categories.sort((a, b) => (order.get(a.slug) ?? 1e9) - (order.get(b.slug) ?? 1e9));
 
   return {
     source: "supabase",
@@ -129,7 +133,7 @@ async function fetchStorefrontRows(timeoutMs) {
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const [catalog, gallery] = await Promise.all([
+    const [catalog, gallery, cats] = await Promise.all([
       supabase
         .from("storefront_catalog")
         .select(VIEW_COLUMNS)
@@ -146,12 +150,23 @@ async function fetchStorefrontRows(timeoutMs) {
         .order("sort_order")
         .order("id")
         .abortSignal(controller.signal),
+      // Orden de las categorías para los filtros (la RLS solo devuelve las activas).
+      supabase
+        .from("categories")
+        .select("slug, sort_order")
+        .order("sort_order")
+        .abortSignal(controller.signal),
     ]);
 
     if (catalog.error) throw new Error(`Supabase: ${catalog.error.message}`);
     // Sin galería la tienda funciona igual (portada y fotos de variantes).
     if (gallery.error) console.warn("Catálogo: no se pudo leer la galería de imágenes.", gallery.error);
-    return { rows: catalog.data ?? [], galleryRows: gallery.error ? [] : (gallery.data ?? []) };
+    if (cats.error) console.warn("Catálogo: no se pudo leer el orden de las categorías.", cats.error);
+    return {
+      rows: catalog.data ?? [],
+      galleryRows: gallery.error ? [] : (gallery.data ?? []),
+      categoryRows: cats.error ? [] : (cats.data ?? []),
+    };
   } finally {
     clearTimeout(timer);
   }
@@ -173,6 +188,7 @@ export function mapRowsToProducts(rows, galleryRows = []) {
         id: row.product_id,
         name: row.product_name,
         category: row.category_slug,
+        categoryName: row.category_name ?? row.category_slug,
         description: row.description ?? "",
         cover: row.cover_image,
         variants: [],
