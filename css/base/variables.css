@@ -23,6 +23,13 @@
   --radius-pill:   100px;
   --cart-width:    400px;
 
+  /* Halo de los modales: resplandor blanco difuso detrás de la caja,
+     para separarla del fondo oscurecido (sutil, sin mancha blanca) */
+  --modal-halo: 0 0 0 1px rgba(255, 255, 255, 0.06),
+                0 0 48px 4px rgba(255, 255, 255, 0.09),
+                0 0 140px 28px rgba(255, 255, 255, 0.05);
+  --modal-backdrop-blur: blur(4px); /* el mismo que ya usa «Contacto» */
+
   /* Transitions */
   --t:             0.2s ease;
   --t-slow:        0.35s ease;

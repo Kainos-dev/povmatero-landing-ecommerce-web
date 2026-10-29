@@ -40,8 +40,8 @@
   border-top-right-radius: 20px;
 }
 
+/* La imagen ya no hace zoom: crece la card entera (ver "CARD FLOTANTE" abajo) */
 .product-card:hover .card-image-wrap img {
-  transform: scale(1.075);
   filter: grayscale(0%);
 }
 
@@ -55,7 +55,9 @@
   flex: 1;
 }
 
+/* Va debajo del título y antes del precio */
 .card-category {
+  margin-top: 2px;
   font-size: var(--font-size-xs);
   font-weight: 400;
   letter-spacing: 0.12em;
@@ -71,13 +73,16 @@
   line-height: 1.3;
   text-transform: uppercase;
   letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
 }
 
+/* Precio: mismo tamaño que el título y trazo más marcado */
 .card-price {
-  font-size: var(--font-size-sm);
-  font-weight: 900;
+  font-size: var(--font-size-base);
+  font-weight: 700;
+  line-height: 1.3;
   color: var(--text-secondary);
-  margin-top: 2px;
+  margin-top: 6px;
 }
 
 /* Add to cart button: white outline, inverts on hover */
@@ -144,4 +149,34 @@
 @media (prefers-reduced-motion: reduce) {
   .card-image-wrap img.card-img { transition: none; }
   .skeleton-card .card-image-wrap, .skeleton-card .card-body span { animation: none; }
+}
+
+/* =========================
+   CARD FLOTANTE (hover con mouse)
+   La card completa crece y se eleva; las de su misma fila se corren hacia los
+   costados (--shift, lo calcula js/components/catalog.js). Solo transform y
+   box-shadow: la grilla no cambia de tamaño y las otras filas no se mueven.
+   Borde: marrón de la marca (--details) con el grosor de línea del sitio (.1em).
+========================= */
+.product-card {
+  --shift: 0px;
+  --lift: 1;
+  position: relative;
+  transform: translateX(var(--shift)) scale(var(--lift));
+  box-shadow: 0 0 0 .1em transparent, 0 0 0 0 rgba(0, 0, 0, 0);
+  transition:
+    transform 0.45s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    box-shadow 0.45s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    background var(--t);
+}
+
+.product-card.is-lifted {
+  --lift: 1.05;
+  z-index: 2;
+  box-shadow: 0 0 0 .1em var(--details), 0 24px 44px -14px rgba(0, 0, 0, 0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .product-card { transition: box-shadow 0.2s ease; }
+  .product-card.is-lifted { --lift: 1; }
 }

@@ -29,6 +29,44 @@ function revealWhenLoaded(img) {
   }, { once: true });
 }
 
+// ---------------------------------------------------------------------
+// Card flotante: con mouse, la card crece (CSS .is-lifted) y las de su misma
+// fila se corren hacia los costados lo justo para dejarle lugar. Las filas de
+// arriba y de abajo no se mueven (solo se usa transform). En pantallas táctiles
+// no se activa, así no quedan estados de hover trabados.
+// ---------------------------------------------------------------------
+const LIFT_SCALE = 1.05; // igual que .product-card.is-lifted en productCard.css
+const canHover = window.matchMedia("(hover: hover) and (pointer: fine)");
+
+function rowOf(card) {
+  const top = card.offsetTop; // no lo afectan los transform
+  return [...card.parentElement.children].filter((c) => c.offsetTop === top);
+}
+
+function liftCard(card) {
+  const extra = (card.offsetWidth * (LIFT_SCALE - 1)) / 2;
+  for (const other of rowOf(card)) {
+    if (other === card) continue;
+    other.style.setProperty("--shift", `${other.offsetLeft < card.offsetLeft ? -extra : extra}px`);
+  }
+  card.classList.add("is-lifted");
+}
+
+function dropCard(card) {
+  card.classList.remove("is-lifted");
+  if (!card.parentElement) return;
+  for (const other of rowOf(card)) other.style.removeProperty("--shift");
+}
+
+function enableLift(card) {
+  card.addEventListener("pointerenter", (e) => {
+    if (e.pointerType === "mouse" && canHover.matches) liftCard(card);
+  });
+  card.addEventListener("pointerleave", (e) => {
+    if (e.pointerType === "mouse") dropCard(card);
+  });
+}
+
 export function renderCatalog(products, UI, modal, cart) {
   UI.productGrid.innerHTML = "";
 
@@ -55,14 +93,16 @@ randomized.forEach((product, index) => {
       </div>
 
       <div class="card-body">
-        <p class="card-category">${escapeHtml(product.categoryName ?? product.category)}</p>
         <p class="card-name">${escapeHtml(product.name)}</p>
+        <p class="card-category">${escapeHtml(product.categoryName ?? product.category)}</p>
           ${product.category !== "yerbas" ? `
         <p class="card-price">${formatPrice(product.price)}</p>
           ` : ""} 
         <button class="btn-add">Ver más</button>
       </div>
     `;
+
+    enableLift(card);
 
     const img = card.querySelector(".card-img");
     withFallback(img, product.image);

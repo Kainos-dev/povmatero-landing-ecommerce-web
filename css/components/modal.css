@@ -100,8 +100,11 @@
   text-transform: uppercase;
 }
 
+/* Precio con más presencia que el texto secundario */
 .modal-price {
-  font-size: var(--font-size-lg);
+  font-size: var(--font-size-xl);
+  font-weight: 700;
+  line-height: 1.2;
 }
 
 .modal-description {
@@ -225,3 +228,10 @@
 
 /* Presentación sin stock: se puede ver, pero no comprar */
 .variant-btn.out { text-decoration: line-through; opacity: 0.55; }
+
+/* Halo para separar el modal del fondo (ver --modal-halo en variables.css) */
+.modal { box-shadow: var(--modal-halo); }
+.modal-overlay {
+  -webkit-backdrop-filter: var(--modal-backdrop-blur);
+  backdrop-filter: var(--modal-backdrop-blur);
+}

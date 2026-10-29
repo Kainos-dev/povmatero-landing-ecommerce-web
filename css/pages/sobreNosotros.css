@@ -121,3 +121,10 @@
   line-height: 1.7;
   max-width: 520px;
 }
+
+/* Halo para separar el modal del fondo (ver --modal-halo en variables.css) */
+.about-modal { box-shadow: var(--modal-halo); }
+.about-overlay {
+  -webkit-backdrop-filter: var(--modal-backdrop-blur);
+  backdrop-filter: var(--modal-backdrop-blur);
+}

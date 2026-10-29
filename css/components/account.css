@@ -78,6 +78,7 @@
   border: 1px solid #1f1f1f;
   border-radius: 20px;
   color: var(--text);
+  box-shadow: var(--modal-halo);
   transform: translateY(12px) scale(0.97);
   transition: transform 0.25s ease;
 }
