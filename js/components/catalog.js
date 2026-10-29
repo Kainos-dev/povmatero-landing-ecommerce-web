@@ -6,6 +6,33 @@ function formatPrice(price) {
   return "$" + price.toLocaleString("es-AR");
 }
 
+// Precio válido para mostrar: número mayor a cero.
+const validPrice = (value) => Number.isFinite(Number(value)) && Number(value) > 0;
+
+// Yerbas: precio de cada presentación que se vende (aunque no tenga stock).
+// Las presentaciones sin precio válido no se muestran (no se comercializan).
+function presentationPrices(product) {
+  if (!product.variants) {
+    return validPrice(product.price) ? [{ name: "", price: Number(product.price) }] : [];
+  }
+  return product.variants
+    .filter((v) => validPrice(v.price))
+    .map((v) => ({ name: v.name, price: Number(v.price) }));
+}
+
+function yerbaPricesHtml(product) {
+  const items = presentationPrices(product);
+  if (!items.length) return "";
+  return `
+        <ul class="card-presentations">
+          ${items.map((p) => `
+          <li class="card-presentation">
+            ${p.name ? `<span class="card-presentation-name">${escapeHtml(p.name)}</span>` : ""}
+            <span class="card-price">${formatPrice(p.price)}</span>
+          </li>`).join("")}
+        </ul>`;
+}
+
 function shuffle(array) {
   return [...array].sort(() => Math.random() - 0.5);
 }
@@ -94,10 +121,9 @@ randomized.forEach((product, index) => {
 
       <div class="card-body">
         <p class="card-name">${escapeHtml(product.name)}</p>
+        ${product.category === "yerbas" ? yerbaPricesHtml(product) : `
         <p class="card-category">${escapeHtml(product.categoryName ?? product.category)}</p>
-          ${product.category !== "yerbas" ? `
-        <p class="card-price">${formatPrice(product.price)}</p>
-          ` : ""} 
+        <p class="card-price">${formatPrice(product.price)}</p>`}
         <button class="btn-add">Ver más</button>
       </div>
     `;

@@ -262,12 +262,8 @@
   pointer-events: none;
 }
 
+/* Tipografía de la marca: css/components/brand.css (.povmatero-wordmark) */
 .logo-preload {
-  font-size:auto;
-  font-weight: 900;
-  color: white;
-  letter-spacing: -0.09em;
-  padding: .1em;
 
   /* 🔥 esto oculta todo el texto */
   -webkit-mask-image: linear-gradient(
@@ -291,7 +287,7 @@
   -webkit-mask-size: 200% 100%;
   mask-size: 200% 100%;
 
-  animation: reveal 1.4s ease forwards;
+  animation: reveal 2s ease forwards;
 }
 
 @keyframes reveal {

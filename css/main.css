@@ -18,6 +18,7 @@
 @import url('./components/breadcrumb.css');
 @import url('./components/emptyState.css');
 @import url('./components/account.css');
+@import url('./components/brand.css');
 
 /* PAGES */
 @import url('./pages/productPage.css');

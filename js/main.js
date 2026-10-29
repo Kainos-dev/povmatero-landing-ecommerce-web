@@ -55,7 +55,10 @@ initAccount();
 // apenas pasa la animación (antes esperaba 2,8 s fijos después de cargar todo
 // el HTML, en cada página). En las siguientes páginas de la misma visita no se
 // muestra (ver el script del <head> de index.html).
-const INTRO_MIN_MS = 1500; // lo que dura la animación del logo
+// Lo que dura la animación del nombre (2 s, ver .logo-preload) más una breve
+// pausa para leerlo. El catálogo carga en paralelo, así que no demora la tienda.
+// Si el JavaScript fallara, la intro se va sola a los 5 s (header.css).
+const INTRO_MIN_MS = 2200;
 (function hidePreloader() {
   const preloader = document.getElementById("preloader");
   if (!preloader) return;

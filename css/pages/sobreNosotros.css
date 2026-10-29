@@ -12,6 +12,9 @@
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.3s ease;
+
+  -webkit-backdrop-filter: var(--modal-backdrop-blur);
+  backdrop-filter: var(--modal-backdrop-blur);
 }
 
 .about-overlay.open {
@@ -19,10 +22,12 @@
   pointer-events: all;
 }
 
-/* MODAL */
+/* MODAL
+   Ancho ajustado al texto (sin espacio vacío a la derecha), con un máximo
+   cómodo para leer; en celular deja 16px de margen a cada lado. */
 .about-modal {
-  width: 100%;
-  max-width: 800px;
+  width: fit-content;
+  max-width: min(640px, calc(100vw - 32px));
   height: auto;
 
   /* background: #000; 
@@ -37,6 +42,7 @@
   background: linear-gradient(145deg, #000, #0a0a0a);
   border: 1px solid var(--border);
   border-radius: 20px;
+  box-shadow: var(--modal-halo); /* halo: ver variables.css */
 }
 
 /* HEADER */
@@ -57,6 +63,8 @@
 
 .about-logo img {
   height: 30px;
+  width: auto;          /* respeta la proporción original del logo */
+  object-fit: contain;
 }
 
 /* TITLE */
@@ -93,16 +101,15 @@
   cursor: pointer;
 }
 
-/* CONTENT */
+/* CONTENT: márgenes internos parejos a los lados y abajo (24px) */
 .about-content {
   justify-self: start;
-  padding: 10px 23px;
+  padding: 8px 24px 24px;
   overflow-y: auto;
 
   display: flex;
   flex-direction: column;
   gap: 10px;
-  margin-bottom: 3em;
 }
 
 /* TEXT */
@@ -120,11 +127,4 @@
   color: var(--text-secondary);
   line-height: 1.7;
   max-width: 520px;
-}
-
-/* Halo para separar el modal del fondo (ver --modal-halo en variables.css) */
-.about-modal { box-shadow: var(--modal-halo); }
-.about-overlay {
-  -webkit-backdrop-filter: var(--modal-backdrop-blur);
-  backdrop-filter: var(--modal-backdrop-blur);
 }

@@ -14,6 +14,9 @@
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.25s ease;
+
+  -webkit-backdrop-filter: var(--modal-backdrop-blur);
+  backdrop-filter: var(--modal-backdrop-blur);
 }
 
 .modal-overlay.open {
@@ -36,6 +39,7 @@
 
   overflow: hidden;
   position: relative;
+  box-shadow: var(--modal-halo); /* halo: ver variables.css */
 }
 
 /* CLOSE */
@@ -228,10 +232,3 @@
 
 /* Presentación sin stock: se puede ver, pero no comprar */
 .variant-btn.out { text-decoration: line-through; opacity: 0.55; }
-
-/* Halo para separar el modal del fondo (ver --modal-halo en variables.css) */
-.modal { box-shadow: var(--modal-halo); }
-.modal-overlay {
-  -webkit-backdrop-filter: var(--modal-backdrop-blur);
-  backdrop-filter: var(--modal-backdrop-blur);
-}
