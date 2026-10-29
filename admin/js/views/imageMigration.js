@@ -242,7 +242,7 @@ export async function renderImageMigration(view) {
         : null,
       result && repoLeft === 0 && result.broken.length === 0
         ? h("p", { class: "notice-info" },
-            "El catálogo de Supabase ya no depende de la carpeta images/. Antes de borrarla: la tienda tiene que leer de Supabase por defecto (hoy todavía usa js/products.js y la hoja WEB, que apuntan a images/), y hay que conservar los archivos propios del sitio (logo, fondos, ícono e imagen de respaldo).")
+            "El catálogo de Supabase ya no depende de la carpeta images/. Todavía no la borres: mientras no haya productos publicados, la tienda muestra el catálogo anterior (js/products.js y la hoja WEB), que usa esas fotos. Además hay que conservar los archivos propios del sitio (logo, fondos, ícono e imagen de respaldo).")
         : null
     );
   }
