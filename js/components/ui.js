@@ -1,3 +1,5 @@
+import { scrollBehavior } from "../lib/scroll.js";
+
 export function initUI() {
   return {
     productGrid: document.getElementById("productGrid"),
@@ -58,7 +60,7 @@ export function initFooter(UI) {
   document.getElementById("footerAllProducts")?.addEventListener("click", (e) => {
     e.preventDefault();
 
-    document.getElementById("productos")?.scrollIntoView({ behavior: "smooth" });
+    document.getElementById("productos")?.scrollIntoView({ behavior: scrollBehavior() });
 
     document.querySelectorAll(".filter-chip").forEach(btn => {
       btn.classList.remove("active");

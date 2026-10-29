@@ -109,7 +109,7 @@ export function renderCatalog(products, UI, modal, cart) {
 
 randomized.forEach((product, index) => {
     const card = document.createElement("div");
-    card.className = "product-card";
+    card.className = product.category === "yerbas" ? "product-card product-card--yerba" : "product-card";
 
     const eager = index < EAGER_CARDS;
     const srcset = optimizedSrcset(product.image, CARD_WIDTHS);

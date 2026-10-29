@@ -4,6 +4,8 @@
 // Con Supabase, los botones se ajustan a las categorías que tienen productos
 // publicados: se ocultan los que quedarían vacíos y se agregan las categorías
 // nuevas creadas desde el panel. Con la fuente anterior quedan como en el HTML.
+import { scrollToUnderHeader } from "../lib/scroll.js";
+
 export function initFilters(UI, catalogPromise, render, showError) {
   const container = UI.filterChips[0]?.parentElement;
 
@@ -11,7 +13,8 @@ export function initFilters(UI, catalogPromise, render, showError) {
   // la respuesta vieja se descarta.
   let lastRequest = 0;
 
-  async function show(category) {
+  // scroll: true solo cuando la persona eligió la categoría (no al cargar).
+  async function show(category, { scroll = false } = {}) {
     const request = ++lastRequest;
 
     try {
@@ -24,22 +27,33 @@ export function initFilters(UI, catalogPromise, render, showError) {
       console.error("No se pudo cargar el catálogo:", error);
       showError();
     }
+    if (scroll && request === lastRequest) scrollToResults();
+  }
+
+  // Primero se aplica el filtro; en el cuadro siguiente (ya con la grilla
+  // nueva y la barra de categorías cerrada en celular) se va al inicio de los
+  // resultados, o al aviso de categoría vacía.
+  function scrollToResults() {
+    requestAnimationFrame(() => {
+      const target = UI.productGrid.children.length ? UI.productGrid : UI.emptyState;
+      scrollToUnderHeader(target);
+    });
   }
 
   function chips() {
     return container ? [...container.querySelectorAll(".filter-chip")] : [];
   }
 
-  function select(btn) {
+  function select(btn, { fromUser = false } = {}) {
     chips().forEach((b) => b.classList.remove("active"));
     btn.classList.add("active");
-    show(btn.dataset.category);
+    show(btn.dataset.category, { scroll: fromUser });
   }
 
   // Un solo listener para todos los botones, incluidos los que se agregan después.
   container?.addEventListener("click", (event) => {
     const btn = event.target.closest(".filter-chip");
-    if (btn && container.contains(btn)) select(btn);
+    if (btn && container.contains(btn)) select(btn, { fromUser: true });
   });
 
   function syncChips(categories) {

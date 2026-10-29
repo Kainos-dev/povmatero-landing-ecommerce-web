@@ -37,6 +37,7 @@
   .card-body { padding: 20px 20px 24px; }
   .card-name { font-size: var(--font-size-lg); }
   .card-price { font-size: var(--font-size-lg); }
+  .card-body > .card-price { font-size: var(--font-size-xl); }
 }
 
 /* --- Large desktop: 1440px+ --- */

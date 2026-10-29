@@ -83,7 +83,7 @@
   overflow-wrap: anywhere;
 }
 
-/* Precio: mismo tamaño que el título y trazo más marcado */
+/* Precio (base, también lo usan las presentaciones de yerbas) */
 .card-price {
   font-size: var(--font-size-base);
   font-weight: 700;
@@ -91,6 +91,17 @@
   color: var(--text);
   margin-top: 6px;
 }
+
+/* Productos comunes: precio más grande, pegado al botón «Ver más».
+   margin-top: auto lo empuja al pie de la card, así queda a la misma altura
+   en toda la fila aunque los títulos ocupen distinta cantidad de renglones.
+   (Las yerbas no se ven afectadas: su precio está dentro de la lista.) */
+.card-body > .card-price {
+  margin-top: auto;
+  padding-top: 8px;
+  font-size: var(--font-size-lg);
+}
+.card-body > .card-price + .btn-add { margin-top: 12px; }
 
 /* Yerbas: sin categoría; precio de cada presentación, centrados bajo el título */
 .card-presentations {
@@ -116,6 +127,9 @@
   color: var(--text-secondary);
 }
 .card-presentation .card-price { margin-top: 0; }
+
+/* Yerbas: título centrado (los precios ya van centrados debajo) */
+.product-card--yerba .card-name { text-align: center; }
 
 /* Add to cart button: white outline, inverts on hover */
 .btn-add {
@@ -189,6 +203,11 @@
   --lift: 1.05;
   z-index: 2;
   box-shadow: 0 0 0 .1em var(--details), 0 24px 44px -14px rgba(0, 0, 0, 0.35);
+}
+
+/* Yerbas: misma elevación y sombra, sin el borde marrón */
+.product-card--yerba.is-lifted {
+  box-shadow: 0 0 0 .1em transparent, 0 24px 44px -14px rgba(0, 0, 0, 0.35);
 }
 
 @media (prefers-reduced-motion: reduce) {
