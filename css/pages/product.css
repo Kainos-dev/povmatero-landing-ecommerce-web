@@ -129,11 +129,15 @@ html:not(.route-product) .pdp { display: none; }
   color: var(--text-muted);
 }
 
+/* Flechas solo con mouse; en pantallas táctiles el carrusel se desliza */
 .pdp-related-arrows {
   position: absolute;
   right: 0;
-  display: flex;
+  display: none;
   gap: 8px;
+}
+@media (hover: hover) and (pointer: fine) and (min-width: 640px) {
+  .pdp-related-arrows { display: flex; }
 }
 .pdp-related-arrow {
   display: flex;
@@ -149,9 +153,6 @@ html:not(.route-product) .pdp { display: none; }
 .pdp-related-arrow:hover:not(:disabled) { border-color: var(--details); color: var(--details); }
 .pdp-related-arrow:disabled { opacity: 0.3; cursor: default; }
 .pdp-related-arrow[hidden] { display: none; }
-@media (hover: none), (pointer: coarse) {
-  .pdp-related-arrows { display: none; }
-}
 
 /* Carril horizontal: deslizable con el dedo, con la rueda horizontal o con
    las flechas. Se reserva aire arriba y abajo para la card que crece. */

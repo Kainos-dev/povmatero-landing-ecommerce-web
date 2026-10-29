@@ -119,18 +119,20 @@
    grid-template-rows 0fr → 1fr: rápido, parejo y sin saltos. */
 .filters-content {
   display: grid;
-  grid-template-rows: 0fr;
+  /* minmax(0, …): sin mínimo, así cerrado mide 0 aunque el contenido tenga
+     padding y margen (con 0fr a secas quedaba un hueco de 20px) */
+  grid-template-rows: minmax(0, 0fr);
   overflow: hidden;
   opacity: 0;
   transition:
-    grid-template-rows 0.24s cubic-bezier(0.2, 0.8, 0.2, 1),
+    grid-template-rows 0.26s cubic-bezier(0.3, 0.7, 0.2, 1),
     opacity 0.18s ease;
 }
 .filters-content > .filters-chips { min-height: 0; overflow: hidden; }
 
 /* abierto */
 .filters-content.open {
-  grid-template-rows: 1fr;
+  grid-template-rows: minmax(0, 1fr);
   opacity: 1;
 }
 
@@ -169,7 +171,7 @@
   }
 
   .filters-content {
-    grid-template-rows: 1fr;
+    grid-template-rows: minmax(0, 1fr);
     opacity: 1;
     overflow: visible;
     transition: none;

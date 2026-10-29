@@ -217,7 +217,7 @@
 }
 
 /* Enlaces de la card (nombre y «Ver más» llevan a la página del producto) */
-.card-name a { color: inherit; }
+.card-name a { display: block; color: inherit; } /* todo el renglón del nombre es clickeable, como antes */
 a.btn-add { display: block; text-align: center; }
 .card-name a:focus-visible,
 a.btn-add:focus-visible,
