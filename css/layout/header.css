@@ -247,8 +247,15 @@
   justify-content: center;
   align-items: center;
   z-index: 9999;
-  transition: opacity 0.8s ease;
+  transition: opacity 0.5s ease;
 }
+
+/* Intro ya vista en esta visita: no se vuelve a mostrar */
+.intro-seen #preloader { display: none; }
+
+/* Respaldo: si el JavaScript no llega a cargar, la intro se va sola */
+#preloader { animation: preloader-failsafe 0.5s ease 5s forwards; }
+@keyframes preloader-failsafe { to { opacity: 0; visibility: hidden; } }
 
 #preloader.hidden {
   opacity: 0;
@@ -284,7 +291,7 @@
   -webkit-mask-size: 200% 100%;
   mask-size: 200% 100%;
 
-  animation: reveal 2.5s ease forwards;
+  animation: reveal 1.4s ease forwards;
 }
 
 @keyframes reveal {

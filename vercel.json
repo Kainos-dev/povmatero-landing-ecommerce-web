@@ -1,0 +1,27 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "images": {
+    "sizes": [128, 256, 384, 640, 828, 1080, 1200, 1600],
+    "qualities": [75],
+    "formats": ["image/webp"],
+    "minimumCacheTTL": 2678400,
+    "remotePatterns": [
+      {
+        "protocol": "https",
+        "hostname": "gubrehbalkfvzwsndbcv.supabase.co",
+        "pathname": "/storage/v1/object/public/product-images/**"
+      }
+    ],
+    "localPatterns": [
+      { "pathname": "^/images/.*$", "search": "" }
+    ]
+  },
+  "headers": [
+    {
+      "source": "/images/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=86400, stale-while-revalidate=604800" }
+      ]
+    }
+  ]
+}

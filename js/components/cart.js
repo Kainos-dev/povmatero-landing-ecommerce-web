@@ -1,4 +1,8 @@
 import { escapeHtml } from "../lib/html.js";
+import { optimizedSrc, withFallback } from "../lib/images.js";
+
+// La foto del carrito se ve a 72 px: alcanza con una versión chica.
+const CART_IMAGE_WIDTH = 256;
 
 // El carrito se guarda en este navegador (producto, presentación y cantidad) y,
 // al volver, se reconstruye con el catálogo actual: precios, fotos y stock al día.
@@ -35,7 +39,7 @@ export function initCart(UI) {
       div.className = "cart-item";
 
       div.innerHTML = `
-        <img src="${escapeHtml(item.image)}" alt="" class="cart-item-img"/>
+        <img src="${escapeHtml(optimizedSrc(item.image, CART_IMAGE_WIDTH))}" alt="" class="cart-item-img" decoding="async"/>
 
         <div class="cart-item-info">
           <p class="cart-item-name">${escapeHtml(item.name)}</p>
@@ -52,6 +56,8 @@ export function initCart(UI) {
           <button class="cart-item-remove">Eliminar</button>
         </div>
       `;
+
+      withFallback(div.querySelector(".cart-item-img"), item.image);
 
       // ➕ ➖
       // maxQty = stock disponible (null = no se controla stock)

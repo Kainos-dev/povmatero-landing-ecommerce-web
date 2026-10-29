@@ -17,6 +17,7 @@
 @import url('./components/toast.css');
 @import url('./components/breadcrumb.css');
 @import url('./components/emptyState.css');
+@import url('./components/account.css');
 
 /* PAGES */
 @import url('./pages/productPage.css');

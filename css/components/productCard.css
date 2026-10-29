@@ -111,3 +111,37 @@
   height: 100%;
   object-fit: cover; 
 }
+
+/* =========================
+   CARGA DE FOTOS
+   Fondo neutro mientras llega la foto y aparición suave (sin "saltos").
+========================= */
+.card-image-wrap { background: #f2f2f2; }
+
+.card-image-wrap img.card-img {
+  opacity: 0;
+  transition: opacity 0.25s ease, transform 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94), filter 0.4s ease;
+}
+.card-image-wrap img.card-img.is-loaded { opacity: 1; }
+
+/* Tarjetas de espera mientras llega el catálogo (mismo tamaño que las reales) */
+.skeleton-card { pointer-events: none; animation: none; }
+.skeleton-card .card-image-wrap,
+.skeleton-card .card-body span {
+  background: linear-gradient(90deg, #ececec 0%, #f6f6f6 50%, #ececec 100%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+.skeleton-card .card-body { gap: 10px; min-height: 120px; }
+.skeleton-card .card-body span { display: block; height: 12px; width: 40%; border-radius: 4px; opacity: 0.12; }
+.skeleton-card .card-body span + span { width: 75%; height: 16px; }
+
+@keyframes skeleton-shimmer {
+  from { background-position: 100% 0; }
+  to   { background-position: -100% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-image-wrap img.card-img { transition: none; }
+  .skeleton-card .card-image-wrap, .skeleton-card .card-body span { animation: none; }
+}

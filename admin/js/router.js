@@ -6,6 +6,7 @@ import { renderImageMigration } from "./views/imageMigration.js";
 import { renderCostImport } from "./views/costImport.js";
 import { renderCatalogReview } from "./views/catalogReview.js";
 import { renderStockTable } from "./views/stockTable.js";
+import { renderCustomers } from "./views/customers.js";
 
 const DEFAULT_ROUTE = "#/productos";
 
@@ -18,6 +19,7 @@ const routes = [
   [/^#\/imagenes\/?$/,         (view) => renderImageMigration(view)],
   [/^#\/importar-costos\/?$/,  (view) => renderCostImport(view)],
   [/^#\/revision\/?$/,         (view) => renderCatalogReview(view)],
+  [/^#\/clientes\/?$/,         (view) => renderCustomers(view)],
 ];
 
 let container = null;

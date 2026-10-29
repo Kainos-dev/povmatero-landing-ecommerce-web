@@ -480,3 +480,18 @@ input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--text); }
   .admin-main { padding: 20px 16px; }
   .card { padding: 16px; }
 }
+
+/* Enlaces a la tienda */
+.store-link {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.store-link:hover { color: var(--text); }
+.store-button { text-decoration: none; white-space: nowrap; }
+
+/* Clientes */
+.customers-summary { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.customers-summary .card { margin: 0; padding: 12px 16px; min-width: 160px; gap: 2px; }
+.customers-summary strong { display: block; font-size: var(--font-size-xl); font-weight: 600; }

@@ -11,10 +11,60 @@
   <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <title>povmatero</title>
-  <link rel="stylesheet" href="css/main.css">
+
+  <!-- Intro (preloader) solo la primera vez de cada visita -->
+  <script>try{if(sessionStorage.getItem("povmatero-intro-seen"))document.documentElement.classList.add("intro-seen")}catch(e){}</script>
+
+  <!-- Catálogo: se pide a Supabase en paralelo con el resto de la página.
+       Mismas URLs que CATALOG_URLS en js/catalogSource.js (si cambian allá, copiarlas acá). -->
+  <link rel="preconnect" href="https://gubrehbalkfvzwsndbcv.supabase.co" crossorigin />
+  <link rel="preload" as="fetch" crossorigin="anonymous" fetchpriority="high" href="https://gubrehbalkfvzwsndbcv.supabase.co/rest/v1/storefront_catalog?select=product_id,product_name,description,category_slug,category_name,cover_image,variant_name,price,track_stock,stock,variant_image,product_sort,variant_sort&amp;order=product_sort.asc,product_id.asc,variant_sort.asc&amp;apikey=sb_publishable_cMxTBYTgJm1wQ2FkJ37uZg_XNyogu7M" />
+  <link rel="preload" as="fetch" crossorigin="anonymous" href="https://gubrehbalkfvzwsndbcv.supabase.co/rest/v1/product_images?select=product_id,src,is_cover,sort_order&amp;variant_id=is.null&amp;order=product_id.asc,sort_order.asc,id.asc&amp;apikey=sb_publishable_cMxTBYTgJm1wQ2FkJ37uZg_XNyogu7M" />
+  <link rel="preload" as="fetch" crossorigin="anonymous" href="https://gubrehbalkfvzwsndbcv.supabase.co/rest/v1/categories?select=slug,sort_order&amp;order=sort_order.asc&amp;apikey=sb_publishable_cMxTBYTgJm1wQ2FkJ37uZg_XNyogu7M" />
+
+  <!-- Fondo del hero (lo primero que se ve) -->
+  <link rel="preload" as="image" type="image/webp" href="images/fondoDesktop.webp" media="(min-width: 768px)" fetchpriority="high" />
+  <link rel="preload" as="image" type="image/webp" href="images/fondoMobile.webp" media="(max-width: 767px)" fetchpriority="high" />
+
+  <!-- Estilos: enlazados directo (css/main.css los importaba en cadena) -->
+  <link rel="stylesheet" href="css/base/variables.css">
+  <link rel="stylesheet" href="css/base/reset.css">
+  <link rel="stylesheet" href="css/base/base.css">
+  <link rel="stylesheet" href="css/layout/header.css">
+  <link rel="stylesheet" href="css/layout/hero.css">
+  <link rel="stylesheet" href="css/layout/filters.css">
+  <link rel="stylesheet" href="css/layout/catalog.css">
+  <link rel="stylesheet" href="css/layout/footer.css">
+  <link rel="stylesheet" href="css/components/productCard.css">
+  <link rel="stylesheet" href="css/components/cart.css">
+  <link rel="stylesheet" href="css/components/modal.css">
+  <link rel="stylesheet" href="css/components/toast.css">
+  <link rel="stylesheet" href="css/components/breadcrumb.css">
+  <link rel="stylesheet" href="css/components/emptyState.css">
+  <link rel="stylesheet" href="css/components/account.css">
+  <link rel="stylesheet" href="css/pages/productPage.css">
+  <link rel="stylesheet" href="css/pages/sobreNosotros.css">
+  <link rel="stylesheet" href="css/responsive/responsive.css">
+
+  <!-- Módulos de la tienda: se descargan todos juntos en vez de uno tras otro -->
+  <link rel="modulepreload" href="js/main.js">
+  <link rel="modulepreload" href="js/catalogSource.js">
+  <link rel="modulepreload" href="js/lib/supabaseConfig.js">
+  <link rel="modulepreload" href="js/lib/html.js">
+  <link rel="modulepreload" href="js/lib/images.js">
+  <link rel="modulepreload" href="js/components/ui.js">
+  <link rel="modulepreload" href="js/components/catalog.js">
+  <link rel="modulepreload" href="js/components/modal.js">
+  <link rel="modulepreload" href="js/components/cart.js">
+  <link rel="modulepreload" href="js/components/filters.js">
+  <link rel="modulepreload" href="js/components/account.js">
+
   <link rel="icon" href="images/iconoPestaña.ico" />
+  <!-- Tipografía sin bloquear la primera pintura (display=swap) -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" onload="this.onload=null;this.rel='stylesheet'" />
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" /></noscript>
 </head>
 <body>
 
@@ -28,7 +78,7 @@
   <header class="site-header">
     <div class="header-inner">
 
-      <a href="index.html" class="logo"><img src="images/Logo.png" alt="povmatero"></a>
+      <a href="index.html" class="logo"><img src="images/Logo-header.webp" alt="povmatero" width="110" height="96" fetchpriority="high"></a>
 
       <!-- DESKTOP NAV -->
       <nav class="header-nav">
@@ -43,6 +93,13 @@
           <span></span>
           <span></span>
           <span></span>
+        </button>
+
+        <button type="button" class="account-btn" id="accountBtn" aria-label="Ingresar o crear cuenta" aria-haspopup="dialog" aria-controls="accountModal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="20" height="20" aria-hidden="true">
+            <circle cx="12" cy="8" r="4"/>
+            <path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/>
+          </svg>
         </button>
 
         <button class="cart-btn" id="cartBtn" aria-label="Abrir carrito">
@@ -128,7 +185,13 @@
        PRODUCT GRID (Las card se integran con js)
   ===================== -->
   <main class="catalog-section">
-    <div class="product-grid" id="productGrid"></div>
+    <div class="product-grid" id="productGrid" aria-busy="true">
+      <!-- Lugar reservado mientras carga el catálogo (se reemplaza al llegar los productos) -->
+      <div class="product-card skeleton-card" aria-hidden="true"><div class="card-image-wrap"></div><div class="card-body"><span></span><span></span></div></div>
+      <div class="product-card skeleton-card" aria-hidden="true"><div class="card-image-wrap"></div><div class="card-body"><span></span><span></span></div></div>
+      <div class="product-card skeleton-card" aria-hidden="true"><div class="card-image-wrap"></div><div class="card-body"><span></span><span></span></div></div>
+      <div class="product-card skeleton-card" aria-hidden="true"><div class="card-image-wrap"></div><div class="card-body"><span></span><span></span></div></div>
+    </div>
     <div class="empty-state" id="emptyState" style="display:none;">
       <p>Próximamente vas a poder encontrar productos también en esta sección.</p>
     </div>
@@ -312,7 +375,7 @@
       <div class="about-header">
 
         <div class="about-logo">
-          <img src="images/Logo.png" alt="povmatero">
+          <img src="images/Logo-header.webp" alt="povmatero" width="110" height="96" loading="lazy">
         </div>
 
         <p class="about-title-header">SOBRE NOSOTROS</p>
@@ -369,6 +432,22 @@
 
     </div>
 
+  </div>
+
+  <!-- =====================
+       MODAL MI CUENTA (el contenido lo arma js/components/account.js)
+  ===================== -->
+  <div class="account-modal" id="accountModal" aria-hidden="true">
+    <div class="account-overlay" data-account-close></div>
+    <div class="account-box" role="dialog" aria-modal="true" aria-labelledby="accountTitle" tabindex="-1">
+      <button type="button" class="account-close" aria-label="Cerrar" data-account-close>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16" aria-hidden="true">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+      <div class="account-body" id="accountBody"></div>
+    </div>
   </div>
 
   <script type="module" src="js/main.js"></script>

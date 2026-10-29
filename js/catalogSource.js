@@ -10,7 +10,8 @@
 //   stock:    solo en productos simples (sin variantes), mismo criterio
 //   gallery:  [src] portada + imágenes generales del producto
 
-const SUPABASE_JS_URL = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/+esm";
+import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from "./lib/supabaseConfig.js";
+
 const REQUEST_TIMEOUT_MS = 10000;
 // Si falla (por ejemplo, un corte de red momentáneo), se reintenta una vez.
 const RETRY_DELAY_MS = 1500;
@@ -25,7 +26,22 @@ const VIEW_COLUMNS = [
   "product_id", "product_name", "description", "category_slug", "category_name", "cover_image",
   "variant_name", "price", "track_stock", "stock", "variant_image",
   "product_sort", "variant_sort",
-].join(", ");
+].join(",");
+
+// Consultas directas a la API REST de Supabase (sin descargar supabase-js).
+// La clave pública va en la URL para que el pedido sea "simple" (sin consulta
+// previa de CORS) y el navegador pueda empezarlo desde el HTML.
+// IMPORTANTE: index.html precarga estas mismas URLs (<link rel="preload">).
+// Si cambian acá, hay que copiarlas allá; si no coinciden, todo funciona igual
+// pero se pierde la precarga.
+const REST_URL = `${SUPABASE_URL}/rest/v1/`;
+export const CATALOG_URLS = {
+  catalog: `${REST_URL}storefront_catalog?select=${VIEW_COLUMNS}&order=product_sort.asc,product_id.asc,variant_sort.asc&apikey=${SUPABASE_PUBLISHABLE_KEY}`,
+  // Imágenes generales de productos publicados (la RLS filtra el resto).
+  gallery: `${REST_URL}product_images?select=product_id,src,is_cover,sort_order&variant_id=is.null&order=product_id.asc,sort_order.asc,id.asc&apikey=${SUPABASE_PUBLISHABLE_KEY}`,
+  // Orden de las categorías para los filtros (la RLS solo devuelve las activas).
+  categories: `${REST_URL}categories?select=slug,sort_order&order=sort_order.asc&apikey=${SUPABASE_PUBLISHABLE_KEY}`,
+};
 
 // Devuelve { source, categories, productCount, getCategory(category) } donde
 // category es "all", "yerbas" o el slug de una categoría. "all" no incluye yerbas.
@@ -83,55 +99,38 @@ async function loadSupabaseCatalog(timeoutMs) {
   };
 }
 
+// Un pedido de solo lectura, sin sesión: la tienda siempre ve lo mismo que un
+// visitante anónimo (aunque haya un admin con la sesión abierta).
+async function getJson(url, signal) {
+  // Mismo modo que la precarga de index.html (crossorigin="anonymous"): sin cookies.
+  const res = await fetch(url, { signal });
+  if (!res.ok) {
+    let message = res.statusText;
+    try { message = (await res.json()).message ?? message; } catch { /* sin cuerpo JSON */ }
+    throw new Error(`Supabase ${res.status}: ${message}`);
+  }
+  return res.json();
+}
+
 async function fetchStorefrontRows(timeoutMs) {
-  const [{ createClient }, { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY }] = await Promise.all([
-    import(SUPABASE_JS_URL),
-    import("./lib/supabaseConfig.js"),
-  ]);
-
-  // Cliente anónimo propio de la tienda: no lee ni guarda sesión, así una
-  // sesión de admin abierta en el panel no cambia lo que ve la tienda.
-  const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-  });
-
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const [catalog, gallery, cats] = await Promise.all([
-      supabase
-        .from("storefront_catalog")
-        .select(VIEW_COLUMNS)
-        .order("product_sort")
-        .order("product_id")
-        .order("variant_sort")
-        .abortSignal(controller.signal),
-      // Imágenes generales de productos publicados (la RLS filtra el resto).
-      supabase
-        .from("product_images")
-        .select("product_id, src, is_cover, sort_order")
-        .is("variant_id", null)
-        .order("product_id")
-        .order("sort_order")
-        .order("id")
-        .abortSignal(controller.signal),
-      // Orden de las categorías para los filtros (la RLS solo devuelve las activas).
-      supabase
-        .from("categories")
-        .select("slug, sort_order")
-        .order("sort_order")
-        .abortSignal(controller.signal),
+    const [catalog, gallery, cats] = await Promise.allSettled([
+      getJson(CATALOG_URLS.catalog, controller.signal),
+      getJson(CATALOG_URLS.gallery, controller.signal),
+      getJson(CATALOG_URLS.categories, controller.signal),
     ]);
 
-    if (catalog.error) throw new Error(`Supabase: ${catalog.error.message}`);
+    if (catalog.status === "rejected") throw catalog.reason;
     // Sin galería la tienda funciona igual (portada y fotos de variantes).
-    if (gallery.error) console.warn("Catálogo: no se pudo leer la galería de imágenes.", gallery.error);
-    if (cats.error) console.warn("Catálogo: no se pudo leer el orden de las categorías.", cats.error);
+    if (gallery.status === "rejected") console.warn("Catálogo: no se pudo leer la galería de imágenes.", gallery.reason);
+    if (cats.status === "rejected") console.warn("Catálogo: no se pudo leer el orden de las categorías.", cats.reason);
     return {
-      rows: catalog.data ?? [],
-      galleryRows: gallery.error ? [] : (gallery.data ?? []),
-      categoryRows: cats.error ? [] : (cats.data ?? []),
+      rows: catalog.value ?? [],
+      galleryRows: gallery.status === "fulfilled" ? (gallery.value ?? []) : [],
+      categoryRows: cats.status === "fulfilled" ? (cats.value ?? []) : [],
     };
   } finally {
     clearTimeout(timer);

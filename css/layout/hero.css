@@ -9,6 +9,8 @@
 
   /* DESKTOP IMAGE */
   background-image: url("../../images/fondoDesktop.png");
+  /* WebP: misma imagen, ~18 veces más liviana (el PNG queda de respaldo) */
+  background-image: image-set(url("../../images/fondoDesktop.webp") type("image/webp"), url("../../images/fondoDesktop.png") type("image/png"));
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
@@ -111,6 +113,7 @@
 
     /* IMAGEN MOBILE */
     background-image: url("../../images/fondoMobile.png");
+    background-image: image-set(url("../../images/fondoMobile.webp") type("image/webp"), url("../../images/fondoMobile.png") type("image/png"));
 
     background-position: center top;
   }

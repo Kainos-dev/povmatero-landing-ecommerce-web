@@ -36,7 +36,10 @@ function showPanel(user, role) {
   startRouter(document.getElementById("adminContent"));
 }
 
-// Verifica que el usuario logueado sea admin. Si no lo es, cierra la sesión.
+// Verifica que el usuario logueado sea admin.
+// Si es un cliente de la tienda, NO se le cierra la sesión (la comparte con la
+// tienda): solo se le avisa que no tiene acceso. La base rechaza igual cualquier
+// acción del panel para quien no figure en admin_users.
 async function enterIfAdmin(user) {
   let role;
   try {
@@ -49,8 +52,7 @@ async function enterIfAdmin(user) {
   }
 
   if (!role) {
-    await signOut();
-    showLogin("Esta cuenta no tiene permisos de administrador.");
+    showLogin(`La cuenta ${user.email ?? ""} no tiene permisos de administrador. Volvé a la tienda o ingresá con una cuenta de administrador.`);
     return;
   }
 

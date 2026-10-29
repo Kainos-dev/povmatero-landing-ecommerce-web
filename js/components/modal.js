@@ -1,5 +1,15 @@
 import { showToast } from "./ui.js";
 import { escapeHtml } from "../lib/html.js";
+import { optimizedSrc, withFallback } from "../lib/images.js";
+
+// Ancho de la foto principal de la ficha: al menos el ancho máximo que puede
+// ocupar (90vw en celular, 65vw en escritorio) para que el modal mida lo mismo
+// que con la foto original, y más nítida en pantallas de alta densidad.
+export function modalImageWidth() {
+  const cssWidth = window.innerWidth * (window.innerWidth < 768 ? 0.9 : 0.65);
+  return Math.max(cssWidth, Math.min(cssWidth * (window.devicePixelRatio || 1), 1600));
+}
+const THUMB_WIDTH = 128;
 
 export function initModal(UI, cart) {
 
@@ -42,14 +52,14 @@ export function initModal(UI, cart) {
         <div class="modal-content vertical">
 
           <div class="modal-image">
-            <img src="${escapeHtml(selectedImage)}" alt="${escapeHtml(product.name)}" />
+            <img src="${escapeHtml(optimizedSrc(selectedImage, modalImageWidth()))}" alt="${escapeHtml(product.name)}" decoding="async" />
             ${
               gallery.length > 1
                 ? `
                   <div class="modal-thumbs">
                     ${gallery.map((src) => `
                       <button type="button" class="modal-thumb${src === selectedImage ? " active" : ""}" data-src="${escapeHtml(src)}" aria-label="Ver imagen">
-                        <img src="${escapeHtml(src)}" alt="" loading="lazy" />
+                        <img src="${escapeHtml(optimizedSrc(src, THUMB_WIDTH))}" alt="" decoding="async" />
                       </button>
                     `).join("")}
                   </div>
@@ -114,12 +124,15 @@ export function initModal(UI, cart) {
       `;
 
       const mainImg = UI.modalBody.querySelector(".modal-image > img");
+      withFallback(mainImg, selectedImage);
+      UI.modalBody.querySelectorAll(".modal-thumb").forEach(t => withFallback(t.querySelector("img"), t.dataset.src));
 
       function showImage(src) {
         if (!src || src === selectedImage) return;
         mainImg.style.opacity = 0;
         setTimeout(() => {
-          mainImg.src = src;
+          withFallback(mainImg, src);
+          mainImg.src = optimizedSrc(src, modalImageWidth());
           mainImg.style.opacity = 1;
         }, 120);
         selectedImage = src;
