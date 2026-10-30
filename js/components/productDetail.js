@@ -151,6 +151,14 @@ export function renderProductDetail(container, product, { cart, layout = "modal"
   withFallback(mainImg, selectedImage);
   $$(".modal-thumb").forEach(t => withFallback(t.querySelector("img"), t.dataset.src));
 
+  // La proporción de la portada fija la altura de la zona de la foto (página
+  // de producto). Se toma una sola vez: recorrer la galería no cambia el alto.
+  const setRatio = () => {
+    if (stage.style.getPropertyValue("--ratio") || !mainImg.naturalWidth) return;
+    stage.style.setProperty("--ratio", `${mainImg.naturalWidth} / ${mainImg.naturalHeight}`);
+  };
+  if (mainImg.complete) setRatio(); else mainImg.addEventListener("load", setRatio, { once: true });
+
   // Miniatura activa: borde marrón y, si la tira tiene scroll, a la vista.
   function syncThumbs(src) {
     $$(".modal-thumb").forEach(t => {

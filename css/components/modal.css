@@ -259,8 +259,8 @@
 
 .modal-thumb {
   flex: 0 0 auto;
-  width: 56px;
-  aspect-ratio: 1 / 1;
+  width: 72px;
+  aspect-ratio: 3 / 2;
   padding: 0;
   border: 2px solid transparent;
   background: #fff;
@@ -280,7 +280,7 @@
 .btn-add:disabled { opacity: 0.5; pointer-events: none; }
 
 @media (max-width: 767px) {
-  .modal-thumb { width: 44px; }
+  .modal-thumb { width: 60px; }
   .modal-thumbs { padding: 8px 12px; }
   /* Lugar para la tira de miniaturas sin achicar la foto */
   .modal-image.has-gallery { min-height: 262px; }

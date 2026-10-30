@@ -59,10 +59,21 @@ html:not(.route-product) .pdp { display: none; }
 }
 .pdp-loading { padding: 80px 24px; text-align: center; color: var(--text-secondary); font-size: var(--font-size-sm); }
 
+/* La foto principal define la altura: la zona de la foto toma la proporción
+   real de la portada (--ratio, la mide productDetail.js; 3:2 hasta que carga),
+   sin recortar ni deformar. Tope: el alto de la pantalla (fotos muy verticales). */
 .pdp .modal-content { height: auto; }
 .pdp .modal-image { height: auto; min-height: 0; background: #fff; }
 .pdp .modal-stage,
-.pdp .has-gallery .modal-stage { flex: none; height: min(66vh, 600px); }
+.pdp .has-gallery .modal-stage {
+  flex: none;
+  height: auto;
+  aspect-ratio: var(--ratio, 3 / 2);
+  max-height: calc(100vh - 140px);
+  background: #fff;
+}
+.pdp .modal-stage img { width: 100%; height: 100%; object-fit: contain; }
+.pdp .modal-thumbs { background: #fff; }
 .pdp .modal-info {
   background: #000;
   height: auto;
@@ -81,7 +92,27 @@ html:not(.route-product) .pdp { display: none; }
 .pdp .modal-close { display: none; }
 
 @media (min-width: 768px) {
-  .pdp .modal-content { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); }
+  /* Foto y panel lado a lado: el panel negro mide exactamente lo mismo que la
+     foto principal. Las miniaturas van en una fila aparte, debajo de la foto,
+     así no cambian la altura del panel. */
+  .pdp .modal-content {
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    align-items: start;
+  }
+  .pdp .modal-image { display: contents; }
+  .pdp .modal-stage { grid-column: 1; grid-row: 1; }
+  .pdp .modal-thumbs { grid-column: 1; grid-row: 2; }
+  .pdp .modal-info {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: stretch;
+    /* Su contenido no estira la fila: la altura la pone la foto. Si el texto
+       no entrara, se desplaza dentro del panel. */
+    contain: size;
+    overflow-y: auto;
+    border-radius: 0 0 20px 0;
+  }
 }
 
 /* Presentación única (sin selector) */
@@ -201,7 +232,7 @@ html:not(.route-product) .pdp { display: none; }
   .pdp-detail { border-radius: 16px; }
   .pdp .modal-image { min-height: 0; }
   .pdp .modal-stage,
-  .pdp .has-gallery .modal-stage { height: auto; aspect-ratio: 1 / 1; }
+  .pdp .has-gallery .modal-stage { max-height: 80vh; }
   .pdp .modal-info { padding: 20px 18px 24px; }
   .pdp-related { margin-top: 40px; }
   .pdp-related-track { gap: 16px; padding: 16px 0 28px; }
