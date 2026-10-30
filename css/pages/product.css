@@ -91,7 +91,8 @@ html:not(.route-product) .pdp { display: none; }
 }
 .pdp .modal-close { display: none; }
 
-@media (min-width: 768px) {
+/* Desde 769px: responsive.css usa el layout de celular hasta 768px inclusive */
+@media (min-width: 769px) {
   /* Foto y panel lado a lado: el panel negro mide exactamente lo mismo que la
      foto principal. Las miniaturas van en una fila aparte, debajo de la foto,
      así no cambian la altura del panel. */
@@ -103,14 +104,13 @@ html:not(.route-product) .pdp { display: none; }
   .pdp .modal-image { display: contents; }
   .pdp .modal-stage { grid-column: 1; grid-row: 1; }
   .pdp .modal-thumbs { grid-column: 1; grid-row: 2; }
+  /* El panel se estira a la altura de la foto. Si su contenido no entra
+     (nombres largos o muchas presentaciones en pantallas angostas), crece lo
+     justo: nunca se esconde «Agregar al carrito» dentro del panel. */
   .pdp .modal-info {
     grid-column: 2;
     grid-row: 1;
     align-self: stretch;
-    /* Su contenido no estira la fila: la altura la pone la foto. Si el texto
-       no entrara, se desplaza dentro del panel. */
-    contain: size;
-    overflow-y: auto;
     border-radius: 0 0 20px 0;
   }
 }
@@ -227,7 +227,7 @@ html:not(.route-product) .pdp { display: none; }
 /* =========================
    CELULAR
 ========================= */
-@media (max-width: 767px) {
+@media (max-width: 768px) {
   .pdp { padding: 76px 16px 96px; }
   .pdp-detail { border-radius: 16px; }
   .pdp .modal-image { min-height: 0; }
@@ -237,7 +237,20 @@ html:not(.route-product) .pdp { display: none; }
   .pdp-related { margin-top: 40px; }
   .pdp-related-track { gap: 16px; padding: 16px 0 28px; }
   .pdp-related-track > .product-card { flex-basis: 72vw; }
-  /* El botón «Agregar al carrito» queda fijo abajo (ver responsive.css):
-     se deja lugar para que no tape el final de la página */
-  .route-product body { padding-bottom: 64px; }
+}
+
+/* «Agregar al carrito» en su lugar natural dentro del panel (en celular,
+   responsive.css lo fija abajo para el modal; en la página no). Mismo diseño
+   que en escritorio. */
+@media (max-width: 768px) {
+  .pdp .modal-info .btn-add {
+    position: static;
+    width: 100%;
+    margin-top: 8px;
+    padding: 14px 20px;
+    border: 1px solid #fff;
+    background: transparent;
+    color: #fff;
+    z-index: auto;
+  }
 }
