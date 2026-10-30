@@ -93,16 +93,14 @@
   margin-top: 6px;
 }
 
-/* Productos comunes: precio más grande, pegado al botón «Ver más».
-   margin-top: auto lo empuja al pie de la card, así queda a la misma altura
-   en toda la fila aunque los títulos ocupen distinta cantidad de renglones.
-   (Las yerbas no se ven afectadas: su precio está dentro de la lista.) */
+/* Productos comunes: precio más grande, al pie de la card.
+   margin-top: auto lo empuja abajo, así queda a la misma altura en toda la
+   fila aunque los títulos ocupen distinta cantidad de renglones. */
 .card-body > .card-price {
   margin-top: auto;
-  padding-top: 8px;
+  padding-top: 10px;
   font-size: var(--font-size-lg);
 }
-.card-body > .card-price + .btn-add { margin-top: 12px; }
 
 /* Yerbas: sin categoría; precio de cada presentación, centrados bajo el título */
 .card-presentations {
@@ -111,7 +109,9 @@
   flex-wrap: wrap;
   justify-content: center;
   gap: 6px 20px;
-  margin-top: 8px;
+  /* Al pie de la card, como el precio de los demás productos */
+  margin-top: auto;
+  padding-top: 10px;
   text-align: center;
 }
 .card-presentation {
@@ -216,11 +216,21 @@
   .product-card.is-lifted { --lift: 1; }
 }
 
-/* Enlaces de la card (nombre y «Ver más» llevan a la página del producto) */
-.card-name a { display: block; color: inherit; } /* todo el renglón del nombre es clickeable, como antes */
-a.btn-add { display: block; text-align: center; }
-.card-name a:focus-visible,
-a.btn-add:focus-visible,
+/* Enlaces de la card: el del nombre se estira sobre toda la card (foto
+   incluida), así cualquier clic lleva a la página del producto. */
+.card-name a { display: block; color: inherit; }
+.card-name a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+/* Foco con teclado: se marca la card entera */
+.card-name a:focus-visible { outline: none; }
+.product-card:has(.card-name a:focus-visible) {
+  outline: var(--focus-outline);
+  outline-offset: 2px;
+}
 a.card-image-wrap:focus-visible {
   outline: var(--focus-outline);
   outline-offset: 2px;

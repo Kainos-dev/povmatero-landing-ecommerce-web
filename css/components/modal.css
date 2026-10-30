@@ -111,7 +111,27 @@
   white-space: pre-line;   /* respeta los saltos de línea de la descripción */
 }
 
-/* VARIANTS */
+/* VARIANTS
+   Bloque de opciones: línea blanca que lo separa del precio, título
+   («Colores», «Presentación»…) y botones con borde blanco, como «Agregar al
+   carrito». La opción elegida se invierte (fondo blanco, texto negro). */
+.modal-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 4px;
+  padding-top: 18px;
+  border-top: 1px solid #fff;
+}
+
+.modal-options-title {
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
 .modal-variants {
   display: flex;
   flex-wrap: wrap;
@@ -119,10 +139,12 @@
 }
 
 .variant-btn {
-  padding: 8px 16px;
-  border: 1px solid var(--border);
+  padding: 9px 16px;
+  border: 1px solid #fff;
   font-family: var(--font);
   font-size: var(--font-size-sm);
+  font-weight: 500;
+  letter-spacing: 0.06em;
   color: var(--text-secondary);
   background: transparent;
   cursor: pointer;
@@ -131,13 +153,20 @@
 }
 
 .variant-btn:hover {
-  color: var(--text);
+  color: #fff;
   background-color: var(--details);
 }
 
-.variant-btn.active {
-  background: var(--details);
-  color: #fff;
+.variant-btn.active,
+.variant-btn.active:hover {
+  background: #fff;
+  border-color: #fff;
+  color: #000;
+}
+
+.variant-btn:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
 }
 
 .btn-add {

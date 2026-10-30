@@ -234,6 +234,16 @@ html:not(.route-product) .pdp { display: none; }
   .pdp .modal-stage,
   .pdp .has-gallery .modal-stage { max-height: 80vh; }
   .pdp .modal-info { padding: 20px 18px 24px; }
+  /* Opciones en varias filas, alineadas a la izquierda y con separación
+     (responsive.css las pone en una sola fila pegadas, para el modal) */
+  .pdp .modal-options .modal-variants {
+    flex-wrap: wrap;
+    overflow-x: visible;
+    align-self: stretch;
+    gap: 8px;
+    padding-bottom: 0;
+  }
+  .pdp .modal-options .variant-btn { padding: 9px 14px; }
   .pdp-related { margin-top: 40px; }
   .pdp-related-track { gap: 16px; padding: 16px 0 28px; }
   .pdp-related-track > .product-card { flex-basis: 72vw; }

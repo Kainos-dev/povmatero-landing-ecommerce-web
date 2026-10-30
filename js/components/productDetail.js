@@ -43,6 +43,15 @@ function hasStockInfo(product) {
   return product.variants.some(v => v.stock != null);
 }
 
+// Título del selector de variantes según lo que se elige: gramajes en las
+// yerbas, medida o tipo de caño en las bombillas y colores en el resto
+// (termeras, yerberos, etc.). "single": cuando hay una sola opción.
+function variantLabels(category) {
+  if (category === "yerbas") return { title: "Presentación", single: "Presentación" };
+  if (category === "bombillas") return { title: "Opciones", single: "Opción" };
+  return { title: "Colores", single: "Color" };
+}
+
 // Dibuja la ficha en "container". Devuelve { step } para recorrer la galería
 // con el teclado (null si hay una sola foto).
 export function renderProductDetail(container, product, { cart, layout = "modal" }) {
@@ -59,6 +68,8 @@ export function renderProductDetail(container, product, { cart, layout = "modal"
   const titleTag = isModal ? "h2" : "h1";
   // En el modal se conservan los id de siempre; en la página no hacen falta.
   const id = (name) => (isModal ? ` id="${name}"` : "");
+  const optionLabels = variantLabels(product.category);
+  const optionsTitleId = `${layout}-options-title`;
 
   container.innerHTML = `
     <div class="modal-content vertical">
@@ -116,17 +127,23 @@ export function renderProductDetail(container, product, { cart, layout = "modal"
         ${
           product.variants
             ? `
-              ${singleVariant ? `<p class="modal-single-variant">Presentación: ${escapeHtml(singleVariant.name)}</p>` : ""}
-              <div class="modal-variants"${singleVariant ? " hidden" : ""}>
-                ${product.variants.map((v) => `
-                  <button
-                    class="variant-btn${v.stock != null && v.stock <= 0 ? " out" : ""}"
-                    data-name="${escapeHtml(v.name)}"
-                    data-img="${escapeHtml((product.category === "yerbas" ? product.image : v.image) ?? "")}"
-                  >
-                    ${escapeHtml(v.name)}
-                  </button>
-                `).join("")}
+              <div class="modal-options">
+                ${singleVariant
+                  ? `<p class="modal-single-variant">${optionLabels.single}: ${escapeHtml(singleVariant.name)}</p>`
+                  : `<p class="modal-options-title" id="${optionsTitleId}">${optionLabels.title}</p>`}
+                <div class="modal-variants" role="group"${singleVariant ? " hidden" : ` aria-labelledby="${optionsTitleId}"`}>
+                  ${product.variants.map((v) => `
+                    <button
+                      type="button"
+                      class="variant-btn${v.stock != null && v.stock <= 0 ? " out" : ""}"
+                      aria-pressed="false"
+                      data-name="${escapeHtml(v.name)}"
+                      data-img="${escapeHtml((product.category === "yerbas" ? product.image : v.image) ?? "")}"
+                    >
+                      ${escapeHtml(v.name)}
+                    </button>
+                  `).join("")}
+                </div>
               </div>
             `
             : ""
@@ -255,8 +272,10 @@ export function renderProductDetail(container, product, { cart, layout = "modal"
     }
 
     // ACTIVE
-    $$(".variant-btn").forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
+    $$(".variant-btn").forEach(b => {
+      b.classList.toggle("active", b === btn);
+      b.setAttribute("aria-pressed", String(b === btn));
+    });
 
     // Botón según el stock de la presentación elegida
     const stock = stockFor(product, variantName);

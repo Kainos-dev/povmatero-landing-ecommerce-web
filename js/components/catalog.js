@@ -100,8 +100,9 @@ export function productPath(product) {
 }
 
 // Arma una card (la usan el catálogo y el carrusel de similares).
-// La foto, el nombre y «Ver más» son enlaces reales a la página del producto
-// (se pueden abrir en otra pestaña; js/router.js los navega sin recargar).
+// La foto y el nombre son enlaces reales a la página del producto (se pueden
+// abrir en otra pestaña; js/router.js los navega sin recargar). El enlace del
+// nombre se estira sobre toda la card (productCard.css): se clickea entera.
 export function createProductCard(product, { eager = false, sizes = CARD_SIZES } = {}) {
   const card = document.createElement("div");
   card.className = product.category === "yerbas" ? "product-card product-card--yerba" : "product-card";
@@ -119,7 +120,6 @@ export function createProductCard(product, { eager = false, sizes = CARD_SIZES }
       ${product.category === "yerbas" ? yerbaPricesHtml(product) : `
       <p class="card-category">${escapeHtml(product.categoryName ?? product.category)}</p>
       <p class="card-price">${formatPrice(product.price)}</p>`}
-      <a class="btn-add" href="${href}">Ver más</a>
     </div>
   `;
 
