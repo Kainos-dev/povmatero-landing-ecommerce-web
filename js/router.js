@@ -6,16 +6,18 @@
 // Una URL de producto abierta directamente (o recargada) funciona igual: Vercel
 // la sirve con index.html (ver vercel.json) y este módulo muestra el producto.
 import { renderProductDetail } from "./components/productDetail.js";
-import { createProductCard, productPath } from "./components/catalog.js";
+import { productPath } from "./components/catalog.js";
+import { createRelatedCarousel } from "./components/relatedCarousel.js";
 import { closeLightbox, isLightboxOpen } from "./components/lightbox.js";
-import { scrollToUnderHeader, scrollBehavior } from "./lib/scroll.js";
+import { scrollToUnderHeader } from "./lib/scroll.js";
 import { absoluteSrc } from "./lib/images.js";
 import { escapeHtml } from "./lib/html.js";
 
 const SITE_URL = "https://povmatero-landing-ecommerce-web.vercel.app";
 const PRODUCT_RE = /^\/producto\/([a-z0-9]+(?:-[a-z0-9]+)*)\/?$/;
 const RELATED_MAX = 12;
-const RELATED_SIZES = "(min-width: 1024px) 22vw, (min-width: 640px) 30vw, 72vw";
+// Ancho de cada card del carrusel (ver .pdp-related-track en product.css)
+const RELATED_SIZES = "(min-width: 1024px) 21vw, (min-width: 640px) 30vw, 72vw";
 
 export function slugFromPath(pathname = location.pathname) {
   return pathname.match(PRODUCT_RE)?.[1] ?? null;
@@ -156,32 +158,14 @@ export function initRouter({ cart }) {
     galleryNav = null;
   }
 
-  // ---------- Productos similares ----------
+  // ---------- Productos similares (carrusel infinito) ----------
+  const carousel = track ? createRelatedCarousel({ track, prevBtn, nextBtn, sizes: RELATED_SIZES }) : null;
+
   function renderRelated(product, products) {
     const items = products.filter((p) => p.category === product.category && p.id !== product.id).slice(0, RELATED_MAX);
-    track.innerHTML = "";
     related.hidden = items.length === 0;
-    if (!items.length) return;
-    const fragment = document.createDocumentFragment();
-    items.forEach((p) => fragment.append(createProductCard(p, { sizes: RELATED_SIZES })));
-    track.append(fragment);
-    track.scrollLeft = 0;
-    updateArrows();
+    carousel?.render(items);
   }
-
-  function updateArrows() {
-    if (!prevBtn || !nextBtn) return;
-    const max = track.scrollWidth - track.clientWidth;
-    const overflow = max > 2;
-    prevBtn.hidden = nextBtn.hidden = !overflow;
-    prevBtn.disabled = track.scrollLeft <= 2;
-    nextBtn.disabled = track.scrollLeft >= max - 2;
-  }
-  track?.addEventListener("scroll", updateArrows, { passive: true });
-  window.addEventListener("resize", updateArrows);
-  const page1 = (dir) => track.scrollBy({ left: dir * track.clientWidth * 0.85, behavior: scrollBehavior() });
-  prevBtn?.addEventListener("click", () => page1(-1));
-  nextBtn?.addEventListener("click", () => page1(1));
 
   // ---------- Navegación ----------
   function render() {

@@ -50,8 +50,10 @@ html:not(.route-product) .pdp { display: none; }
 .pdp-crumb:empty { display: none; }
 
 /* Ficha: foto sobre blanco + información sobre negro (como las cards) */
+/* Sin fondo propio: si fuera negro, el suavizado del borde redondeado lo
+   mezclaba con el blanco de la foto y dejaba una línea oscura muy fina.
+   El negro lo pone solo el panel de información. */
 .pdp-detail {
-  background: #000;
   border-radius: 20px;
   overflow: hidden;
 }
@@ -62,6 +64,7 @@ html:not(.route-product) .pdp { display: none; }
 .pdp .modal-stage,
 .pdp .has-gallery .modal-stage { flex: none; height: min(66vh, 600px); }
 .pdp .modal-info {
+  background: #000;
   height: auto;
   overflow: visible;
   padding: 48px 40px;
@@ -108,10 +111,16 @@ html:not(.route-product) .pdp { display: none; }
 /* =========================
    TAMBIÉN TE PUEDE INTERESAR
 ========================= */
-.pdp-related { margin-top: 56px; }
+/* A todo el ancho de la pantalla (sale del contenedor de 1200px) */
+.pdp-related {
+  width: 100vw;
+  margin-top: 56px;
+  margin-left: calc(50% - 50vw);
+}
 
 .pdp-related-head {
   position: relative;
+  padding: 0 24px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -131,7 +140,7 @@ html:not(.route-product) .pdp { display: none; }
 /* Flechas solo con mouse; en pantallas táctiles el carrusel se desliza */
 .pdp-related-arrows {
   position: absolute;
-  right: 0;
+  right: 24px;
   display: none;
   gap: 8px;
 }
@@ -153,26 +162,28 @@ html:not(.route-product) .pdp { display: none; }
 .pdp-related-arrow:disabled { opacity: 0.3; cursor: default; }
 .pdp-related-arrow[hidden] { display: none; }
 
-/* Carril horizontal: deslizable con el dedo, con la rueda horizontal o con
-   las flechas. Se reserva aire arriba y abajo para la card que crece. */
+/* Carril horizontal a todo el ancho: las cards se centran al detenerse, así
+   las de los extremos quedan cortadas y se intuye que hay más. Infinito (ver
+   js/components/relatedCarousel.js). Aire arriba y abajo para la card que crece. */
 .pdp-related-track {
+  position: relative; /* las medidas del bucle se toman desde el carril */
   display: flex;
   gap: 24px;
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scroll-snap-type: x mandatory;
-  scroll-padding-inline: 4px;
-  padding: 20px 4px 32px;
-  margin: 0 -4px;
-  scrollbar-width: thin;
-  scrollbar-color: #d9d9d9 transparent;
+  padding: 20px 0 32px;
+  scrollbar-width: none;
 }
+.pdp-related-track::-webkit-scrollbar { display: none; }
 .pdp-related-track > .product-card {
-  flex: 0 0 calc((100% - 72px) / 4);
-  scroll-snap-align: start;
+  flex: 0 0 21vw;
+  scroll-snap-align: center;
 }
+/* Con pocos productos (sin bucle) se muestran centrados, sin repetir */
+.pdp-related-track.is-static { justify-content: center; }
 @media (max-width: 1023px) {
-  .pdp-related-track > .product-card { flex-basis: calc((100% - 48px) / 3); }
+  .pdp-related-track > .product-card { flex-basis: 30vw; }
 }
 
 /* Foco visible con el marrón de la marca */
@@ -193,8 +204,8 @@ html:not(.route-product) .pdp { display: none; }
   .pdp .has-gallery .modal-stage { height: auto; aspect-ratio: 1 / 1; }
   .pdp .modal-info { padding: 20px 18px 24px; }
   .pdp-related { margin-top: 40px; }
-  .pdp-related-track { gap: 16px; padding: 16px 16px 28px; margin: 0 -16px; scroll-padding-inline: 16px; }
-  .pdp-related-track > .product-card { flex-basis: 72%; }
+  .pdp-related-track { gap: 16px; padding: 16px 0 28px; }
+  .pdp-related-track > .product-card { flex-basis: 72vw; }
   /* El botón «Agregar al carrito» queda fijo abajo (ver responsive.css):
      se deja lugar para que no tape el final de la página */
   .route-product body { padding-bottom: 64px; }
