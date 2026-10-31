@@ -15,7 +15,7 @@ html:not(.route-product) .pdp { display: none; }
 
 .pdp {
   background: var(--bg);
-  padding: 84px 24px 96px;
+  padding: 84px 24px 16px; /* + 8em del footer */
   min-height: 70vh;
 }
 
@@ -228,7 +228,7 @@ html:not(.route-product) .pdp { display: none; }
    CELULAR
 ========================= */
 @media (max-width: 768px) {
-  .pdp { padding: 76px 16px 96px; }
+  .pdp { padding: 76px 16px 16px; }
   .pdp-detail { border-radius: 16px; }
   .pdp .modal-image { min-height: 0; }
   .pdp .modal-stage,

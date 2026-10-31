@@ -30,7 +30,7 @@
 
   .filters-inner { padding: 0 40px; }
 
-  .catalog-section { padding: 48px 40px 140px; }
+  .catalog-section { padding: 48px 40px 40px; }
 
   .cart-panel { width: var(--cart-width); }
 

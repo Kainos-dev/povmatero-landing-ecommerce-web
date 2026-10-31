@@ -54,7 +54,7 @@
 .catalog-section {
   max-width: 90vw;
   margin: 0 auto;
-  padding: 40px 24px 120px;
+  padding: 40px 24px 32px; /* + 8em del footer: aire justo antes del pie */
   background:#ffffff;
 
 }
