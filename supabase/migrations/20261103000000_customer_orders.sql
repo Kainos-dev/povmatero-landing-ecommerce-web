@@ -29,6 +29,11 @@
 -- pedidos (ver 20261102000000).
 --
 -- No modifica ni borra datos existentes.
+--
+-- Se ejecuta UNA vez. Si ya existiera una tabla public.orders o public.order_items
+-- (de otra prueba), falla al empezar y no cambia nada: así nunca se le aplican
+-- permisos ni políticas a una tabla ajena. Verificar antes con
+-- supabase/checks/20261103_antes_de_migrar.sql.
 -- =====================================================================
 
 begin;
@@ -36,7 +41,7 @@ begin;
 -- ---------------------------------------------------------------------
 -- 1. Tablas
 -- ---------------------------------------------------------------------
-create table if not exists public.orders (
+create table public.orders (
   id              bigint generated always as identity primary key,
   customer_id     uuid references auth.users (id) on delete set null,
   -- Datos de contacto en el momento del pedido (el perfil puede cambiar después).
@@ -49,9 +54,9 @@ create table if not exists public.orders (
   created_at      timestamptz not null default now()
 );
 
-create index if not exists orders_customer_idx on public.orders (customer_id, created_at desc);
+create index orders_customer_idx on public.orders (customer_id, created_at desc);
 
-create table if not exists public.order_items (
+create table public.order_items (
   id            bigint generated always as identity primary key,
   order_id      bigint not null references public.orders (id) on delete cascade,
   product_id    bigint references public.products (id) on delete set null,
@@ -64,7 +69,7 @@ create table if not exists public.order_items (
   line_total    numeric(12, 2) not null check (line_total >= 0)
 );
 
-create index if not exists order_items_order_idx on public.order_items (order_id);
+create index order_items_order_idx on public.order_items (order_id);
 
 comment on table public.orders is
   'Solicitudes de pedido enviadas por WhatsApp por clientes con cuenta. No implica pago ni confirmación.';
