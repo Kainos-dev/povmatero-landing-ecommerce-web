@@ -64,6 +64,43 @@ export async function listProductLegacyIds() {
   return check(await supabase.from("product_internal").select("product_id, legacy_id"));
 }
 
+// ---------- Eliminar borradores ----------
+// Qué se borraría con el producto. "movements" > 0 impide borrarlo: el historial
+// de stock no se borra (la base lo protege) para no perder trazabilidad.
+export async function getDeletionInfo(productId) {
+  const [product, variants, images] = await Promise.all([
+    getProduct(productId),
+    supabase.from("product_variants").select("id").eq("product_id", productId).then(check),
+    supabase.from("product_images").select("id, src").eq("product_id", productId).then(check),
+  ]);
+  let movements = 0;
+  if (variants.length) {
+    const { count, error } = await supabase
+      .from("inventory_movements")
+      .select("id", { count: "exact", head: true })
+      .in("variant_id", variants.map((v) => v.id));
+    if (error) throw error;
+    // Sin conteo no se sabe si hay historial: mejor no ofrecer el borrado.
+    if (count == null) throw new Error("No se pudo verificar el historial de stock del producto.");
+    movements = count;
+  }
+  return { product, variants: variants.length, images, movements };
+}
+
+// Borra un producto SOLO si sigue en borrador (la condición la evalúa la base en
+// el mismo DELETE: un producto publicado nunca se borra). Variantes, SKU, costos,
+// imágenes y datos internos se borran en cascada.
+export async function deleteDraftProduct(productId) {
+  const rows = check(
+    await supabase.from("products").delete().eq("id", productId).eq("is_active", false).select("id")
+  );
+  if (!rows.length) {
+    const err = new Error("No se eliminó: el producto ya no está en borrador o no existe. Recargá la página.");
+    err.code = "NOT_DRAFT";
+    throw err;
+  }
+}
+
 // ---------- Productos simples ----------
 // Un producto de un solo modelo se guarda con una única variante interna "Único":
 // ahí viven su precio, stock, costo, SKU y movimientos. El panel la muestra como

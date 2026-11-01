@@ -254,3 +254,15 @@ export async function replaceImageSrc(id, oldSrc, newSrc) {
   if (!rows.length) throw notSaved("actualizar la ruta de la imagen");
   return rows[0];
 }
+
+// Borra archivos de Storage de un producto ya eliminado. Solo dentro de su carpeta
+// products/<id>/. Devuelve cuántos se borraron.
+export async function removeProductFiles(productId, srcs) {
+  const prefix = `products/${productId}/`;
+  const paths = [...new Set(srcs.map(storagePathFromSrc))]
+    .filter((p) => p && p.startsWith(prefix) && !p.includes(".."));
+  if (!paths.length) return 0;
+  const { data, error } = await supabase.storage.from(BUCKET).remove(paths);
+  if (error) throw error;
+  return Array.isArray(data) ? data.length : 0;
+}

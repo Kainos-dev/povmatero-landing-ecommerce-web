@@ -2,6 +2,8 @@ import * as api from "../api/catalog.js";
 import { h, mount, field, showError, toast, errorMessage, slugify, SLUG_RE } from "../ui.js";
 import { renderStockPanel } from "./stockPanel.js";
 import { renderImagesPanel } from "./imagesPanel.js";
+import { imageSource, removeProductFiles } from "../api/images.js";
+import { icon } from "../icons.js";
 
 function backLink() {
   return h("a", { href: "#/productos", class: "back-link" }, "← Volver a productos");
@@ -522,14 +524,103 @@ export async function renderProductEdit(view, productId) {
   }
 
   // ------------------------------------------------------------------
+  // Eliminar (solo borradores). Único lugar con rojo en esta pantalla.
+  // ------------------------------------------------------------------
+  const deleteBox = h("div", { hidden: true });
+
+  function deleteButton() {
+    if (isNew || product.is_active) return null;
+    const button = h("button", { type: "button", class: "btn-ghost btn-danger" }, icon("trash"), "Eliminar borrador");
+    button.addEventListener("click", () => openDelete());
+    return button;
+  }
+
+  async function openDelete() {
+    deleteBox.hidden = false;
+    mount(deleteBox, h("div", { class: "confirm-box confirm-danger" }, h("p", {}, "Revisando qué se va a eliminar…")));
+    deleteBox.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    let info;
+    try {
+      info = await api.getDeletionInfo(product.id);
+    } catch (err) {
+      console.error(err);
+      mount(deleteBox, h("div", { class: "confirm-box confirm-danger" },
+        h("p", { class: "form-error" }, `No se pudo revisar el producto: ${errorMessage(err)}`),
+        h("div", { class: "actions" }, h("button", { type: "button", class: "btn-ghost", onClick: closeDelete }, "Cerrar"))));
+      return;
+    }
+    const cancel = h("button", { type: "button", class: "btn-ghost", onClick: closeDelete }, "Cancelar");
+
+    if (!info.product || info.product.is_active) {
+      mount(deleteBox, h("div", { class: "confirm-box confirm-danger" },
+        h("p", {}, "Este producto ya no está en borrador: los productos publicados no se pueden eliminar. Recargá la página."),
+        h("div", { class: "actions" }, cancel)));
+      return;
+    }
+    if (info.movements > 0) {
+      mount(deleteBox, h("div", { class: "confirm-box confirm-danger" },
+        h("p", {}, h("strong", {}, `No se puede eliminar «${product.name}».`)),
+        h("p", {}, `Sus variantes tienen ${info.movements} ${info.movements === 1 ? "movimiento" : "movimientos"} de stock. `,
+          "El historial de stock se conserva siempre, así que este producto no se borra. Dejalo en borrador: no se muestra en la tienda."),
+        h("div", { class: "actions" }, cancel)));
+      return;
+    }
+
+    const storageFiles = info.images.filter((i) => imageSource(i.src) === "storage").length;
+    const confirm = h("button", { type: "button", class: "btn-primary btn-danger-solid" }, `Sí, eliminar «${product.name}»`);
+    confirm.addEventListener("click", async () => {
+      confirm.disabled = true;
+      cancel.disabled = true;
+      confirm.textContent = "Eliminando…";
+      try {
+        await api.deleteDraftProduct(product.id);
+      } catch (err) {
+        console.error(err);
+        mount(deleteBox, h("div", { class: "confirm-box confirm-danger" },
+          h("p", { class: "form-error" }, err.code === "NOT_DRAFT" ? err.message : `No se eliminó: ${errorMessage(err)}`),
+          h("div", { class: "actions" }, h("button", { type: "button", class: "btn-ghost", onClick: closeDelete }, "Cerrar"))));
+        return;
+      }
+      // El producto ya no existe; los archivos de Storage se borran después.
+      // Si eso falla, quedan archivos sin uso, pero ningún registro roto.
+      let filesNote = "";
+      try { await removeProductFiles(product.id, info.images.map((i) => i.src)); }
+      catch (err) { console.error(err); filesNote = " Algunas fotos no se pudieron borrar de Storage (no afecta la tienda)."; }
+      toast(`«${product.name}» se eliminó.${filesNote}`, filesNote ? "error" : "ok");
+      location.hash = "#/productos?estado=draft";
+    });
+
+    mount(deleteBox, h("div", { class: "confirm-box confirm-danger", role: "alertdialog", "aria-label": `Eliminar ${product.name}` },
+      h("p", {}, h("strong", {}, `¿Eliminar «${product.name}»?`)),
+      h("p", {}, "Se borra el producto con todo lo suyo. No se puede deshacer."),
+      h("ul", { class: "change-list" },
+        h("li", {}, info.variants
+          ? `${info.variants} ${info.variants === 1 ? "variante" : "variantes"}, con sus precios, costos y SKU`
+          : "Sin variantes"),
+        h("li", {}, info.images.length
+          ? `${info.images.length} ${info.images.length === 1 ? "imagen" : "imágenes"}${storageFiles ? ` (${storageFiles} ${storageFiles === 1 ? "archivo" : "archivos"} en Storage)` : ""}`
+          : "Sin imágenes")),
+      h("div", { class: "actions" }, confirm, cancel)));
+    confirm.focus();
+  }
+
+  function closeDelete() {
+    deleteBox.hidden = true;
+    mount(deleteBox);
+  }
+
+  // ------------------------------------------------------------------
   // Armado de la pantalla
   // ------------------------------------------------------------------
   mount(view, 
     backLink(),
     h("div", { class: "page-header" },
-      h("h2", {}, isNew ? "Nuevo producto" : product.name),
-      isNew ? null : statusBadge(product.is_active)
+      h("div", { class: "title-row" },
+        h("h2", {}, isNew ? "Nuevo producto" : product.name),
+        isNew ? null : statusBadge(product.is_active)),
+      deleteButton()
     ),
+    deleteBox,
     productForm(),
     isNew
       ? h("p", { class: "muted" }, "Después de crear el producto vas a poder cargar su precio y stock, o sus variantes.")

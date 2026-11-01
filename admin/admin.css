@@ -482,6 +482,7 @@ div.form-error {
   font-size: var(--a-text-sm);
 }
 
+.title-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; min-width: 0; }
 .confirm-box {
   border: 1px solid var(--a-line-2);
   border-radius: var(--a-radius);
@@ -493,6 +494,9 @@ div.form-error {
   background: var(--a-bg);
   color: var(--a-fg);
 }
+
+/* Confirmación de borrado: único bloque con fondo rojo */
+.confirm-box.confirm-danger { border-color: var(--a-red-line); background: var(--a-red-bg); }
 
 /* Movimientos: entrada/salida se leen por el signo, no por el color */
 .qty-pos { color: var(--a-fg); font-weight: 600; }
