@@ -1093,4 +1093,26 @@ a.move:hover { background: var(--a-sunken); }
   .table-moves .c-who { grid-area: who; font-size: var(--a-text-xs); color: var(--a-muted); text-align: right; }
   .table-moves .c-ref,
   .table-moves .c-cost { display: none; }
+
+  /* Clientes */
+  .table-customers tr {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "name action"
+      "email action"
+      "phone news"
+      "how date";
+    gap: 2px 12px;
+    padding: 12px 14px;
+    align-items: center;
+  }
+  .table-customers .c-name { grid-area: name; font-weight: 600; }
+  .table-customers .c-email { grid-area: email; font-size: var(--a-text-sm); overflow-wrap: anywhere; }
+  .table-customers .c-phone { grid-area: phone; font-size: var(--a-text-xs); color: var(--a-fg-2); }
+  .table-customers .c-news { grid-area: news; text-align: right; }
+  .table-customers .c-news .badge::before { content: "Novedades: "; font-weight: 400; }
+  .table-customers .c-how { grid-area: how; font-size: var(--a-text-xs); color: var(--a-muted); }
+  .table-customers .c-date { grid-area: date; font-size: var(--a-text-xs); color: var(--a-muted); text-align: right; }
+  .table-customers .c-pref { display: none; }
+  .table-customers .c-action { grid-area: action; align-self: start; }
 }

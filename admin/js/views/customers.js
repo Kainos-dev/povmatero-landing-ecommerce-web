@@ -1,9 +1,12 @@
-// Clientes registrados en la tienda (solo lectura).
-// Muestra quiénes aceptaron recibir novedades y cómo lo hicieron, y permite
-// exportar la lista. Los datos salen de public.customer_profiles: la RLS solo
-// se los devuelve a los administradores.
+// Clientes registrados en la tienda.
+// Muestra quiénes aceptaron recibir novedades y cómo lo hicieron, permite
+// exportar la lista y eliminar cuentas (por ejemplo, las de prueba). Los datos
+// salen de public.customer_profiles: la RLS solo se los devuelve a los
+// administradores.
 import { supabase } from "/js/lib/supabaseClient.js";
-import { h, mount, errorMessage, normalizeText } from "../ui.js";
+import { h, mount, errorMessage, normalizeText, toast } from "../ui.js";
+import { getCurrentUserId } from "../api/inventory.js";
+import { icon } from "../icons.js";
 
 const METHOD_LABELS = {
   signup_prechecked: "Registro (casilla premarcada)",
@@ -23,6 +26,28 @@ async function listCustomers() {
     .order("created_at", { ascending: false });
   if (error) throw error;
   return data ?? [];
+}
+
+// Elimina la cuenta de Auth del cliente (y en cascada su perfil e historial de
+// novedades). Lo hace una función de la base que verifica que quien llama sea
+// administrador, que no sea su propia cuenta ni la de otro administrador, y que
+// el cliente no tenga pedidos. El navegador nunca usa claves secretas.
+// Ver supabase/migrations/20261102000000_admin_delete_customer.sql
+async function deleteCustomer(userId) {
+  const { data, error } = await supabase.rpc("admin_delete_customer", { target: userId });
+  if (error) throw error;
+  return data;
+}
+
+// Rechazos de la base con un mensaje ya pensado para el panel.
+const KNOWN_REFUSALS = new Set(["own_account", "admin_account", "not_found", "has_orders"]);
+function deleteErrorMessage(err) {
+  if (KNOWN_REFUSALS.has(err?.hint)) return err.message;
+  if (err?.code === "PGRST202" || /admin_delete_customer/.test(err?.message ?? "")) {
+    return "Falta aplicar la migración supabase/migrations/20261102000000_admin_delete_customer.sql en el SQL Editor de Supabase.";
+  }
+  if (err?.code === "42501") return "No tenés permisos para eliminar clientes.";
+  return errorMessage(err);
 }
 
 function toCsv(rows) {
@@ -51,12 +76,14 @@ function download(filename, text) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+const fullName = (c) => [c.first_name, c.last_name].filter(Boolean).join(" ");
+
 export async function renderCustomers(view) {
   mount(view, h("p", { class: "muted" }, "Cargando clientes…"));
 
-  let customers;
+  let customers, me;
   try {
-    customers = await listCustomers();
+    [customers, me] = await Promise.all([listCustomers(), getCurrentUserId()]);
   } catch (err) {
     console.error(err);
     // 42P01 / PGRST205: la tabla todavía no existe (falta aplicar la migración).
@@ -80,12 +107,79 @@ export async function renderCustomers(view) {
   const exportBtn = h("button", { type: "button", class: "btn-ghost" }, "Exportar CSV");
   const count = h("p", { class: "muted" });
   const tbody = h("tbody");
-
-  const optedIn = customers.filter((c) => c.marketing_opt_in);
-  const active = optedIn.filter((c) => c.marketing_consent_method !== "signup_prechecked");
+  const summary = h("div", { class: "customers-summary" });
+  const confirmSlot = h("div", { hidden: true });
 
   let visible = customers;
 
+  function renderSummary() {
+    const opted = customers.filter((c) => c.marketing_opt_in);
+    const actively = opted.filter((c) => c.marketing_consent_method !== "signup_prechecked");
+    mount(summary,
+      h("div", { class: "card" }, h("strong", {}, String(customers.length)), h("span", { class: "muted" }, "registrados")),
+      h("div", { class: "card" }, h("strong", {}, String(opted.length)), h("span", { class: "muted" }, "aceptan novedades")),
+      h("div", { class: "card" }, h("strong", {}, String(actively.length)), h("span", { class: "muted" }, "las aceptaron marcando la casilla o desde su cuenta")));
+  }
+
+  // ---------- Eliminar ----------
+  function closeConfirm() {
+    confirmSlot.hidden = true;
+    mount(confirmSlot);
+  }
+
+  // Confirmación: quién es, qué se borra y qué no. Único lugar con rojo.
+  function askDelete(c) {
+    const who = fullName(c) ? `«${fullName(c)}» (${c.email})` : c.email;
+    const error = h("p", { class: "form-error", role: "alert", hidden: true });
+    const cancel = h("button", { type: "button", class: "btn-ghost", onClick: closeConfirm }, "Cancelar");
+    const confirm = h("button", { type: "button", class: "btn-primary btn-danger-solid" }, "Sí, eliminar la cuenta");
+
+    confirm.addEventListener("click", async () => {
+      confirm.disabled = true;
+      cancel.disabled = true;
+      confirm.textContent = "Eliminando…";
+      try {
+        const result = await deleteCustomer(c.user_id);
+        customers = customers.filter((x) => x.user_id !== c.user_id);
+        closeConfirm();
+        apply();
+        renderSummary();
+        toast(`Se eliminó la cuenta de ${result?.email ?? c.email}. Ese email ya puede registrarse de nuevo.`);
+        // Se vuelve a leer la lista para confirmar con la base.
+        try { customers = await listCustomers(); apply(); renderSummary(); } catch (err) { console.error(err); }
+      } catch (err) {
+        console.error(err);
+        error.textContent = `No se eliminó: ${deleteErrorMessage(err)}`;
+        error.hidden = false;
+        confirm.disabled = false;
+        cancel.disabled = false;
+        confirm.textContent = "Sí, eliminar la cuenta";
+      }
+    });
+
+    confirmSlot.hidden = false;
+    mount(confirmSlot, h("div", { class: "confirm-box confirm-danger", role: "alertdialog", "aria-label": `Eliminar la cuenta de ${c.email}` },
+      h("p", {}, h("strong", {}, `¿Eliminar la cuenta de ${who}?`)),
+      h("ul", { class: "change-list" },
+        h("li", {}, "Se borra su cuenta de acceso: el email queda libre para registrarse de nuevo."),
+        h("li", {}, "Se borran su perfil (nombre y teléfono) y su historial de preferencias de novedades."),
+        h("li", {}, "No se tocan productos, precios, stock ni movimientos. Si tuviera pedidos, la base no deja eliminarla.")),
+      h("p", {}, "No se puede deshacer."),
+      error,
+      h("div", { class: "actions" }, confirm, cancel)));
+    confirmSlot.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+    confirm.focus();
+  }
+
+  function actionCell(c) {
+    if (c.user_id === me) return h("span", { class: "chip", title: "Es la cuenta con la que estás usando el panel" }, "Vos");
+    return h("button", {
+      type: "button", class: "btn-ghost btn-danger btn-sm",
+      "aria-label": `Eliminar la cuenta de ${c.email}`, onClick: () => askDelete(c),
+    }, icon("trash"), "Eliminar");
+  }
+
+  // ---------- Tabla ----------
   function apply() {
     const q = normalizeText(search.value.trim());
     visible = customers.filter((c) => {
@@ -99,15 +193,16 @@ export async function renderCustomers(view) {
     count.textContent = `${visible.length} de ${customers.length} clientes`;
     mount(tbody, visible.length
       ? visible.map((c) => h("tr", {},
-          h("td", {}, [c.first_name, c.last_name].filter(Boolean).join(" ") || "—"),
-          h("td", {}, c.email),
-          h("td", {}, c.phone || "—"),
-          h("td", { class: "center" }, h("span", { class: `badge ${c.marketing_opt_in ? "badge-ok" : ""}` }, c.marketing_opt_in ? "Sí" : "No")),
-          h("td", {}, METHOD_LABELS[c.marketing_consent_method] ?? "—"),
-          h("td", {}, formatDate(c.marketing_updated_at)),
-          h("td", {}, formatDate(c.created_at))
+          h("td", { class: "c-name" }, fullName(c) || "—"),
+          h("td", { class: "c-email" }, c.email),
+          h("td", { class: "c-phone" }, c.phone || "—"),
+          h("td", { class: "center c-news" }, h("span", { class: `badge ${c.marketing_opt_in ? "badge-ok" : ""}` }, c.marketing_opt_in ? "Sí" : "No")),
+          h("td", { class: "c-how" }, METHOD_LABELS[c.marketing_consent_method] ?? "—"),
+          h("td", { class: "c-pref" }, formatDate(c.marketing_updated_at)),
+          h("td", { class: "c-date" }, formatDate(c.created_at)),
+          h("td", { class: "c-action" }, actionCell(c))
         ))
-      : h("tr", {}, h("td", { colspan: 7, class: "empty" }, customers.length ? "Ningún cliente coincide con la búsqueda." : "Todavía no hay clientes registrados."))
+      : h("tr", {}, h("td", { colspan: 8, class: "empty" }, customers.length ? "Ningún cliente coincide con la búsqueda." : "Todavía no hay clientes registrados."))
     );
   }
 
@@ -118,25 +213,23 @@ export async function renderCustomers(view) {
     download(`clientes-povmatero-${stamp}.csv`, toCsv(visible));
   });
 
+  renderSummary();
   mount(view,
     h("div", { class: "page-header" }, h("h2", {}, "Clientes")),
-    h("div", { class: "customers-summary" },
-      h("div", { class: "card" }, h("strong", {}, String(customers.length)), h("span", { class: "muted" }, "registrados")),
-      h("div", { class: "card" }, h("strong", {}, String(optedIn.length)), h("span", { class: "muted" }, "aceptan novedades")),
-      h("div", { class: "card" }, h("strong", {}, String(active.length)), h("span", { class: "muted" }, "las aceptaron marcando la casilla o desde su cuenta"))
-    ),
+    summary,
     h("p", { class: "notice-info" },
       "«Casilla premarcada» = la persona dejó marcada la opción que ya venía marcada. ",
       "Si para tus envíos necesitás un consentimiento expreso, usá el filtro «sin contar casilla premarcada»."
     ),
     h("div", { class: "toolbar" }, search, filter, exportBtn),
     count,
+    confirmSlot,
     h("div", { class: "table-wrap" },
-      h("table", { class: "table" },
+      h("table", { class: "table table-cards table-customers" },
         h("thead", {}, h("tr", {},
           h("th", {}, "Nombre"), h("th", {}, "Email"), h("th", {}, "Teléfono"),
           h("th", { class: "center" }, "Novedades"), h("th", {}, "Cómo"),
-          h("th", {}, "Última preferencia"), h("th", {}, "Alta")
+          h("th", {}, "Última preferencia"), h("th", {}, "Alta"), h("th", {}, "")
         )),
         tbody
       )
