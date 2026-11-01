@@ -1,14 +1,14 @@
-// Navegación del panel por hash (#/inicio, #/productos, #/productos/12, #/stock?f=zero).
+// Navegación del panel por hash (#/inicio, #/productos, #/productos/12?tab=precios,
+// #/inventario?tab=stock&f=zero).
 // Lo que va después de "?" se pasa a la pantalla como filtros iniciales.
 import { renderHome } from "./views/home.js";
 import { renderMore } from "./views/more.js";
 import { renderProductList } from "./views/productList.js";
 import { renderProductEdit } from "./views/productEdit.js";
-import { renderPriceTable } from "./views/priceTable.js";
+import { renderInventory } from "./views/inventory.js";
 import { renderImageMigration } from "./views/imageMigration.js";
 import { renderCostImport } from "./views/costImport.js";
 import { renderCatalogReview } from "./views/catalogReview.js";
-import { renderStockTable } from "./views/stockTable.js";
 import { renderCustomers } from "./views/customers.js";
 
 const DEFAULT_ROUTE = "#/inicio";
@@ -18,18 +18,17 @@ const routes = [
   [/^#\/inicio\/?$/,           (view, m, q) => renderHome(view, q),                 "#/inicio"],
   [/^#\/productos\/?$/,        (view, m, q) => renderProductList(view, q),          "#/productos"],
   [/^#\/productos\/nuevo\/?$/, (view) => renderProductEdit(view, null),             "#/productos"],
-  [/^#\/productos\/(\d+)\/?$/, (view, m) => renderProductEdit(view, Number(m[1])),  "#/productos"],
-  [/^#\/precios\/?$/,          (view) => renderPriceTable(view),                    "#/precios"],
-  [/^#\/stock\/?$/,            (view, m, q) => renderStockTable(view, q),           "#/stock"],
+  [/^#\/productos\/(\d+)\/?$/, (view, m, q) => renderProductEdit(view, Number(m[1]), q), "#/productos"],
+  [/^#\/inventario\/?$/,       (view, m, q) => renderInventory(view, q),            "#/inventario"],
   [/^#\/clientes\/?$/,         (view) => renderCustomers(view),                     "#/clientes"],
   [/^#\/imagenes\/?$/,         (view) => renderImageMigration(view),                "#/imagenes"],
-  [/^#\/importar-costos\/?$/,  (view) => renderCostImport(view),                    "#/importar-costos"],
+  [/^#\/importar-(costos|precios)\/?$/, (view) => renderCostImport(view),             "#/importar-precios"],
   [/^#\/revision\/?$/,         (view) => renderCatalogReview(view),                 "#/revision"],
   [/^#\/mas\/?$/,              (view) => renderMore(view),                          "#/mas"],
 ];
 
 // Secciones que en el celular viven dentro de «Más».
-const IN_MORE = new Set(["#/clientes", "#/imagenes", "#/importar-costos", "#/revision", "#/mas"]);
+const IN_MORE = new Set(["#/imagenes", "#/importar-precios", "#/revision", "#/mas"]);
 
 let container = null;
 let listening = false;
@@ -48,6 +47,14 @@ function route() {
   if (!container) return;
   const full = location.hash || DEFAULT_ROUTE;
   const [hash, queryString = ""] = full.split("?");
+  // Direcciones anteriores (#/precios, #/stock) → Inventario, conservando filtros.
+  const legacy = { "#/precios": "precios", "#/stock": "stock" }[hash.replace(/\/$/, "")];
+  if (legacy) {
+    const params = new URLSearchParams(queryString);
+    params.set("tab", legacy);
+    location.replace(`#/inventario?${params}`);
+    return;
+  }
   const query = Object.fromEntries(new URLSearchParams(queryString));
 
   for (const [pattern, render, section] of routes) {

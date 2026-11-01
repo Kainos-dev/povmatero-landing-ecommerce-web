@@ -12,7 +12,7 @@ function issue(level, text) {
 }
 
 // Arma la revisión a partir de los datos ya cargados. Exportada para pruebas.
-export function reviewCatalog({ categories, products, variants, images, legacyIds, legacyProducts }) {
+export function reviewCatalog({ categories, products, variants, images, legacyIds, legacyProducts, internals = new Map() }) {
   const categoryById = new Map(categories.map((c) => [c.id, c]));
   const variantsByProduct = new Map();
   for (const v of variants) {
@@ -90,7 +90,7 @@ export function reviewCatalog({ categories, products, variants, images, legacyId
       variants: vs,
       activeCount: active.length,
       imageCount: imgs.length,
-      withoutSku: vs.filter((v) => !v.sku).length,
+      withoutSku: internals.get(p.id)?.sku ? 0 : 1,   // SKU por producto
       withoutCost: vs.filter((v) => v.cost == null).length,
       unpriced,
       issues,
@@ -138,12 +138,12 @@ export async function renderCatalogReview(view, { compare = false, filterValue =
   let result, sourceErrors;
   try {
     const noSources = { legacyProducts: null, errors: [] };
-    const [categories, products, variants, images, legacyIds, sources] = await Promise.all([
+    const [categories, products, variants, images, legacyIds, sources, internals] = await Promise.all([
       api.listCategories(), api.listProducts(), api.listAllVariantsWithCosts(), listAllImages(),
-      compare ? api.listProductLegacyIds() : [], compare ? loadSources() : noSources,
+      compare ? api.listProductLegacyIds() : [], compare ? loadSources() : noSources, api.listProductInternals(),
     ]);
     sourceErrors = sources.errors;
-    result = reviewCatalog({ categories, products, variants, images, legacyIds, ...sources });
+    result = reviewCatalog({ categories, products, variants, images, legacyIds, ...sources, internals });
   } catch (err) {
     console.error(err);
     mount(view, h("p", { class: "form-error" }, errorMessage(err)));
@@ -298,7 +298,7 @@ export async function renderCatalogReview(view, { compare = false, filterValue =
           : "Ningún producto tiene problemas que impidan publicarlo."),
         h("li", {}, `${withWarnings.length} con observaciones para revisar.`),
         h("li", {}, `${readyDrafts.length} ${readyDrafts.length === 1 ? "borrador está listo" : "borradores están listos"} para publicar (sin problemas, con fotos en Storage o imagen genérica de yerba, y con algo para vender hoy).`),
-        h("li", {}, `${noSku} variantes sin SKU y ${noCost} sin costo (son datos internos: no impiden publicar).`)),
+        h("li", {}, `${noSku} productos sin SKU y ${noCost} variantes sin costo (son datos internos: no impiden publicar).`)),
       h("p", { class: "muted" }, "Solo cambia datos si usás “Publicar”, y siempre con confirmación.")),
     h("section", { class: "card" },
       h("div", { class: "toolbar" }, filter),

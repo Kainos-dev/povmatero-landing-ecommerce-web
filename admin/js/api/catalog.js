@@ -3,8 +3,8 @@
 import { supabase } from "/js/lib/supabaseClient.js";
 
 const CATEGORY_COLUMNS = "id, slug, name, sort_order, is_active";
-const PRODUCT_COLUMNS  = "id, category_id, slug, name, description, is_active, sort_order";
-const VARIANT_COLUMNS  = "id, product_id, name, price, stock, track_stock, is_active, sort_order";
+const PRODUCT_COLUMNS  = "id, category_id, slug, name, description, is_active, sort_order, base_price";
+const VARIANT_COLUMNS  = "id, product_id, name, price, stock, track_stock, is_active, sort_order, price_inherited, cost_inherited";
 
 function check({ data, error }) {
   if (error) throw error;
@@ -31,7 +31,7 @@ export async function listProducts() {
   return check(
     await supabase
       .from("products")
-      .select(`${PRODUCT_COLUMNS}, product_variants (id, name, price, stock, track_stock, is_active)`)
+      .select(`${PRODUCT_COLUMNS}, product_variants (id, name, price, stock, track_stock, is_active, price_inherited, cost_inherited)`)
       .order("name")
   );
 }
@@ -131,62 +131,76 @@ export async function listVariants(productId) {
       .in("variant_id", variants.map((v) => v.id))
   );
   const costByVariant = new Map(costs.map((c) => [c.variant_id, Number(c.cost)]));
-  const skuByVariant = await listSkus(variants.map((v) => v.id));
 
   return variants.map((v) => ({
     ...v,
     price: Number(v.price),
     cost: costByVariant.has(v.id) ? costByVariant.get(v.id) : null,
-    sku: skuByVariant.get(v.id) ?? null,
   }));
 }
 
-// Todas las variantes con su costo y SKU.
-// Para la tabla de precios y stock y la importación de costos.
+// Todas las variantes con su costo. Para Inventario, Inicio y la importación.
 export async function listAllVariantsWithCosts() {
-  const [variants, costs, links] = await Promise.all([
+  const [variants, costs] = await Promise.all([
     supabase.from("product_variants").select(VARIANT_COLUMNS).order("product_id").order("sort_order").order("id").then(check),
     supabase.from("variant_costs").select("variant_id, cost").then(check),
-    supabase.from("variant_internal").select("variant_id, sku").then(check),
   ]);
   const costByVariant = new Map(costs.map((c) => [c.variant_id, Number(c.cost)]));
-  const skuByVariant = new Map(links.map((l) => [l.variant_id, l.sku]));
 
   return variants.map((v) => ({
     ...v,
     price: Number(v.price),
     cost: costByVariant.has(v.id) ? costByVariant.get(v.id) : null,
-    sku: skuByVariant.get(v.id) ?? null,
   }));
 }
 
-// ---------- SKU (interno, por variante) ----------
-// El SKU vive en variant_internal (solo admins).
+// ---------- SKU, precio y costo generales del producto ----------
+// SKU y costo general viven en product_internal (solo admins); el precio de venta
+// general en products.base_price. La base copia los valores generales a las
+// variantes que los heredan (price_inherited / cost_inherited).
+
+// Map productId → { sku, base_cost } de todos los productos que tienen datos internos.
+export async function listProductInternals() {
+  const rows = check(await supabase.from("product_internal").select("product_id, sku, base_cost"));
+  return new Map(rows.map((r) => [r.product_id, { sku: r.sku ?? null, base_cost: r.base_cost == null ? null : Number(r.base_cost) }]));
+}
+
+export async function getProductInternal(productId) {
+  const row = check(await supabase.from("product_internal").select("sku, base_cost").eq("product_id", productId).maybeSingle());
+  return { sku: row?.sku ?? null, base_cost: row?.base_cost == null ? null : Number(row.base_cost) };
+}
+
+// Guarda solo las claves presentes en "changes": { sku, base_price, base_cost }.
+// null borra el valor general (las variantes conservan el que tienen).
+export async function saveProductPricing(productId, changes) {
+  if ("base_price" in changes) {
+    ensureSaved(check(await supabase.from("products").update({ base_price: changes.base_price }).eq("id", productId).select("id")));
+  }
+  const internal = {};
+  if ("sku" in changes) internal.sku = normalizeSku(changes.sku);
+  if ("base_cost" in changes) internal.base_cost = changes.base_cost;
+  if (Object.keys(internal).length) {
+    check(await supabase.from("product_internal").upsert({ product_id: productId, ...internal }, { onConflict: "product_id" }).select("product_id"));
+  }
+}
+
+// Vuelve una variante al precio y/o costo general (la base copia el valor).
+export async function useGeneral(variantId, { price = false, cost = false }) {
+  const fields = {};
+  if (price) fields.price_inherited = true;
+  if (cost) fields.cost_inherited = true;
+  return updateVariant(variantId, fields);
+}
+
+// ---------- SKU ----------
+// Un SKU por producto (product_internal.sku), compartido por sus variantes.
 // Se compara siempre recortando espacios, respetando mayúsculas y minúsculas.
 export function normalizeSku(value) {
   const s = String(value ?? "").trim();
   return s === "" ? null : s;
 }
 
-async function listSkus(variantIds) {
-  if (!variantIds.length) return new Map();
-  const rows = check(
-    await supabase.from("variant_internal").select("variant_id, sku").in("variant_id", variantIds)
-  );
-  return new Map(rows.map((r) => [r.variant_id, r.sku]));
-}
 
-// Guarda (o borra con null) el SKU de una variante. Solo toca la columna sku:
-// el resto de variant_internal queda igual.
-export async function saveVariantSku(variantId, sku) {
-  const value = normalizeSku(sku);
-  const updated = check(
-    await supabase.from("variant_internal").update({ sku: value }).eq("variant_id", variantId).select("variant_id")
-  );
-  if (updated.length === 0 && value !== null) {
-    check(await supabase.from("variant_internal").insert({ variant_id: variantId, sku: value }));
-  }
-}
 
 // El stock nunca se envía: empieza en 0 y solo cambia con movimientos.
 export async function createVariant(productId, fields) {

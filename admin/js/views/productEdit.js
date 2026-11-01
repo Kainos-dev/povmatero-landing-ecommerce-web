@@ -1,9 +1,21 @@
+// Ficha de producto, en pestañas: Datos · Precios y variantes · Imágenes · Stock.
+//
+// Precios: el producto tiene SKU, precio de venta y costo GENERALES. Cada variante
+// usa el general (lo hereda) o tiene un valor particular. La base copia el general
+// a las variantes que lo heredan (ver supabase/migrations/20261101000000_product_pricing.sql).
 import * as api from "../api/catalog.js";
-import { h, mount, field, showError, toast, errorMessage, slugify, SLUG_RE } from "../ui.js";
+import { h, mount, field, showError, toast, errorMessage, slugify, SLUG_RE, formatPrice } from "../ui.js";
 import { renderStockPanel } from "./stockPanel.js";
 import { renderImagesPanel } from "./imagesPanel.js";
 import { imageSource, removeProductFiles } from "../api/images.js";
 import { icon } from "../icons.js";
+
+const TABS = [
+  ["datos", "Datos"],
+  ["precios", "Precios"],
+  ["imagenes", "Imágenes"],
+  ["stock", "Stock"],
+];
 
 function backLink() {
   return h("a", { href: "#/productos", class: "back-link" }, "← Volver a productos");
@@ -13,51 +25,52 @@ function statusBadge(active) {
   return h("span", { class: active ? "badge badge-ok" : "badge" }, active ? "Publicado" : "Borrador");
 }
 
-// Lee y valida los campos de una variante. Devuelve { fields, cost } o { error }.
-function parseVariant({ name, price, cost, track, active, sort }) {
-  const variantName = name.value.trim();
-  if (!variantName) return { error: "La variante necesita un nombre." };
-
-  if (price.value === "") return { error: `Ingresá un precio para “${variantName}”.` };
-  const priceValue = Number(price.value);
-  // Solo presentaciones comercializables: sin precio de venta no se crean.
-  if (!Number.isFinite(priceValue) || priceValue <= 0) return { error: "El precio debe ser un número mayor a 0." };
-
-  let costValue = null;
-  if (cost.value !== "") {
-    costValue = Number(cost.value);
-    if (!Number.isFinite(costValue) || costValue < 0) return { error: "El costo debe ser un número mayor o igual a 0." };
-    costValue = Math.round(costValue * 100) / 100;
-  }
-
-  const sortValue = sort ? Number(sort.value || 0) : 0;
-  if (!Number.isInteger(sortValue)) return { error: "El orden debe ser un número entero." };
-
-  return {
-    fields: {
-      name: variantName,
-      price: Math.round(priceValue * 100) / 100,
-      track_stock: track.checked,
-      is_active: active ? active.checked : true,
-      sort_order: sortValue,
-    },
-    cost: costValue,
-  };
+function round2(n) {
+  return Math.round(n * 100) / 100;
 }
 
-export async function renderProductEdit(view, productId) {
+// Valor de un input numérico: "" → null, inválido → NaN.
+function readNumber(text) {
+  const t = String(text ?? "").trim().replace(",", ".");
+  if (t === "") return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? round2(n) : NaN;
+}
+
+function margin(price, cost) {
+  if (price == null || cost == null || !(price > 0) || Number.isNaN(cost)) return null;
+  return `${Math.round(((price - cost) / price) * 100)} %`;
+}
+
+// Etiqueta de origen de un valor: "General" (hereda) o "Particular".
+function modeChip(inherited, hasGeneral) {
+  if (!hasGeneral) return null;
+  return h("span", { class: inherited ? "chip chip-general" : "chip chip-own" }, inherited ? "General" : "Particular");
+}
+
+function numberInput(value, label, placeholder = "") {
+  return h("input", {
+    class: "input", type: "number", min: "0", step: "0.01", inputmode: "decimal",
+    value: value == null ? "" : String(value), placeholder, "aria-label": label,
+  });
+}
+
+// query: { tab: "datos" | "precios" | "imagenes" | "stock" }
+export async function renderProductEdit(view, productId, query = {}) {
   mount(view, h("p", { class: "muted" }, "Cargando…"));
 
   let categories;
   let product = null;
+  let internal = { sku: null, base_cost: null };
   try {
     categories = await api.listCategories();
     if (productId) {
-      product = await api.getProduct(productId);
+      [product, internal] = await Promise.all([api.getProduct(productId), api.getProductInternal(productId)]);
       if (!product) {
         mount(view, backLink(), h("p", { class: "form-error" }, "No se encontró el producto."));
         return;
       }
+      product.base_price = product.base_price == null ? null : Number(product.base_price);
     }
   } catch (err) {
     console.error(err);
@@ -67,9 +80,8 @@ export async function renderProductEdit(view, productId) {
 
   const isNew = !product;
   let currentVariants = null; // se completa al cargar las variantes
-  const reload = () => renderProductEdit(view, product.id);
-  // Por ahora solo las yerbas controlan stock: es el valor inicial de la casilla
-  // (se puede activar a mano en cualquier producto).
+  const reload = (tab = activeTab) => renderProductEdit(view, product.id, { tab });
+  // Por ahora solo las yerbas controlan stock: es el valor inicial de la casilla.
   const tracksStockByDefault = () => categories.find((c) => c.id === product?.category_id)?.slug === "yerbas";
 
   // ------------------------------------------------------------------
@@ -132,12 +144,12 @@ export async function renderProductEdit(view, productId) {
       try {
         if (isNew) {
           const created = await api.createProduct(data);
-          toast("Producto creado como borrador. Ahora cargá su precio o sus variantes.");
-          location.hash = `#/productos/${created.id}`;
+          toast("Producto creado como borrador. Ahora cargá su SKU y su precio.");
+          location.hash = `#/productos/${created.id}?tab=precios`;
         } else {
           await api.updateProduct(product.id, data);
           toast("Cambios guardados.");
-          await reload();
+          await reload("datos");
         }
       } catch (err) {
         console.error(err);
@@ -157,24 +169,22 @@ export async function renderProductEdit(view, productId) {
     const active = product.is_active;
     const error = h("p", { class: "form-error", role: "alert", hidden: true });
     const button = h("button", { type: "button", class: active ? "btn-ghost" : "btn-primary btn-inline" },
-      active ? "Desactivar producto" : "Publicar producto");
+      active ? "Pasar a borrador" : "Publicar producto");
 
     button.addEventListener("click", async () => {
       if (!active) {
         if (currentVariants === null) { showError(error, "Esperá a que terminen de cargar las variantes."); return; }
         const publishable = currentVariants.some((v) => v.is_active && v.price > 0);
         if (!publishable) {
-          showError(error, api.isSimpleProduct(currentVariants)
-            ? "Para publicar, cargá un precio mayor a 0 en “Precio y stock”."
-            : "Para publicar, el producto necesita al menos una variante activa con precio mayor a 0.");
+          showError(error, "Para publicar, cargá un precio de venta en “Precios y variantes”.");
           return;
         }
       }
       button.disabled = true;
       try {
         await api.updateProduct(product.id, { is_active: !active });
-        toast(active ? "Producto desactivado." : "Producto publicado.");
-        await reload();
+        toast(active ? "El producto pasó a borrador." : "Producto publicado.");
+        await reload("datos");
       } catch (err) {
         console.error(err);
         showError(error, errorMessage(err));
@@ -185,54 +195,369 @@ export async function renderProductEdit(view, productId) {
     return h("section", { class: "card" },
       h("h3", {}, "Publicación"),
       h("p", {}, active
-        ? "Publicado: listo para mostrarse en la tienda."
+        ? "Publicado: se muestra en la tienda."
         : "Borrador: no se muestra en la tienda."),
-      h("p", { class: "muted" }, "La tienda muestra solo los productos publicados desde acá."),
       error,
       h("div", { class: "actions" }, button)
     );
   }
 
   // ------------------------------------------------------------------
-  // Variantes y precios
+  // Precios y variantes
   // ------------------------------------------------------------------
-  const variantsSection = h("section", { class: "card" });
+  const pricesPane = h("div", { class: "pane-stack" });
+  // "simple": un solo modelo (variante interna "Único"). "variants": varias.
+  let mode = null;
+
+  const hasGeneralPrice = () => product.base_price != null;
+  const hasGeneralCost = () => internal.base_cost != null;
+
+  // SKU, precio de venta y costo del producto.
+  function generalCard() {
+    const simple = mode === "simple";
+    const single = simple ? currentVariants[0] ?? null : null;
+    const sku = h("input", { class: "input", maxlength: "64", value: internal.sku ?? "", placeholder: "Ej. 2559", "aria-label": "SKU del producto", autocomplete: "off" });
+    const price = numberInput(product.base_price, "Precio de venta general", simple ? "Precio" : "Sin precio general");
+    const cost = numberInput(internal.base_cost, "Costo general", "Opcional");
+    const track = simple ? h("input", { type: "checkbox", checked: single ? single.track_stock : tracksStockByDefault() }) : null;
+    const marginText = h("span", { class: "margin-hint" });
+    const error = h("p", { class: "form-error", role: "alert", hidden: true });
+    const submit = h("button", { type: "submit", class: "btn-primary btn-inline", disabled: true }, "Guardar");
+
+    const inheritingPrice = currentVariants.filter((v) => v.price_inherited).length;
+    const inheritingCost = currentVariants.filter((v) => v.cost_inherited).length;
+    const applies = h("p", { class: "muted" });
+
+    function refresh() {
+      const p = readNumber(price.value), c = readNumber(cost.value);
+      const m = margin(p, c);
+      marginText.textContent = m ? `Margen ${m}` : "";
+      if (simple) { applies.textContent = ""; return; }
+      const parts = [];
+      if (p != null && !Number.isNaN(p)) parts.push(`el precio se aplica a ${inheritingPrice} de ${currentVariants.length} variantes`);
+      if (c != null && !Number.isNaN(c)) parts.push(`el costo a ${inheritingCost} de ${currentVariants.length}`);
+      applies.textContent = parts.length
+        ? `Al guardar, ${parts.join(" y ")}. Las que tienen valor particular no cambian.`
+        : "Sin valores generales: cada variante tiene su propio precio.";
+    }
+    const markDirty = () => { submit.disabled = false; refresh(); };
+    [sku, price, cost].forEach((el) => el.addEventListener("input", markDirty));
+    track?.addEventListener("change", markDirty);
+    refresh();
+
+    const form = h("form", { class: "card", novalidate: true },
+      h("div", { class: "card-head" },
+        h("h3", {}, simple ? "Precio" : "Precio general"),
+        h("p", { class: "muted" }, simple
+          ? "Producto simple: un solo modelo, sin talles, colores ni pesos para elegir."
+          : "SKU, precio y costo del producto. Las variantes los usan salvo que tengan uno particular.")),
+      h("div", { class: "form-grid form-grid-3" },
+        field("SKU", sku, "Código del proveedor (ej. ARTICULO de la lista). Único por producto."),
+        field("Precio de venta", price),
+        field("Costo", cost, "Interno: no se muestra en la tienda.")),
+      h("div", { class: "general-foot" },
+        marginText,
+        simple ? h("label", { class: "check check-inline" }, track, h("span", {}, "Controla stock")) : null),
+      applies,
+      error,
+      h("div", { class: "actions" }, submit)
+    );
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const p = readNumber(price.value), c = readNumber(cost.value);
+      const newSku = api.normalizeSku(sku.value);
+      const problem =
+        Number.isNaN(p) || (p != null && p <= 0) ? "El precio de venta debe ser un número mayor a 0." :
+        simple && p == null ? "Ingresá el precio de venta." :
+        Number.isNaN(c) || (c != null && c < 0) ? "El costo debe ser un número mayor o igual a 0." :
+        newSku && newSku.length > 64 ? "El SKU puede tener hasta 64 caracteres." :
+        null;
+      if (problem) { showError(error, problem); return; }
+
+      const changes = {};
+      if (newSku !== internal.sku) changes.sku = newSku;
+      if (p !== product.base_price) changes.base_price = p;
+      if (c !== internal.base_cost) changes.base_cost = c;
+
+      error.hidden = true;
+      submit.disabled = true;
+      submit.textContent = "Guardando…";
+      try {
+        await api.saveProductPricing(product.id, changes);
+        if (simple) {
+          // El modelo único hereda precio y costo del producto.
+          if (!single) {
+            await api.createVariant(product.id, { name: api.SINGLE_VARIANT_NAME, price: p, track_stock: track.checked, is_active: true, sort_order: 0 });
+          } else {
+            const fields = {};
+            if (track.checked !== single.track_stock) fields.track_stock = track.checked;
+            if (!single.is_active) fields.is_active = true;
+            if (!single.price_inherited) fields.price_inherited = true;
+            if (!single.cost_inherited && c != null) fields.cost_inherited = true;
+            if (Object.keys(fields).length) await api.updateVariant(single.id, fields);
+            // Sin costo general, el modelo único queda sin costo.
+            if (c == null && single.cost != null) await api.saveVariantCost(single.id, null);
+          }
+        }
+        toast(simple ? "Precio guardado." : "Precio general guardado.");
+        await reload("precios");
+      } catch (err) {
+        console.error(err);
+        showError(error, errorMessage(err));
+        submit.disabled = false;
+        submit.textContent = "Guardar";
+      }
+    });
+    return form;
+  }
+
+  // Tarjeta de una variante.
+  function variantCard(v) {
+    const name = h("input", { class: "input variant-name", maxlength: "80", value: v.name, "aria-label": "Nombre de la variante" });
+    const price = numberInput(v.price, `Precio de ${v.name}`);
+    const cost = numberInput(v.cost, `Costo de ${v.name}`, "Sin costo");
+    const track = h("input", { type: "checkbox", checked: v.track_stock });
+    const active = h("input", { type: "checkbox", checked: v.is_active });
+    const sort = h("input", { class: "input input-sm", type: "number", step: "1", value: String(v.sort_order), "aria-label": "Orden" });
+    const save = h("button", { type: "button", class: "btn-primary btn-sm", hidden: true }, "Guardar");
+    const discard = h("button", { type: "button", class: "btn-ghost btn-sm", hidden: true }, "Descartar");
+
+    const priceChip = h("span", {}, modeChip(v.price_inherited, hasGeneralPrice()));
+    const costChip = h("span", {}, modeChip(v.cost_inherited, hasGeneralCost()));
+    const usePrice = hasGeneralPrice() && !v.price_inherited
+      ? h("button", { type: "button", class: "link-btn", title: `Usar ${formatPrice(product.base_price)}` }, "Usar general")
+      : null;
+    const useCost = hasGeneralCost() && !v.cost_inherited
+      ? h("button", { type: "button", class: "link-btn", title: `Usar ${formatPrice(internal.base_cost)}` }, "Usar general")
+      : null;
+
+    const card = h("article", { class: v.is_active ? "variant-card" : "variant-card is-inactive" },
+      h("div", { class: "variant-head" },
+        name,
+        h("label", { class: "check check-inline" }, active, h("span", {}, "Activa"))),
+      h("div", { class: "variant-fields" },
+        h("div", { class: "vfield" },
+          h("div", { class: "vfield-label" }, h("span", {}, "Precio"), priceChip),
+          price,
+          usePrice),
+        h("div", { class: "vfield" },
+          h("div", { class: "vfield-label" }, h("span", {}, "Costo"), costChip),
+          cost,
+          useCost),
+        h("div", { class: "vfield vfield-sm" },
+          h("div", { class: "vfield-label" }, h("span", {}, "Orden")),
+          sort)),
+      h("div", { class: "variant-foot" },
+        h("label", { class: "check check-inline" }, track, h("span", {}, "Controla stock")),
+        h("span", { class: "variant-stock" }, v.track_stock ? ["Stock: ", h("strong", {}, String(v.stock))] : "Sin control de stock"),
+        h("span", { class: "variant-actions" }, discard, save))
+    );
+
+    // Vista previa del modo mientras se edita.
+    function preview() {
+      const p = readNumber(price.value), c = readNumber(cost.value);
+      if (hasGeneralPrice()) mount(priceChip, modeChip(p === product.base_price, true));
+      if (hasGeneralCost()) mount(costChip, modeChip(c === internal.base_cost, true));
+    }
+    const markDirty = () => { save.hidden = false; discard.hidden = false; card.classList.add("is-dirty"); preview(); };
+    [name, price, cost, sort].forEach((el) => el.addEventListener("input", markDirty));
+    [track, active].forEach((el) => el.addEventListener("change", markDirty));
+    discard.addEventListener("click", () => loadVariants());
+
+    async function useGeneral(which) {
+      try {
+        await api.useGeneral(v.id, { [which]: true });
+        toast(`“${v.name}” usa el ${which === "price" ? "precio" : "costo"} general.`);
+        await loadVariants();
+      } catch (err) {
+        console.error(err);
+        toast(errorMessage(err), "error");
+      }
+    }
+    usePrice?.addEventListener("click", () => useGeneral("price"));
+    useCost?.addEventListener("click", () => useGeneral("cost"));
+
+    save.addEventListener("click", async () => {
+      const variantName = name.value.trim();
+      const p = readNumber(price.value), c = readNumber(cost.value);
+      const s = Number(sort.value || 0);
+      const problem =
+        !variantName ? "La variante necesita un nombre." :
+        p == null || Number.isNaN(p) || p <= 0 ? `El precio de “${variantName}” debe ser mayor a 0 (si no se vende, desactivala).` :
+        Number.isNaN(c) || (c != null && c < 0) ? "El costo debe ser un número mayor o igual a 0 (o vacío)." :
+        !Number.isInteger(s) ? "El orden debe ser un número entero." :
+        null;
+      if (problem) { toast(problem, "error"); return; }
+
+      const fields = {};
+      if (variantName !== v.name) fields.name = variantName;
+      if (p !== v.price) fields.price = p;           // la base decide si queda general o particular
+      if (track.checked !== v.track_stock) fields.track_stock = track.checked;
+      if (active.checked !== v.is_active) fields.is_active = active.checked;
+      if (s !== v.sort_order) fields.sort_order = s;
+
+      save.disabled = true;
+      save.textContent = "Guardando…";
+      try {
+        if (Object.keys(fields).length) await api.updateVariant(v.id, fields);
+        if (c !== v.cost) await api.saveVariantCost(v.id, c);
+        toast(`Variante “${variantName}” guardada.`);
+        await loadVariants();
+      } catch (err) {
+        console.error(err);
+        toast(errorMessage(err), "error");
+        save.disabled = false;
+        save.textContent = "Guardar";
+      }
+    });
+    return card;
+  }
+
+  function newVariantForm() {
+    const name = h("input", { class: "input", maxlength: "80", placeholder: "Ej. 500gr, Chica, Negro", "aria-label": "Nombre de la nueva variante" });
+    const useBase = hasGeneralPrice() ? h("input", { type: "checkbox", checked: true }) : null;
+    const price = numberInput(null, "Precio de la nueva variante", hasGeneralPrice() ? formatPrice(product.base_price) : "Precio");
+    const cost = numberInput(null, "Costo de la nueva variante", hasGeneralCost() ? `General: ${formatPrice(internal.base_cost)}` : "Opcional");
+    const track = h("input", { type: "checkbox", checked: tracksStockByDefault() });
+    const submit = h("button", { type: "submit", class: "btn-primary btn-inline" }, icon("plus"), "Agregar variante");
+
+    function syncPrice() {
+      if (!useBase) return;
+      price.disabled = useBase.checked;
+      if (useBase.checked) price.value = "";
+    }
+    useBase?.addEventListener("change", syncPrice);
+    syncPrice();
+
+    const useSingle = api.isSimpleProduct(currentVariants)
+      ? h("button", { type: "button", class: "btn-ghost", onClick: () => { mode = "simple"; loadVariants(); } },
+          "Es un solo modelo: volver a producto simple")
+      : null;
+
+    const form = h("form", { class: "card new-variant-card", novalidate: true },
+      h("h3", {}, "Nueva variante"),
+      h("div", { class: "form-grid form-grid-3" },
+        field("Nombre", name),
+        h("div", { class: "field" },
+          h("span", {}, "Precio"),
+          price,
+          useBase ? h("label", { class: "check check-inline" }, useBase, h("span", {}, "Usar el precio general")) : null),
+        field("Costo", cost, hasGeneralCost() ? "Vacío = usa el costo general." : null)),
+      h("label", { class: "check check-inline" }, track, h("span", {}, "Controla stock")),
+      h("div", { class: "actions" }, submit, useSingle)
+    );
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const variantName = name.value.trim();
+      const p = useBase?.checked ? product.base_price : readNumber(price.value);
+      const c = readNumber(cost.value);
+      const problem =
+        !variantName ? "La variante necesita un nombre." :
+        p == null || Number.isNaN(p) || p <= 0 ? "Ingresá un precio mayor a 0." :
+        Number.isNaN(c) || (c != null && c < 0) ? "El costo debe ser un número mayor o igual a 0." :
+        null;
+      if (problem) { toast(problem, "error"); return; }
+
+      submit.disabled = true;
+      try {
+        const created = await api.createVariant(product.id, {
+          name: variantName, price: p, track_stock: track.checked, is_active: true, sort_order: currentVariants.length,
+        });
+        if (c != null) await api.saveVariantCost(created.id, c);
+        toast(`Variante “${variantName}” agregada.`);
+        await loadVariants();
+      } catch (err) {
+        console.error(err);
+        toast(errorMessage(err), "error");
+        submit.disabled = false;
+      }
+    });
+    return form;
+  }
+
+  async function loadVariants() {
+    mount(pricesPane, h("p", { class: "muted" }, "Cargando variantes…"));
+    try {
+      currentVariants = await api.listVariants(product.id);
+    } catch (err) {
+      console.error(err);
+      mount(pricesPane, h("p", { class: "form-error" }, errorMessage(err)));
+      return;
+    }
+
+    const sellable = currentVariants.some((v) => v.is_active && v.price > 0);
+    const simple = api.isSimpleProduct(currentVariants);
+    if (mode === null || (mode === "simple" && !simple)) mode = simple ? "simple" : "variants";
+
+    const warning = product.is_active && !sellable
+      ? h("p", { class: "notice-warn" }, "El producto está publicado pero no tiene ninguna variante activa con precio: no se puede comprar.")
+      : null;
+
+    if (mode === "simple") {
+      mount(pricesPane,
+        warning,
+        generalCard(),
+        h("div", { class: "actions" },
+          h("button", { type: "button", class: "btn-ghost", onClick: () => { mode = "variants"; loadVariants(); } },
+            "Tiene variantes (talles, colores, pesos…)")));
+    } else {
+      const particular = currentVariants.filter((v) => !v.price_inherited).length;
+      mount(pricesPane,
+        warning,
+        generalCard(),
+        h("section", { class: "pane-stack" },
+          h("div", { class: "section-head" },
+            h("h3", {}, `Variantes (${currentVariants.length})`),
+            hasGeneralPrice() && currentVariants.length
+              ? h("span", { class: "muted" }, particular
+                  ? `${currentVariants.length - particular} con precio general · ${particular} particular${particular === 1 ? "" : "es"}`
+                  : "Todas usan el precio general")
+              : null),
+          currentVariants.length
+            ? h("div", { class: "variant-grid" }, currentVariants.map(variantCard))
+            : h("p", { class: "empty-box" }, "Este producto todavía no tiene variantes.")),
+        newVariantForm());
+    }
+    refreshImages();
+    renderStockPane();
+    renderHeaderMeta();
+  }
 
   // ------------------------------------------------------------------
-  // Panel de stock (una variante a la vez)
+  // Imágenes
   // ------------------------------------------------------------------
-  const stockSection = h("section", { class: "card stock-panel", hidden: true });
-
-  // Sección de imágenes: se redibuja solo si cambian las variantes (nombres o estado),
-  // para no interrumpir una subida en curso cuando se guarda stock o precios.
-  const imagesSection = h("section", { class: "card" });
+  const imagesPane = h("section", { class: "card" });
   let imagesVariantsKey = null;
-
   function refreshImages() {
     const simple = mode === "simple";
     const key = JSON.stringify([simple, currentVariants.map((v) => [v.id, v.name, v.is_active])]);
     if (key === imagesVariantsKey) return;
     imagesVariantsKey = key;
-    // En un producto simple no hay variantes para elegir: todo va a la galería.
-    renderImagesPanel(imagesSection, { product, variants: simple ? [] : currentVariants });
+    renderImagesPanel(imagesPane, { product, variants: simple ? [] : currentVariants });
   }
 
-  // "simple": precio y stock directo en el producto (variante interna "Único").
-  // "variants": tabla de variantes. Se decide al cargar; se puede pasar a variantes.
-  let mode = null;
+  // ------------------------------------------------------------------
+  // Stock: lista de variantes y panel de movimientos de la elegida
+  // ------------------------------------------------------------------
+  const stockPane = h("div", { class: "pane-stack" });
+  const stockList = h("div");
+  const stockSection = h("section", { class: "card stock-panel", hidden: true });
   let stockVariantId = null;
   let stockTab = "entrada";
+  mount(stockPane, stockList, stockSection);
 
   function closeStock() {
     stockVariantId = null;
     stockSection.hidden = true;
     mount(stockSection);
+    renderStockPane();
   }
 
   function openStock(variantId, tab = "entrada", { scroll = true } = {}) {
     const variant = currentVariants?.find((v) => v.id === variantId);
     if (!variant || !variant.track_stock) { closeStock(); return; }
-
     stockVariantId = variantId;
     stockTab = tab;
     stockSection.hidden = false;
@@ -242,285 +567,25 @@ export async function renderProductEdit(view, productId) {
       onChanged: async (currentTab) => { stockTab = currentTab; await loadVariants(); },
       onClose: closeStock,
     });
+    renderStockPane(false);
     if (scroll) stockSection.scrollIntoView?.({ behavior: "smooth", block: "start" });
   }
 
-  function variantRow(v) {
-    const name = h("input", { class: "input", maxlength: "80", value: v.name, "aria-label": "Nombre de la variante" });
-    const sku = h("input", { class: "input input-sku", maxlength: "64", placeholder: "—", value: v.sku ?? "", "aria-label": "SKU" });
-    const price = h("input", { class: "input input-num", type: "number", min: "0", step: "0.01", value: String(v.price), "aria-label": "Precio" });
-    const cost = h("input", { class: "input input-num", type: "number", min: "0", step: "0.01", placeholder: "—", value: v.cost == null ? "" : String(v.cost), "aria-label": "Costo" });
-    const track = h("input", { type: "checkbox", checked: v.track_stock, "aria-label": "Controla stock" });
-    const active = h("input", { type: "checkbox", checked: v.is_active, "aria-label": "Activa" });
-    const sort = h("input", { class: "input input-num input-sm", type: "number", step: "1", value: String(v.sort_order), "aria-label": "Orden" });
-    const save = h("button", { type: "button", class: "btn-primary btn-sm", disabled: true }, "Guardar");
-    const stockButton = h("button", {
-      type: "button",
-      class: "btn-ghost btn-sm",
-      disabled: !v.track_stock,
-      title: v.track_stock
-        ? "Registrar entradas, salidas y ajustes"
-        : "Esta variante no controla stock. Marcá “Controla stock” y guardá para usarlo.",
-      onClick: () => openStock(v.id),
-    }, "Stock");
-
-    const stock = v.track_stock
-      ? h("span", { title: "El stock se modifica con el botón Stock." }, String(v.stock))
-      : h("span", { class: "muted", title: "Esta variante se vende sin controlar stock." }, "No controla");
-
-    const tr = h("tr", { class: v.is_active ? "" : "row-inactive" },
-      h("td", {}, name),
-      h("td", {}, sku),
-      h("td", {}, price),
-      h("td", {}, cost),
-      h("td", { class: "center" }, track),
-      h("td", { class: "center" }, active),
-      h("td", {}, sort),
-      h("td", { class: "num" }, stock),
-      h("td", {}, h("div", { class: "row-actions" }, save, stockButton))
-    );
-
-    const markDirty = () => { save.disabled = false; tr.classList.add("row-dirty"); };
-    [name, sku, price, cost, sort].forEach((el) => el.addEventListener("input", markDirty));
-    [track, active].forEach((el) => el.addEventListener("change", markDirty));
-
-    save.addEventListener("click", async () => {
-      const parsed = parseVariant({ name, price, cost, track, active, sort });
-      if (parsed.error) { toast(parsed.error, "error"); return; }
-
-      save.disabled = true;
-      save.textContent = "Guardando…";
-      try {
-        await api.updateVariant(v.id, parsed.fields);
-      } catch (err) {
-        console.error(err);
-        toast(errorMessage(err), "error");
-        save.disabled = false;
-        save.textContent = "Guardar";
-        return;
-      }
-
-      const pending = [];
-      try {
-        if (parsed.cost !== v.cost) await api.saveVariantCost(v.id, parsed.cost);
-      } catch (err) {
-        console.error(err);
-        pending.push(`el costo no (${errorMessage(err).replace(/\.$/, "")})`);
-      }
-      try {
-        if (api.normalizeSku(sku.value) !== (v.sku ?? null)) await api.saveVariantSku(v.id, sku.value);
-      } catch (err) {
-        console.error(err);
-        pending.push(`el SKU no (${errorMessage(err).replace(/\.$/, "")})`);
-      }
-      if (pending.length) toast(`La variante se guardó, pero ${pending.join(" y ")}.`, "error");
-      else toast(`Variante “${parsed.fields.name}” guardada.`);
-      await loadVariants();
-    });
-
-    return tr;
-  }
-
-  function newVariantForm() {
-    const name = h("input", { class: "input", maxlength: "80", placeholder: "Ej. 500gr, Chica, Negro", "aria-label": "Nombre de la nueva variante" });
-    const price = h("input", { class: "input input-num", type: "number", min: "0", step: "0.01", placeholder: "Precio", "aria-label": "Precio" });
-    const cost = h("input", { class: "input input-num", type: "number", min: "0", step: "0.01", placeholder: "Costo (opcional)", "aria-label": "Costo" });
-    const sku = h("input", { class: "input", maxlength: "64", placeholder: "Opcional", "aria-label": "SKU de la nueva variante" });
-    const track = h("input", { type: "checkbox", checked: tracksStockByDefault() });
-    const submit = h("button", { type: "submit", class: "btn-primary btn-inline" }, "Agregar variante");
-
-    // Mientras no tenga más de un modelo, se puede volver a "Producto simple".
-    const useSingle = api.isSimpleProduct(currentVariants)
-      ? h("button", { type: "button", class: "btn-ghost", onClick: () => { mode = "simple"; loadVariants(); } },
-          "Es un solo modelo: volver a producto simple")
-      : null;
-
-    const form = h("form", { class: "new-variant", novalidate: true },
-      h("h4", {}, "Nueva variante"),
-      h("div", { class: "new-variant-fields" },
-        field("Nombre", name),
-        field("Precio", price),
-        field("Costo", cost),
-        field("SKU", sku),
-        h("label", { class: "check" }, track, h("span", {}, "Controla stock"))
-      ),
-      h("div", { class: "actions" }, submit, useSingle)
-    );
-
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const parsed = parseVariant({ name, price, cost, track });
-      if (parsed.error) { toast(parsed.error, "error"); return; }
-      parsed.fields.sort_order = currentVariants.length;
-
-      submit.disabled = true;
-      submit.textContent = "Agregando…";
-      let created;
-      try {
-        created = await api.createVariant(product.id, parsed.fields);
-      } catch (err) {
-        console.error(err);
-        toast(errorMessage(err), "error");
-        submit.disabled = false;
-        submit.textContent = "Agregar variante";
-        return;
-      }
-
-      const pending = [];
-      try {
-        if (parsed.cost !== null) await api.saveVariantCost(created.id, parsed.cost);
-      } catch (err) {
-        console.error(err);
-        pending.push(`el costo no (${errorMessage(err).replace(/\.$/, "")})`);
-      }
-      try {
-        if (api.normalizeSku(sku.value) !== null) await api.saveVariantSku(created.id, sku.value);
-      } catch (err) {
-        console.error(err);
-        pending.push(`el SKU no (${errorMessage(err).replace(/\.$/, "")})`);
-      }
-      if (pending.length) toast(`La variante se agregó, pero ${pending.join(" y ")}.`, "error");
-      else toast(`Variante “${parsed.fields.name}” agregada.`);
-      await loadVariants();
-    });
-
-    return form;
-  }
-
-  // ------------------------------------------------------------------
-  // Producto simple: precio, costo, SKU y stock sin variantes visibles
-  // ------------------------------------------------------------------
-  function simpleForm(v) {
-    const price = h("input", { class: "input input-num", type: "number", min: "0", step: "0.01", placeholder: "Precio", value: v ? String(v.price) : "", "aria-label": "Precio" });
-    const cost = h("input", { class: "input input-num", type: "number", min: "0", step: "0.01", placeholder: "Opcional", value: v?.cost == null ? "" : String(v.cost), "aria-label": "Costo" });
-    const sku = h("input", { class: "input input-sku", maxlength: "64", placeholder: "Opcional", value: v?.sku ?? "", "aria-label": "SKU" });
-    const track = h("input", { type: "checkbox", checked: v ? v.track_stock : tracksStockByDefault(), "aria-label": "Controla stock" });
-    const submit = h("button", { type: "submit", class: "btn-primary btn-inline", disabled: !!v }, v ? "Guardar" : "Guardar precio");
-
-    const stockInfo = !v
-      ? h("p", { class: "muted" }, "Después de guardar el precio vas a poder cargar el stock.")
-      : v.track_stock
-        ? h("div", { class: "actions" },
-            h("span", {}, "Stock actual: ", h("strong", {}, String(v.stock))),
-            h("button", { type: "button", class: "btn-ghost btn-sm", onClick: () => openStock(v.id) }, "Registrar stock"))
-        : h("p", { class: "muted" }, "Se vende sin controlar stock.");
-
-    const form = h("form", { class: "new-variant", novalidate: true },
-      h("div", { class: "new-variant-fields" },
-        field("Precio", price),
-        field("Costo", cost, "Interno: no se muestra en la tienda."),
-        field("SKU", sku),
-        h("label", { class: "check" }, track, h("span", {}, "Controla stock"))
-      ),
-      stockInfo,
-      h("div", { class: "actions" }, submit)
-    );
-    const markDirty = () => { submit.disabled = false; };
-    [price, cost, sku].forEach((el) => el.addEventListener("input", markDirty));
-    track.addEventListener("change", markDirty);
-
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const parsed = parseVariant({ name: { value: api.SINGLE_VARIANT_NAME }, price, cost, track });
-      if (parsed.error) { toast(parsed.error, "error"); return; }
-
-      submit.disabled = true;
-      submit.textContent = "Guardando…";
-      let variantId = v?.id;
-      try {
-        if (v) await api.updateVariant(v.id, { price: parsed.fields.price, track_stock: parsed.fields.track_stock, is_active: true });
-        else variantId = (await api.createVariant(product.id, { ...parsed.fields, sort_order: 0 })).id;
-      } catch (err) {
-        console.error(err);
-        toast(errorMessage(err), "error");
-        submit.disabled = false;
-        submit.textContent = v ? "Guardar" : "Guardar precio";
-        return;
-      }
-
-      const pending = [];
-      try {
-        if (parsed.cost !== (v?.cost ?? null)) await api.saveVariantCost(variantId, parsed.cost);
-      } catch (err) {
-        console.error(err);
-        pending.push(`el costo no (${errorMessage(err).replace(/\.$/, "")})`);
-      }
-      try {
-        if (api.normalizeSku(sku.value) !== (v?.sku ?? null)) await api.saveVariantSku(variantId, sku.value);
-      } catch (err) {
-        console.error(err);
-        pending.push(`el SKU no (${errorMessage(err).replace(/\.$/, "")})`);
-      }
-      if (pending.length) toast(`El precio se guardó, pero ${pending.join(" y ")}.`, "error");
-      else toast("Precio guardado.");
-      await loadVariants();
-    });
-
-    return form;
-  }
-
-  async function loadVariants() {
-    const title = h("h3", {}, mode === "simple" ? "Precio y stock" : "Variantes y precios");
-    mount(variantsSection, title, h("p", { class: "muted" }, "Cargando variantes…"));
-
-    try {
-      currentVariants = await api.listVariants(product.id);
-    } catch (err) {
-      console.error(err);
-      mount(variantsSection, title, h("p", { class: "form-error" }, errorMessage(err)));
-      return;
-    }
-
-    const sellable = currentVariants.some((v) => v.is_active && v.price > 0);
-    const simple = api.isSimpleProduct(currentVariants);
-    if (mode === null || (mode === "simple" && !simple)) mode = simple ? "simple" : "variants";
-
-    if (mode === "simple") {
-      const v = currentVariants[0] ?? null;
-      mount(variantsSection,
-        h("h3", {}, "Precio y stock"),
-        h("p", { class: "muted" }, "Producto simple: un solo modelo, sin talles, colores ni pesos para elegir."),
-        product.is_active && !sellable
-          ? h("p", { class: "notice-warn" }, "Atención: el producto está publicado pero no tiene precio.")
-          : null,
-        simpleForm(v),
-        h("div", { class: "actions" },
-          h("button", { type: "button", class: "btn-ghost", onClick: () => { mode = "variants"; loadVariants(); } },
-            "Tiene variantes (talles, colores, pesos…)"))
-      );
-      if (stockVariantId !== null) openStock(stockVariantId, stockTab, { scroll: false });
-      refreshImages();
-      return;
-    }
-
-    const warning = product.is_active && !sellable
-      ? h("p", { class: "notice-warn" }, "Atención: el producto está publicado pero no tiene variantes activas con precio.")
-      : null;
-
-    const table = currentVariants.length
-      ? h("div", { class: "table-wrap" },
-          h("table", { class: "table table-edit" },
-            h("thead", {}, h("tr", {},
-              ["Variante", "SKU", "Precio", "Costo", "Controla stock", "Activa", "Orden", "Stock", ""].map((t) => h("th", {}, t))
-            )),
-            h("tbody", {}, currentVariants.map(variantRow))
-          )
-        )
-      : h("p", { class: "empty-box" }, "Este producto todavía no tiene variantes.");
-
-    mount(variantsSection, 
-      title,
-      h("p", { class: "muted" },
-        "Cada variante tiene su propio precio y stock. ",
-        "El costo es interno y nunca se muestra en la tienda. El stock se carga con el botón “Stock” de cada variante."),
-      warning,
-      table,
-      newVariantForm()
-    );
-
-    // Si el panel de stock estaba abierto, se redibuja con los datos recién leídos.
-    if (stockVariantId !== null) openStock(stockVariantId, stockTab, { scroll: false });
-    refreshImages();
+  function renderStockPane(reopen = true) {
+    if (!currentVariants) return;
+    const tracked = currentVariants.filter((v) => v.track_stock);
+    const untracked = currentVariants.length - tracked.length;
+    mount(stockList, h("section", { class: "card" },
+      h("h3", {}, "Stock"),
+      tracked.length
+        ? h("ul", { class: "stock-list" }, tracked.map((v) => h("li", { class: v.id === stockVariantId ? "is-open" : "" },
+            h("span", { class: "stock-name" }, v.name === api.SINGLE_VARIANT_NAME ? product.name : v.name,
+              v.is_active ? null : h("span", { class: "muted" }, " (inactiva)")),
+            h("span", { class: v.stock === 0 ? "stock-qty text-alert" : "stock-qty" }, String(v.stock)),
+            h("button", { type: "button", class: "btn-ghost btn-sm", onClick: () => openStock(v.id) }, "Movimientos"))))
+        : h("p", { class: "empty-box" }, "Ninguna variante controla stock. Activá «Controla stock» en Precios y variantes."),
+      untracked && tracked.length ? h("p", { class: "muted" }, `${untracked} ${untracked === 1 ? "variante no controla" : "variantes no controlan"} stock.`) : null));
+    if (reopen && stockVariantId !== null) openStock(stockVariantId, stockTab, { scroll: false });
   }
 
   // ------------------------------------------------------------------
@@ -595,7 +660,7 @@ export async function renderProductEdit(view, productId) {
       h("p", {}, "Se borra el producto con todo lo suyo. No se puede deshacer."),
       h("ul", { class: "change-list" },
         h("li", {}, info.variants
-          ? `${info.variants} ${info.variants === 1 ? "variante" : "variantes"}, con sus precios, costos y SKU`
+          ? `${info.variants} ${info.variants === 1 ? "variante" : "variantes"}, con sus precios y costos, y el SKU del producto`
           : "Sin variantes"),
         h("li", {}, info.images.length
           ? `${info.images.length} ${info.images.length === 1 ? "imagen" : "imágenes"}${storageFiles ? ` (${storageFiles} ${storageFiles === 1 ? "archivo" : "archivos"} en Storage)` : ""}`
@@ -610,22 +675,65 @@ export async function renderProductEdit(view, productId) {
   }
 
   // ------------------------------------------------------------------
-  // Armado de la pantalla
+  // Encabezado y pestañas
   // ------------------------------------------------------------------
-  mount(view, 
+  const headerMeta = h("p", { class: "page-sub" });
+  function renderHeaderMeta() {
+    if (isNew) return;
+    const parts = [];
+    parts.push(internal.sku ? `SKU ${internal.sku}` : "Sin SKU");
+    if (product.base_price != null) parts.push(formatPrice(product.base_price));
+    if (currentVariants && mode === "variants") parts.push(`${currentVariants.length} ${currentVariants.length === 1 ? "variante" : "variantes"}`);
+    mount(headerMeta, parts.join(" · "));
+  }
+
+  if (isNew) {
+    mount(view,
+      backLink(),
+      h("div", { class: "page-header" }, h("h2", {}, "Nuevo producto")),
+      productForm(),
+      h("p", { class: "muted" }, "Después de crear el producto vas a poder cargar su SKU, su precio y sus variantes."));
+    return;
+  }
+
+  const panes = {
+    datos: h("div", { class: "pane-stack" }, productForm(), publishSection()),
+    precios: pricesPane,
+    imagenes: imagesPane,
+    stock: stockPane,
+  };
+  let activeTab = TABS.some(([k]) => k === query.tab) ? query.tab : "datos";
+  const tabButtons = {};
+  const tabBar = h("div", { class: "tabs tabs-product", role: "tablist" },
+    TABS.map(([key, label]) => {
+      const b = h("button", { type: "button", class: "tab", role: "tab", onClick: () => selectTab(key) }, label);
+      tabButtons[key] = b;
+      return b;
+    }));
+
+  function selectTab(key) {
+    activeTab = key;
+    for (const [k] of TABS) {
+      const on = k === key;
+      tabButtons[k].classList.toggle("active", on);
+      tabButtons[k].setAttribute("aria-selected", String(on));
+      panes[k].hidden = !on;
+    }
+    // La pestaña queda en la dirección (para volver o compartir) sin redibujar.
+    history.replaceState(null, "", `#/productos/${product.id}${key === "datos" ? "" : `?tab=${key}`}`);
+  }
+
+  mount(view,
     backLink(),
     h("div", { class: "page-header" },
-      h("div", { class: "title-row" },
-        h("h2", {}, isNew ? "Nuevo producto" : product.name),
-        isNew ? null : statusBadge(product.is_active)),
-      deleteButton()
-    ),
+      h("div", { class: "title-block" },
+        h("div", { class: "title-row" }, h("h2", {}, product.name), statusBadge(product.is_active)),
+        headerMeta),
+      deleteButton()),
     deleteBox,
-    productForm(),
-    isNew
-      ? h("p", { class: "muted" }, "Después de crear el producto vas a poder cargar su precio y stock, o sus variantes.")
-      : [publishSection(), variantsSection, stockSection, imagesSection]
-  );
-
-  if (!isNew) await loadVariants();
+    tabBar,
+    Object.values(panes));
+  selectTab(activeTab);
+  renderHeaderMeta();
+  await loadVariants();
 }

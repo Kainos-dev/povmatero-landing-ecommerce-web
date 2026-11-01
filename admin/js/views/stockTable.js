@@ -106,7 +106,7 @@ export async function renderStockTable(view, query = {}) {
       value: e?.target ?? "", "aria-label": `Nuevo stock de ${r.p.name} ${r.v.name}` });
     const diff = h("td", { class: "num c-diff" }, diffText(r));
     const tr = h("tr", { class: [e ? "row-dirty" : "", r.p.is_active ? "" : "row-inactive"].join(" ").trim() },
-      h("td", { class: first ? "c-prod" : "c-prod c-cont" }, first ? h("a", { href: `#/productos/${r.p.id}` }, r.p.name) : h("span", { class: "muted", "aria-hidden": "true" }, "↳"),
+      h("td", { class: first ? "c-prod" : "c-prod c-cont" }, first ? h("a", { href: `#/productos/${r.p.id}?tab=stock` }, r.p.name) : h("span", { class: "muted", "aria-hidden": "true" }, "↳"),
         first && !r.p.is_active ? h("span", { class: "muted" }, " (borrador)") : null),
       h("td", { class: "c-var" }, r.v.name, r.v.is_active ? null : h("span", { class: "muted" }, " (inactiva)")),
       h("td", { class: "num c-price" }, formatPrice(r.v.price)),
@@ -238,10 +238,9 @@ export async function renderStockTable(view, query = {}) {
   showFilter.addEventListener("change", renderTable);
 
   mount(view,
-    h("div", { class: "page-header" }, h("h2", {}, "Stock")),
     h("p", { class: "muted" },
       "El stock se maneja acá y vive en Supabase. Escribí la cantidad que tenés y confirmá: se registra un movimiento por la diferencia ",
-      "(entrada si sube, ajuste si baja), con su historial en la ficha del producto."),
+      "(entrada si sube, ajuste si baja), con su historial en «Movimientos»."),
     h("div", { class: "toolbar" }, search, showFilter),
     info,
     notice,

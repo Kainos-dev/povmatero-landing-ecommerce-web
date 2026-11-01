@@ -69,3 +69,20 @@ export async function listRecentMovements(limit = 8) {
       .limit(limit)
   );
 }
+
+// Historial general, paginado. Filtros opcionales:
+//   type: "entrada" | "salida" | "ajuste"; since: Date; variantIds: [id] (búsqueda)
+// Devuelve { rows, more } (more = hay más páginas).
+export async function listMovementsPage({ type = null, since = null, variantIds = null, limit = 50, offset = 0 } = {}) {
+  let query = supabase
+    .from("inventory_movements")
+    .select(MOVEMENT_COLUMNS)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .range(offset, offset + limit);   // se pide uno de más para saber si hay otra página
+  if (type) query = query.eq("movement_type", type);
+  if (since) query = query.gte("created_at", since.toISOString());
+  if (variantIds) query = query.in("variant_id", variantIds.length ? variantIds : [-1]);
+  const rows = check(await query);
+  return { rows: rows.slice(0, limit), more: rows.length > limit };
+}

@@ -889,3 +889,208 @@ a.move:hover { background: var(--a-sunken); }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }
+
+/* =====================================================================
+   Etapa B: ficha con pestañas, precios generales, Inventario
+   ===================================================================== */
+
+/* ---------- Pestañas de sección ---------- */
+.segmented {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--a-surface);
+  border-radius: 12px;
+  max-width: 100%;
+  overflow-x: auto;
+  align-self: flex-start;
+}
+.segmented a {
+  padding: 8px 16px;
+  border-radius: 9px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--a-fg-2);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.segmented a:hover { color: var(--a-fg); }
+.segmented a.active { background: var(--a-bg); color: var(--a-fg); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+
+.tabs-product { position: sticky; top: 0; z-index: 12; background: var(--a-bg); }
+.pane-stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.title-block { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.section-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; }
+.card-head { display: flex; flex-direction: column; gap: 4px; }
+.form-grid-3 { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.general-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; }
+.margin-hint { font-size: var(--a-text-sm); font-weight: 600; color: var(--a-fg-2); }
+.margin-hint:empty { display: none; }
+
+/* General / Particular */
+.chip-general { background: var(--a-surface); border-color: var(--a-surface); color: var(--a-fg-2); }
+.chip-own { background: var(--a-fg); border-color: var(--a-fg); color: var(--a-bg); }
+.link-btn {
+  font: inherit;
+  font-size: var(--a-text-xs);
+  font-weight: 600;
+  color: var(--a-fg);
+  background: none;
+  border: 0;
+  padding: 2px 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.link-btn:hover { color: var(--a-fg-2); }
+
+/* ---------- Tarjetas de variantes ---------- */
+.variant-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.variant-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--a-line);
+  border-radius: var(--a-radius-lg);
+  background: var(--a-bg);
+  min-width: 0;
+}
+.variant-card.is-dirty { border-color: var(--a-fg); box-shadow: inset 3px 0 0 var(--a-fg); }
+.variant-card.is-inactive { background: var(--a-sunken); }
+.variant-card.is-inactive .variant-name { color: var(--a-fg-2); }
+.variant-head { display: flex; align-items: center; gap: 12px; }
+.variant-name { font-weight: 600; flex: 1; }
+.variant-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 76px; gap: 10px; }
+.vfield { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.vfield-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  font-size: var(--a-text-xs);
+  font-weight: 600;
+  color: var(--a-fg-2);
+}
+.vfield .input { max-width: none; }
+.vfield .link-btn { align-self: flex-start; }
+.variant-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; font-size: var(--a-text-sm); }
+.variant-stock { color: var(--a-fg-2); }
+.variant-actions { margin-left: auto; display: flex; gap: 8px; }
+.new-variant-card .check-inline { min-height: 0; }
+
+/* ---------- Stock del producto ---------- */
+.stock-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.stock-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 4px;
+  border-top: 1px solid var(--a-line);
+}
+.stock-list li:first-child { border-top: 0; }
+.stock-list li.is-open { background: var(--a-sunken); }
+.stock-name { flex: 1; font-weight: 600; min-width: 0; }
+.stock-qty { font-size: var(--a-text-lg); font-weight: 800; font-variant-numeric: tabular-nums; min-width: 2ch; text-align: right; }
+
+/* ---------- Importar precios: tipo de lista ---------- */
+.choice-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--a-line-2);
+  border-radius: var(--a-radius);
+  cursor: pointer;
+}
+.choice.active { border-color: var(--a-fg); box-shadow: inset 0 0 0 1px var(--a-fg); }
+.choice input { margin-top: 2px; }
+.choice-text { display: flex; flex-direction: column; gap: 2px; font-size: var(--a-text-sm); color: var(--a-fg-2); }
+.choice-text strong { color: var(--a-fg); font-size: 14px; }
+
+/* ---------- Inventario · Precios ---------- */
+.table-prices .row-product td { background: var(--a-sunken); border-top: 1px solid var(--a-line-2); }
+.table-prices .row-product.row-dirty td { background: var(--a-surface); }
+.table-prices tbody tr:first-child td { border-top: 0; }
+.table-prices .row-variant .c-name { padding-left: 26px; color: var(--a-fg-2); }
+.variant-mark { color: var(--a-muted); }
+.row-sub { display: block; font-size: var(--a-text-xs); color: var(--a-fg-2); font-weight: 400; }
+.table-prices .c-name a { font-weight: 700; text-decoration: none; }
+.cell-stack { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.cell-meta { display: flex; align-items: center; gap: 8px; }
+.chip-slot:empty { display: none; }
+
+.stats-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+/* ---------- Celular ---------- */
+@media (max-width: 860px) {
+  .tabs-product { top: calc(61px + env(safe-area-inset-top, 0px)); margin: 0 -16px; padding: 0 16px; }
+  .segmented { align-self: stretch; }
+  .tabs-product .tab { padding: 10px 12px; }
+  .segmented a { flex: 1; text-align: center; padding: 9px 10px; }
+}
+
+@media (max-width: 600px) {
+  .variant-grid { grid-template-columns: minmax(0, 1fr); }
+  .variant-fields { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .variant-fields .vfield-sm { grid-column: span 2; flex-direction: row; align-items: center; justify-content: space-between; }
+  .variant-fields .vfield-sm .input { width: 96px; }
+  .variant-actions { width: 100%; }
+  .variant-actions > * { flex: 1; }
+  .stats-3 { gap: 8px; }
+  .stats-3 .stat { padding: 12px; }
+  .stats-3 .stat-value { font-size: 20px; }
+
+  /* Precios: cada producto es un bloque; sus variantes, filas debajo */
+  .table-prices tr {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px 12px;
+    padding: 12px 14px;
+  }
+  .table-prices td { display: block; }
+  .table-prices td:empty { display: none; }
+  .table-prices .c-name { grid-column: 1 / -1; }
+  .table-prices .row-variant .c-name { padding-left: 0; }
+  .table-prices .c-sku { grid-column: 1 / -1; }
+  .table-prices td[data-label]:not(:empty)::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--a-muted);
+  }
+  .table-prices .input { max-width: none; width: 100%; }
+  .table-prices .c-margin,
+  .table-prices .c-stock,
+  .table-prices .c-track { text-align: left; }
+  .table-prices .row-product { background: var(--a-sunken); border-top: 1px solid var(--a-line-2); }
+  .table-prices .row-product td { background: transparent; border: 0; }
+
+  /* Movimientos */
+  .table-moves tr {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "prod qty"
+      "type after"
+      "reason reason"
+      "date who";
+    gap: 4px 12px;
+    padding: 12px 14px;
+  }
+  .table-moves .c-prod { grid-area: prod; font-weight: 600; }
+  .table-moves .c-qty { grid-area: qty; font-size: 18px; }
+  .table-moves .c-type { grid-area: type; }
+  .table-moves .c-after { grid-area: after; font-size: var(--a-text-xs); color: var(--a-fg-2); }
+  .table-moves .c-after::before { content: "quedó "; }
+  .table-moves .c-reason { grid-area: reason; font-size: var(--a-text-sm); color: var(--a-fg-2); }
+  .table-moves .c-date { grid-area: date; font-size: var(--a-text-xs); color: var(--a-muted); }
+  .table-moves .c-who { grid-area: who; font-size: var(--a-text-xs); color: var(--a-muted); text-align: right; }
+  .table-moves .c-ref,
+  .table-moves .c-cost { display: none; }
+}

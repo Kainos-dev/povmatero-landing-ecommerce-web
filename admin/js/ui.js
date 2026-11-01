@@ -94,7 +94,7 @@ export function errorMessage(err) {
   if (code === "23505") {
     if (message.includes("slug")) return "Ya existe un producto con ese slug. Cambialo por uno distinto.";
     if (message.includes("product_id_name")) return "Este producto ya tiene una variante con ese nombre.";
-    if (message.includes("sku")) return "Ese SKU ya está asignado a otra variante.";
+    if (message.includes("sku")) return "Ese SKU ya está asignado a otro producto. Cada SKU identifica a un solo producto.";
     return "Ya existe un registro con ese valor.";
   }
   if (code === "42501") return "No tenés permisos para esta acción.";

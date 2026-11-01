@@ -1,4 +1,4 @@
-import { listProducts, listCategories, setProductsActive, isSimpleProduct } from "../api/catalog.js";
+import { listProducts, listCategories, setProductsActive, isSimpleProduct, listProductInternals } from "../api/catalog.js";
 import { h, mount, formatPrice, errorMessage, normalizeText, toast } from "../ui.js";
 
 function summarize(product) {
@@ -36,9 +36,9 @@ function plural(n, one, many) {
 export async function renderProductList(view, query = {}) {
   mount(view, h("p", { class: "muted" }, "Cargando productos…"));
 
-  let products, categories;
+  let products, categories, internals;
   try {
-    [products, categories] = await Promise.all([listProducts(), listCategories()]);
+    [products, categories, internals] = await Promise.all([listProducts(), listCategories(), listProductInternals()]);
   } catch (err) {
     console.error(err);
     mount(view, h("p", { class: "form-error" }, errorMessage(err)));
@@ -50,7 +50,8 @@ export async function renderProductList(view, query = {}) {
   let visible = [];
   let busy = false;
 
-  const search = h("input", { type: "search", class: "input", placeholder: "Buscar por nombre…", "aria-label": "Buscar" });
+  const skuOf = (p) => internals.get(p.id)?.sku ?? null;
+  const search = h("input", { type: "search", class: "input", placeholder: "Buscar por nombre o SKU…", "aria-label": "Buscar" });
   const categoryFilter = h("select", { class: "input", "aria-label": "Categoría" },
     h("option", { value: "" }, "Todas las categorías"),
     categories.map((c) => h("option", { value: String(c.id) }, c.name))
@@ -165,6 +166,7 @@ export async function renderProductList(view, query = {}) {
     return h("tr", { class: "row-link", onClick: () => { location.hash = href; } },
       h("td", { class: "center c-check", onClick: (e) => { if (e.target === e.currentTarget) { e.stopPropagation(); check.click(); } } }, check),
       h("td", { class: "c-name" }, h("a", { href }, product.name)),
+      h("td", { class: "c-meta", "data-label": "SKU" }, skuOf(product) ?? h("span", { class: "muted" }, "—")),
       h("td", { class: "c-meta", "data-label": "Categoría" }, categoryName.get(product.category_id) ?? "—"),
       h("td", { class: "c-meta", "data-label": "Variantes" }, s.variants ?? h("span", { class: "badge badge-warn" }, "Sin precio")),
       h("td", { class: "c-meta", "data-label": "Precio" }, s.price),
@@ -173,7 +175,7 @@ export async function renderProductList(view, query = {}) {
         product.is_active ? "Publicado" : "Borrador")),
       // Solo en el celular: los datos de las columnas en una línea.
       h("td", { class: "c-meta-line", "aria-hidden": "true" },
-        [categoryName.get(product.category_id), s.variants ?? "Sin precio", s.price, s.stock !== "—" ? `stock ${s.stock}` : null]
+        [skuOf(product) ? `SKU ${skuOf(product)}` : null, categoryName.get(product.category_id), s.variants ?? "Sin precio", s.price, s.stock !== "—" ? `stock ${s.stock}` : null]
           .filter(Boolean).join(" · "))
     );
   }
@@ -191,7 +193,7 @@ export async function renderProductList(view, query = {}) {
     const status = statusFilter.value;
 
     visible = products.filter((p) =>
-      (!query || normalizeText(p.name).includes(query)) &&
+      (!query || normalizeText(`${p.name} ${skuOf(p) ?? ""}`).includes(query)) &&
       (!category || String(p.category_id) === category) &&
       (!status || (status === "active") === p.is_active)
     );
@@ -207,7 +209,7 @@ export async function renderProductList(view, query = {}) {
       const message = products.length
         ? "No hay productos que coincidan con los filtros."
         : "Todavía no hay productos. Creá el primero con “Nuevo producto”.";
-      mount(tbody, h("tr", {}, h("td", { colspan: "7", class: "empty" }, message)));
+      mount(tbody, h("tr", {}, h("td", { colspan: "8", class: "empty" }, message)));
     }
 
     const published = products.filter((p) => p.is_active).length;
@@ -237,7 +239,7 @@ export async function renderProductList(view, query = {}) {
       h("table", { class: "table table-cards table-products" },
         h("thead", {}, h("tr", {},
           h("th", { class: "center" }, selectAll),
-          ["Producto", "Categoría", "Variantes", "Precio", "Stock", "Estado"].map((t) => h("th", {}, t))
+          ["Producto", "SKU", "Categoría", "Variantes", "Precio", "Stock", "Estado"].map((t) => h("th", {}, t))
         )),
         tbody
       )

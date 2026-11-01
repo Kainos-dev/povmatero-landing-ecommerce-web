@@ -117,10 +117,10 @@ export async function renderHome(view) {
 
   // ---------- Necesita atención ----------
   const tasks = [];
-  if (s.outOfStock.length) tasks.push(task({ tone: "alert", href: "#/stock?f=zero", action: "Cargar stock",
+  if (s.outOfStock.length) tasks.push(task({ tone: "alert", href: "#/inventario?tab=stock&f=zero", action: "Cargar stock",
     title: `${plural(s.outOfStock.length, "presentación agotada", "presentaciones agotadas")}`,
     detail: `Publicadas y sin stock: ${examples(s.outOfStock)}` }));
-  if (s.lowStock.length) tasks.push(task({ tone: "strong", href: "#/stock?f=low", action: "Ver",
+  if (s.lowStock.length) tasks.push(task({ tone: "strong", href: "#/inventario?tab=stock&f=low", action: "Ver",
     title: `${plural(s.lowStock.length, "presentación con 1 unidad", "presentaciones con 1 unidad")}`,
     detail: examples(s.lowStock) }));
   if (s.drafts.length) tasks.push(task({ tone: "outline", href: "#/productos?estado=draft", action: "Revisar",
@@ -132,7 +132,7 @@ export async function renderHome(view) {
   if (s.noImages.length) tasks.push(task({ tone: "outline", href: "#/revision", action: "Ver",
     title: `${plural(s.noImages.length, "producto publicado sin fotos", "productos publicados sin fotos")}`,
     detail: examples(s.noImages) }));
-  if (s.noCost.length) tasks.push(task({ tone: "outline", href: "#/precios", action: "Cargar costos",
+  if (s.noCost.length) tasks.push(task({ tone: "outline", href: "#/inventario?tab=precios&f=nocost", action: "Cargar costos",
     title: `${plural(s.noCost.length, "variante sin costo", "variantes sin costo")}`,
     detail: "Dato interno: no afecta la tienda, sí el valor del stock" }));
 
@@ -160,16 +160,16 @@ export async function renderHome(view) {
         h("h1", {}, "Inicio"),
         h("p", { class: "page-sub" }, today.charAt(0).toUpperCase() + today.slice(1))),
       h("div", { class: "actions header-actions home-header-actions" },
-        h("a", { href: "#/stock", class: "btn-ghost btn-inline" }, "Cargar stock"),
+        h("a", { href: "#/inventario?tab=stock", class: "btn-ghost btn-inline" }, "Cargar stock"),
         h("a", { href: "#/productos/nuevo", class: "btn-primary btn-inline" }, icon("plus"), "Nuevo producto"))),
 
     h("div", { class: "stats" },
       stat(INT.format(s.published), `productos publicados de ${INT.format(s.total)}`, { href: "#/productos?estado=active" }),
-      stat(INT.format(s.units), "unidades en stock", { href: "#/stock" }),
+      stat(INT.format(s.units), "unidades en stock", { href: "#/inventario?tab=stock" }),
       stat(formatPrice(s.stockValue), "valor del stock a costo",
         { hint: s.stockWithoutCost ? `${plural(s.stockWithoutCost, "presentación con stock no suma", "presentaciones con stock no suman")}: falta el costo` : null }),
       stat(INT.format(s.outOfStock.length), s.outOfStock.length === 1 ? "presentación agotada" : "presentaciones agotadas",
-        { alert: s.outOfStock.length > 0, href: "#/stock?f=zero" })),
+        { alert: s.outOfStock.length > 0, href: "#/inventario?tab=stock&f=zero" })),
 
     h("div", { class: "home-grid" },
       h("section", { class: "panel" },
@@ -182,10 +182,10 @@ export async function renderHome(view) {
         h("section", { class: "panel" },
           h("div", { class: "panel-head" }, h("h2", {}, "Accesos rápidos")),
           h("div", { class: "quick" },
-            h("a", { href: "#/stock" }, icon("stock"), "Cargar stock"),
+            h("a", { href: "#/inventario?tab=stock" }, icon("stock"), "Cargar stock"),
             h("a", { href: "#/productos/nuevo" }, icon("plus"), "Nuevo producto"),
-            h("a", { href: "#/precios" }, icon("tag"), "Actualizar precios"),
-            h("a", { href: "#/importar-costos" }, icon("upload"), "Importar costos"))),
+            h("a", { href: "#/inventario?tab=precios" }, icon("tag"), "Actualizar precios"),
+            h("a", { href: "#/importar-precios" }, icon("upload"), "Importar precios"))),
 
         h("section", { class: "panel" },
           h("div", { class: "panel-head" }, h("h2", {}, "Últimos movimientos de stock")),

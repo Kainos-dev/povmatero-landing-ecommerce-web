@@ -1,14 +1,38 @@
-// Importar costos desde una lista de precios del proveedor (.xlsx, .xls o .csv).
-// Busca cada SKU del archivo entre las variantes y actualiza SOLO su costo interno.
-// No cambia precios de venta, stock, imágenes ni ningún otro dato.
+// Importar precios desde una lista en Excel (.xlsx, .xls o .csv).
+//
+// Busca cada SKU del archivo entre los SKU de PRODUCTO y actualiza un solo valor
+// general del producto, según el tipo de lista:
+//   * Lista mayorista (ej. Darc Cuir & Yatay) → costo general.
+//   * Lista minorista                         → precio de venta general.
+// La base copia ese valor a las variantes que usan el general; las que tienen un
+// valor particular no cambian. No se tocan nombres, imágenes, descripciones,
+// categorías, stock ni ningún otro dato. No se calculan márgenes.
 // El archivo se lee en el navegador: no se sube a ningún lado.
-import { listProducts, listAllVariantsWithCosts, saveVariantCost, normalizeSku } from "../api/catalog.js";
+import { listProducts, listAllVariantsWithCosts, listProductInternals, saveProductPricing, normalizeSku } from "../api/catalog.js";
 import { h, mount, formatPrice, errorMessage, toast } from "../ui.js";
 
 const SHEETJS_URL = "https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs";
 const SKU_HEADER = /\bsku\b|c[oó]d(igo)?|art[ií]culo|\bref(erencia)?\b/i;
-const PRICE_HEADER = /precio|costo|lista|importe|valor/i;
-const BIG_CHANGE = 0.5;   // avisar si el costo cambia más del 50 %
+// "$" solo (como en la lista de Darc Cuir & Yatay) también es una columna de precio.
+const PRICE_HEADER = /precio|costo|lista|importe|valor|mayorista|minorista|venta|^\s*\$\s*$/i;
+const BIG_CHANGE = 0.5;   // avisar si el valor cambia más del 50 %
+
+const MODES = {
+  cost: {
+    label: "Lista mayorista",
+    detail: "Actualiza el costo general de cada producto (precio de compra).",
+    field: "base_cost",
+    what: "costo",
+    column: "Columna precio mayorista (costo)",
+  },
+  price: {
+    label: "Lista minorista",
+    detail: "Actualiza el precio de venta general de cada producto.",
+    field: "base_price",
+    what: "precio de venta",
+    column: "Columna precio de venta",
+  },
+};
 
 let sheetjs = null;
 async function loadSheetJs() {
@@ -33,6 +57,12 @@ export function parsePrice(value) {
   return Number.isFinite(n) ? n : null;
 }
 
+// SKU de una celda: los números de Excel (2559 o 2559.0) se leen como "2559".
+export function cellSku(value) {
+  if (typeof value === "number") return Number.isInteger(value) ? String(value) : String(value);
+  return normalizeSku(value);
+}
+
 function decodeText(buffer) {
   try {
     return new TextDecoder("utf-8", { fatal: true }).decode(buffer).replace(/^﻿/, "");
@@ -53,7 +83,7 @@ function columnLetter(i) {
 
 // Fila de encabezados: la primera (de las 30 primeras) que tenga un título de SKU
 // y uno de precio; si no hay, la primera con al menos 2 celdas.
-function detectHeaderRow(rows) {
+export function detectHeaderRow(rows) {
   const limit = Math.min(rows.length, 30);
   for (let i = 0; i < limit; i++) {
     const cells = rows[i].map(cellText);
@@ -65,18 +95,62 @@ function detectHeaderRow(rows) {
   return 0;
 }
 
-function round2(n) {
-  return Math.round(n * 100) / 100;
+const round2 = (n) => Math.round(n * 100) / 100;
+
+// Cruza las filas del archivo con los productos. Exportada para pruebas.
+//   products: [{ id, name, base_price }]; internals: Map id → { sku, base_cost }
+//   variants: [{ product_id, price_inherited, cost_inherited }]
+export function analyzeRows({ rows, skuCol, priceCol, mode, products, internals, variants }) {
+  const m = MODES[mode];
+  const productBySku = new Map();
+  for (const p of products) {
+    const sku = internals.get(p.id)?.sku;
+    if (sku != null) productBySku.set(sku, p);
+  }
+  const current = (p) => (m.field === "base_cost" ? internals.get(p.id)?.base_cost ?? null : p.base_price ?? null);
+  const inheriting = (p) => variants.filter((v) => v.product_id === p.id && (mode === "cost" ? v.cost_inherited : v.price_inherited)).length;
+  const total = (p) => variants.filter((v) => v.product_id === p.id).length;
+
+  const entries = new Map();   // sku → [{ row, raw, value }]
+  let emptyRows = 0;
+  rows.forEach(({ cells, row }) => {
+    const sku = cellSku(cells[skuCol]);
+    const raw = cells[priceCol];
+    if (sku == null) { if (cells.some((c) => cellText(c) !== "")) emptyRows++; return; }
+    if (!entries.has(sku)) entries.set(sku, []);
+    entries.get(sku).push({ row, raw: cellText(raw), value: parsePrice(raw) });
+  });
+
+  const update = [], same = [], ignored = [], errors = [];
+  for (const [sku, list] of entries) {
+    const product = productBySku.get(sku);
+    const rowsText = list.map((e) => e.row).join(", ");
+    if (!product) {
+      // Títulos de sección ("1 CAMPERAS") y artículos que no vendés.
+      ignored.push({ sku, rows: rowsText, section: list.every((e) => e.raw === "") });
+      continue;
+    }
+    const minValue = mode === "price" ? 0 : -1;   // venta > 0; costo >= 0
+    const invalid = list.find((e) => e.value == null || e.value <= minValue);
+    if (invalid) { errors.push({ sku, rows: rowsText, product, reason: `${m.what} no válido (“${invalid.raw || "vacío"}”)` }); continue; }
+    const values = [...new Set(list.map((e) => round2(e.value)))];
+    if (values.length > 1) { errors.push({ sku, rows: rowsText, product, reason: `SKU repetido con valores distintos (${values.map(formatPrice).join(", ")})` }); continue; }
+    const item = { sku, rows: rowsText, product, value: values[0], before: current(product), inheriting: inheriting(product), total: total(product), repeated: list.length > 1 };
+    if (item.before != null && round2(item.before) === item.value) same.push(item);
+    else update.push(item);
+  }
+  const inFile = new Set(entries.keys());
+  const notInFile = products.filter((p) => internals.get(p.id)?.sku != null && !inFile.has(internals.get(p.id).sku));
+  return { update, same, ignored, errors, notInFile, emptyRows, totalSkus: entries.size };
 }
 
 export async function renderCostImport(view) {
-  mount(view, h("p", { class: "muted" }, "Cargando variantes…"));
+  mount(view, h("p", { class: "muted" }, "Cargando productos…"));
 
-  let variants, productName;
+  let products, internals, variants;
   async function loadCatalog() {
-    const [all, products] = await Promise.all([listAllVariantsWithCosts(), listProducts()]);
-    variants = all;
-    productName = new Map(products.map((p) => [p.id, p.name]));
+    [products, internals, variants] = await Promise.all([listProducts(), listProductInternals(), listAllVariantsWithCosts()]);
+    for (const p of products) p.base_price = p.base_price == null ? null : Number(p.base_price);
   }
   try {
     await loadCatalog();
@@ -85,10 +159,11 @@ export async function renderCostImport(view) {
     mount(view, h("p", { class: "form-error" }, errorMessage(err)));
     return;
   }
-  const label = (v) => `${productName.get(v.product_id) ?? "Producto"} · ${v.name}`;
 
+  let mode = "cost";
   let workbook = null, rows = [], fileName = "", applying = false;
 
+  const modeBox = h("div", { class: "choice-grid", role: "radiogroup", "aria-label": "Tipo de lista" });
   const fileInput = h("input", { type: "file", class: "input", accept: ".xlsx,.xls,.csv,text/csv", "aria-label": "Archivo de la lista de precios" });
   const fileInfo = h("p", { class: "muted" });
   const sheetSelect = h("select", { class: "input", "aria-label": "Hoja" });
@@ -98,7 +173,16 @@ export async function renderCostImport(view) {
   const columnsCard = h("section", { class: "card", hidden: true });
   const previewCard = h("section", { class: "card", hidden: true });
 
-  const skuCount = variants.filter((v) => v.sku != null).length;
+  const withSku = () => products.filter((p) => internals.get(p.id)?.sku != null).length;
+
+  function renderModes() {
+    mount(modeBox, Object.entries(MODES).map(([key, m]) => {
+      const input = h("input", { type: "radio", name: "import-mode", value: key, checked: key === mode });
+      input.addEventListener("change", () => { mode = key; renderModes(); if (rows.length) { renderColumnsCard(); renderPreview(); } });
+      return h("label", { class: key === mode ? "choice active" : "choice" }, input,
+        h("span", { class: "choice-text" }, h("strong", {}, m.label), h("span", {}, m.detail)));
+    }));
+  }
 
   // ---------- 1. Archivo ----------
   fileInput.addEventListener("change", async () => {
@@ -182,49 +266,17 @@ export async function renderCostImport(view) {
 
   // ---------- 3. Vista previa ----------
   function analyze() {
-    const skuCol = Number(skuSelect.value), priceCol = Number(priceSelect.value);
-    const bySku = new Map(variants.filter((v) => v.sku != null).map((v) => [v.sku, v]));
-    const entries = new Map();   // sku → [{ row, raw, price }]
-    let emptyRows = 0;
-
-    rows.slice(headerIndex() + 1).forEach((r, i) => {
-      const rowNumber = headerIndex() + 2 + i;
-      const sku = normalizeSku(cellText(r[skuCol]));
-      const raw = r[priceCol];
-      if (sku == null) { if (cellText(raw) !== "" || r.some((c) => cellText(c) !== "")) emptyRows++; return; }
-      if (!entries.has(sku)) entries.set(sku, []);
-      entries.get(sku).push({ row: rowNumber, raw: cellText(raw), price: parsePrice(raw) });
+    const start = headerIndex() + 1;
+    return analyzeRows({
+      rows: rows.slice(start).map((cells, i) => ({ cells, row: start + 1 + i })),
+      skuCol: Number(skuSelect.value), priceCol: Number(priceSelect.value),
+      mode, products, internals, variants,
     });
-
-    const update = [], same = [], ignored = [], errors = [];
-    for (const [sku, list] of entries) {
-      const variant = bySku.get(sku);
-      const rowsText = list.map((e) => e.row).join(", ");
-      if (!variant) { ignored.push({ sku, rows: rowsText }); continue; }
-
-      const invalid = list.find((e) => e.price == null || e.price <= 0);
-      if (invalid) {
-        errors.push({ sku, rows: rowsText, variant, reason: `precio no válido (“${invalid.raw || "vacío"}”)` });
-        continue;
-      }
-      const prices = [...new Set(list.map((e) => round2(e.price)))];
-      if (prices.length > 1) {
-        errors.push({ sku, rows: rowsText, variant, reason: `SKU repetido con precios distintos (${prices.map(formatPrice).join(", ")})` });
-        continue;
-      }
-      const cost = prices[0];
-      const item = { sku, rows: rowsText, variant, cost, repeated: list.length > 1 };
-      if (variant.cost === cost) same.push(item);
-      else update.push(item);
-    }
-
-    const inFile = new Set(entries.keys());
-    const notInFile = variants.filter((v) => v.sku != null && !inFile.has(v.sku));
-    return { update, same, ignored, errors, notInFile, emptyRows, totalSkus: entries.size };
   }
 
   function renderPreview(confirming = false) {
     if (!rows.length) return;
+    const m = MODES[mode];
     if (skuSelect.value === "" || priceSelect.value === "") {
       mount(previewCard, h("h3", {}, "3. Vista previa"), h("p", { class: "muted" }, "Elegí las columnas de SKU y de precio."));
       previewCard.hidden = false;
@@ -233,65 +285,74 @@ export async function renderCostImport(view) {
     }
     renderColumnsCard();
     const a = analyze();
+    const sections = a.ignored.filter((i) => i.section).length;
 
     const updateRows = a.update.map((u) => {
-      const change = u.variant.cost ? (u.cost - u.variant.cost) / u.variant.cost : null;
+      const change = u.before ? (u.value - u.before) / u.before : null;
       const big = change != null && Math.abs(change) > BIG_CHANGE;
       return h("tr", { class: big ? "row-dirty" : "" },
         h("td", {}, u.sku),
-        h("td", {}, h("a", { href: `#/productos/${u.variant.product_id}` }, label(u.variant))),
-        h("td", { class: "num" }, u.variant.cost == null ? h("span", { class: "muted" }, "sin costo") : formatPrice(u.variant.cost)),
-        h("td", { class: "num" }, formatPrice(u.cost)),
+        h("td", {}, h("a", { href: `#/productos/${u.product.id}?tab=precios` }, u.product.name)),
+        h("td", { class: "num" }, u.before == null ? h("span", { class: "muted" }, "sin valor") : formatPrice(u.before)),
+        h("td", { class: "num" }, h("strong", {}, formatPrice(u.value))),
         h("td", { class: "num" }, change == null ? "—" : `${change > 0 ? "+" : ""}${Math.round(change * 100)} %${big ? " ⚠" : ""}`),
-        h("td", { class: "muted" }, `fila ${u.rows}${u.repeated ? " (repetido, mismo precio)" : ""}`)
+        h("td", {}, u.total === 0 ? h("span", { class: "muted" }, "sin variantes")
+          : u.inheriting === u.total ? `${u.total} de ${u.total}`
+          : h("span", {}, `${u.inheriting} de ${u.total}`, h("span", { class: "muted" }, ` · ${u.total - u.inheriting} particular${u.total - u.inheriting === 1 ? "" : "es"} no cambian`))),
+        h("td", { class: "muted" }, `fila ${u.rows}${u.repeated ? " (repetido, mismo valor)" : ""}`)
       );
     });
+    const noneInherit = a.update.filter((u) => u.total > 0 && u.inheriting === 0);
 
     const applyButton = h("button", { type: "button", class: "btn-primary btn-inline", disabled: applying || !a.update.length },
-      a.update.length ? `Actualizar ${a.update.length} ${a.update.length === 1 ? "costo" : "costos"}` : "No hay costos para actualizar");
+      a.update.length ? `Actualizar ${a.update.length} ${a.update.length === 1 ? "producto" : "productos"}` : "No hay nada para actualizar");
     applyButton.addEventListener("click", () => renderPreview(true));
 
     const confirmBox = confirming
       ? h("div", { class: "confirm-box" },
-          h("p", {}, `Se va a actualizar el costo de ${a.update.length} ${a.update.length === 1 ? "variante" : "variantes"} con los valores de “${fileName}”.`),
-          h("p", {}, "Solo cambia el costo interno: no se tocan precios de venta, stock, imágenes ni otros datos."),
+          h("p", {}, `Se va a actualizar el ${m.what} general de ${a.update.length} ${a.update.length === 1 ? "producto" : "productos"} con los valores de “${fileName}”.`),
+          h("p", {}, "El valor se copia a las variantes que usan el general. No se tocan nombres, imágenes, descripciones, categorías ni stock."),
           h("div", { class: "actions" },
             h("button", { type: "button", class: "btn-primary btn-inline", disabled: applying, onClick: () => apply(a) }, "Confirmar importación"),
             h("button", { type: "button", class: "btn-ghost", disabled: applying, onClick: () => renderPreview(false) }, "Cancelar")))
       : null;
 
-    const big = a.update.filter((u) => u.variant.cost && Math.abs((u.cost - u.variant.cost) / u.variant.cost) > BIG_CHANGE).length;
+    const big = a.update.filter((u) => u.before && Math.abs((u.value - u.before) / u.before) > BIG_CHANGE).length;
 
     mount(previewCard,
       h("h3", {}, "3. Vista previa"),
       h("ul", { class: "change-list" },
-        h("li", {}, h("strong", {}, `${a.update.length} para actualizar`), " · costo nuevo o distinto al actual"),
-        h("li", {}, `${a.same.length} sin cambios · el costo ya es igual`),
-        h("li", {}, `${a.ignored.length} ignorados · SKU que no está en tu catálogo (productos que no vendés)`),
+        h("li", {}, h("strong", {}, `${a.update.length} para actualizar`), ` · ${m.what} nuevo o distinto al actual`),
+        h("li", {}, `${a.same.length} sin cambios · el valor ya es igual`),
+        h("li", {}, `${a.ignored.length - sections} ignorados · SKU que no está en tu catálogo (artículos que no vendés)`),
+        sections ? h("li", { class: "muted" }, `${sections} títulos de sección sin precio (ej. «CAMPERAS»): se saltean`) : null,
         h("li", { class: a.errors.length ? "form-error" : "" }, `${a.errors.length} con error · no se aplican`),
         a.emptyRows ? h("li", { class: "muted" }, `${a.emptyRows} filas sin SKU (se saltean)`) : null
       ),
-      skuCount === 0
-        ? h("p", { class: "notice-warn" }, "Ninguna variante tiene SKU todavía: todo el archivo va a quedar como ignorado. Asigná los SKU en “Precios y stock” o en cada producto.")
+      withSku() === 0
+        ? h("p", { class: "notice-warn" }, "Ningún producto tiene SKU todavía: todo el archivo va a quedar como ignorado. Cargá los SKU en Inventario › Precios o en cada producto.")
         : null,
-      big ? h("p", { class: "notice-warn" }, `${big} ${big === 1 ? "costo cambia" : "costos cambian"} más de un 50 % (marcados con ⚠). Revisá que la columna de precio sea la correcta.`) : null,
+      big ? h("p", { class: "notice-warn" }, `${big} ${big === 1 ? "valor cambia" : "valores cambian"} más de un 50 % (marcados con ⚠). Revisá que la columna y el tipo de lista sean los correctos.`) : null,
+      noneInherit.length
+        ? h("p", { class: "notice-warn" }, `En ${noneInherit.length} ${noneInherit.length === 1 ? "producto" : "productos"} ninguna variante usa el ${m.what} general, así que no cambia ningún precio visible: ${noneInherit.map((u) => u.product.name).join(", ")}. Si querés que lo usen, marcalas con «Usar general».`)
+        : null,
       a.errors.length
         ? h("div", { class: "form-error" }, h("p", {}, "Errores (no se aplican):"),
-            h("ul", { class: "change-list" }, a.errors.map((e) => h("li", {}, `SKU ${e.sku} (fila ${e.rows}) · ${label(e.variant)}: ${e.reason}`))))
+            h("ul", { class: "change-list" }, a.errors.map((e) => h("li", {}, `SKU ${e.sku} (fila ${e.rows}) · ${e.product.name}: ${e.reason}`))))
         : null,
       a.update.length
         ? h("div", { class: "table-wrap" },
             h("table", { class: "table price-table" },
-              h("thead", {}, h("tr", {}, ["SKU", "Variante", "Costo actual", "Costo nuevo", "Cambio", "Archivo"].map((t) => h("th", {}, t)))),
+              h("thead", {}, h("tr", {}, ["SKU", "Producto", "Actual", "Nuevo", "Cambio", "Variantes que lo usan", "Archivo"].map((t) => h("th", {}, t)))),
               h("tbody", {}, updateRows)))
         : null,
-      a.ignored.length
-        ? h("details", {}, h("summary", {}, `Ver ${a.ignored.length} SKU ignorados`),
-            h("p", { class: "muted" }, a.ignored.map((i) => i.sku).join(" · ")))
+      a.ignored.length - sections
+        ? h("details", {}, h("summary", {}, `Ver ${a.ignored.length - sections} SKU ignorados`),
+            h("p", { class: "muted" }, a.ignored.filter((i) => !i.section).map((i) => i.sku).join(" · ")))
         : null,
       a.notInFile.length
-        ? h("details", {}, h("summary", {}, `${a.notInFile.length} variantes con SKU que no aparecen en el archivo`),
-            h("ul", { class: "change-list" }, a.notInFile.map((v) => h("li", {}, `${v.sku} · ${label(v)}`))))
+        ? h("details", {}, h("summary", {}, `${a.notInFile.length} productos con SKU que no aparecen en el archivo`),
+            h("ul", { class: "change-list" }, a.notInFile.map((p) => h("li", {}, `${internals.get(p.id).sku} · ${p.name}`))))
         : null,
       h("div", { class: "actions" }, confirming ? null : applyButton),
       confirmBox
@@ -306,24 +367,25 @@ export async function renderCostImport(view) {
       h("label", { class: "field" }, h("span", {}, "Fila de encabezados"), headerInput,
         h("small", { class: "hint" }, "Fila donde están los títulos de las columnas. Se detecta sola; cambiala si no es la correcta.")),
       h("label", { class: "field" }, h("span", {}, "Columna SKU"), skuSelect, h("small", { class: "hint" }, samples(skuSelect.value))),
-      h("label", { class: "field" }, h("span", {}, "Columna precio (costo de compra)"), priceSelect, h("small", { class: "hint" }, samples(priceSelect.value)))
+      h("label", { class: "field" }, h("span", {}, MODES[mode].column), priceSelect, h("small", { class: "hint" }, samples(priceSelect.value)))
     );
   }
 
   // ---------- 4. Aplicar ----------
   async function apply(a) {
     applying = true;
+    const field = MODES[mode].field;
     const progress = h("p", {}, `Actualizando 0 de ${a.update.length}…`);
     mount(previewCard, h("h3", {}, "Importando…"), progress);
     const failed = [];
     let ok = 0;
     for (const [i, u] of a.update.entries()) {
       try {
-        await saveVariantCost(u.variant.id, u.cost);
+        await saveProductPricing(u.product.id, { [field]: u.value });
         ok++;
       } catch (err) {
         console.error(err);
-        failed.push(`SKU ${u.sku} · ${label(u.variant)}: ${errorMessage(err)}`);
+        failed.push(`SKU ${u.sku} · ${u.product.name}: ${errorMessage(err)}`);
       }
       progress.textContent = `Actualizando ${i + 1} de ${a.update.length}…`;
     }
@@ -333,33 +395,34 @@ export async function renderCostImport(view) {
     mount(previewCard,
       h("h3", {}, "Resultado"),
       h("ul", { class: "change-list" },
-        h("li", {}, h("strong", {}, `${ok} actualizados`)),
+        h("li", {}, h("strong", {}, `${ok} productos actualizados`)),
         h("li", {}, `${a.same.length} sin cambios`),
-        h("li", {}, `${a.ignored.length} ignorados (SKU que no vendés)`),
+        h("li", {}, `${a.ignored.filter((i) => !i.section).length} ignorados (SKU que no vendés)`),
         h("li", { class: a.errors.length + failed.length ? "form-error" : "" }, `${a.errors.length + failed.length} errores`)
       ),
       failed.length || a.errors.length
         ? h("div", { class: "form-error" }, h("ul", { class: "change-list" },
             [...a.errors.map((e) => `SKU ${e.sku} (fila ${e.rows}): ${e.reason}`), ...failed].map((t) => h("li", {}, t))))
         : null,
-      h("p", { class: "muted" }, "Podés revisar los costos en “Precios y stock”."),
       h("div", { class: "actions" },
-        h("a", { href: "#/precios", class: "btn-ghost" }, "Ir a Precios y stock"),
+        h("a", { href: "#/inventario?tab=precios", class: "btn-ghost" }, "Ver en Inventario › Precios"),
         h("button", { type: "button", class: "btn-ghost", onClick: () => renderPreview(false) }, "Ver vista previa otra vez"))
     );
-    toast(failed.length ? `Importación con ${failed.length} errores.` : `${ok} costos actualizados.`, failed.length ? "error" : "ok");
+    toast(failed.length ? `Importación con ${failed.length} errores.` : `${ok} productos actualizados.`, failed.length ? "error" : "ok");
   }
 
+  renderModes();
   mount(view,
-    h("div", { class: "page-header" }, h("h2", {}, "Importar costos")),
+    h("div", { class: "page-header" }, h("h2", {}, "Importar precios")),
     h("p", { class: "muted" },
-      "Cargá la lista de precios del proveedor. Cada fila se busca por SKU exacto entre tus variantes y actualiza solo su costo interno. ",
+      "Cargá una lista en Excel o CSV. Cada fila se busca por el SKU del producto y actualiza solo su costo o su precio de venta general. ",
       "Nada se guarda hasta que confirmás."),
     h("section", { class: "card" },
-      h("h3", {}, "1. Archivo"),
-      h("label", { class: "field" }, h("span", {}, "Lista de precios (.xlsx, .xls o .csv)"), fileInput),
+      h("h3", {}, "1. Tipo de lista y archivo"),
+      modeBox,
+      h("label", { class: "field" }, h("span", {}, "Archivo (.xlsx, .xls o .csv)"), fileInput),
       fileInfo,
-      h("p", { class: "muted" }, `${skuCount} de ${variants.length} variantes tienen SKU asignado.`)
+      h("p", { class: "muted" }, `${withSku()} de ${products.length} productos tienen SKU.`)
     ),
     columnsCard,
     previewCard
