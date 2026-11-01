@@ -1,18 +1,10 @@
 // Revisión del catálogo: qué falta o no coincide antes de publicar.
-// Cruza la base con las fuentes actuales de la tienda (js/products.js y la hoja
-// WEB). Solo lee: no cambia nada.
+// Trabaja solo con Supabase; opcionalmente compara con el catálogo anterior
+// (js/products.js). Solo lee: no cambia nada salvo con confirmación.
 import * as api from "../api/catalog.js";
 import { isSimpleProduct } from "../api/catalog.js";
 import { listAllImages, imageSource } from "../api/images.js";
 import { h, mount, errorMessage, formatPrice, toast } from "../ui.js";
-
-const SHEET_URL = "https://opensheet.elk.sh/1TFmZ1hbO5bXh5MGktpUzM7MJTZwyoknVLyVHRNBbwso/WEB";
-
-// Precio de la hoja: "$5,600" → 5600 (mismo criterio que la tienda actual).
-function sheetPrice(text) {
-  const n = Number(String(text ?? "").replace("$", "").replace(/,/g, "").trim());
-  return Number.isFinite(n) ? n : 0;
-}
 
 // level: "block" = no se puede publicar o no se vería; "warn" = revisar.
 function issue(level, text) {
@@ -20,7 +12,7 @@ function issue(level, text) {
 }
 
 // Arma la revisión a partir de los datos ya cargados. Exportada para pruebas.
-export function reviewCatalog({ categories, products, variants, images, legacyIds, legacyProducts, sheetRows }) {
+export function reviewCatalog({ categories, products, variants, images, legacyIds, legacyProducts }) {
   const categoryById = new Map(categories.map((c) => [c.id, c]));
   const variantsByProduct = new Map();
   for (const v of variants) {
@@ -34,7 +26,6 @@ export function reviewCatalog({ categories, products, variants, images, legacyId
   }
   const legacyByProduct = new Map(legacyIds.map((l) => [l.product_id, l.legacy_id]));
   const legacyById = new Map((legacyProducts ?? []).map((p) => [p.id, p]));
-  const sheetById = new Map((sheetRows ?? []).map((r) => [Number(r.ID), r]));
 
   const rows = products.map((p) => {
     const vs = variantsByProduct.get(p.id) ?? [];
@@ -71,20 +62,11 @@ export function reviewCatalog({ categories, products, variants, images, legacyId
       issues.push(issue("warn", "Controla stock y está todo en 0: se verá sin stock"));
     }
 
-    // Comparación con las fuentes actuales de la tienda.
+    // Comparación con el catálogo anterior (js/products.js).
     const legacyId = legacyByProduct.get(p.id);
     const legacy = legacyId != null ? legacyById.get(legacyId) : null;
     if (legacy && !legacy.variants && vs.length === 1 && vs[0].price !== Number(legacy.price)) {
       issues.push(issue("warn", `Precio distinto de products.js (${formatPrice(legacy.price)})`));
-    }
-    for (const v of vs) {
-      if (v.sheet_id == null || !sheetById.size) continue;
-      const r = sheetById.get(v.sheet_id);
-      if (!r) { issues.push(issue("warn", `${v.name}: ya no está en la hoja WEB`)); continue; }
-      const sp = sheetPrice(r.Precio);
-      if (sp > 0 && sp !== v.price) issues.push(issue("warn", `${v.name}: precio ${formatPrice(v.price)}, en la hoja ${formatPrice(sp)}`));
-      const ss = Number(String(r.Stock ?? "").trim() || 0);
-      if (v.track_stock && Number.isInteger(ss) && ss !== v.stock) issues.push(issue("warn", `${v.name}: stock ${v.stock}, en la hoja ${ss}`));
     }
 
     // Listo para publicar: sin bloqueos, con fotos ya en Storage (o, en yerbas, la
@@ -116,29 +98,19 @@ export function reviewCatalog({ categories, products, variants, images, legacyId
     };
   });
 
-  // Lo que está en las fuentes y no en la base.
+  // Lo que está en el catálogo anterior y no en la base.
   const importedLegacy = new Set(legacyIds.map((l) => l.legacy_id));
   const missingLegacy = (legacyProducts ?? []).filter((p) => !importedLegacy.has(p.id));
-  const importedSheet = new Set(variants.map((v) => v.sheet_id).filter((id) => id != null));
-  const sheetWithoutPrice = (sheetRows ?? []).filter((r) => !(sheetPrice(r.Precio) > 0));
-  const missingSheet = (sheetRows ?? []).filter((r) => sheetPrice(r.Precio) > 0 && !importedSheet.has(Number(r.ID)));
 
-  return { rows, missingLegacy, missingSheet, sheetWithoutPrice, hasLegacy: !!legacyProducts, hasSheet: !!sheetRows };
+  return { rows, missingLegacy, hasLegacy: !!legacyProducts };
 }
 
 async function loadSources() {
-  const out = { legacyProducts: null, sheetRows: null, errors: [] };
+  const out = { legacyProducts: null, errors: [] };
   try {
     out.legacyProducts = (await import("/js/products.js")).products;
   } catch (err) {
     out.errors.push(`No se pudo leer js/products.js: ${err?.message || err}`);
-  }
-  try {
-    const res = await fetch(SHEET_URL, { cache: "no-store" });
-    if (!res.ok) throw new Error(`respondió ${res.status}`);
-    out.sheetRows = await res.json();
-  } catch (err) {
-    out.errors.push(`No se pudo leer la hoja WEB: ${err?.message || err}`);
   }
   return out;
 }
@@ -158,14 +130,14 @@ function downloadCsv(filename, header, rows) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-// compare: también compara con el catálogo anterior (js/products.js y hoja WEB).
+// compare: también compara con el catálogo anterior (js/products.js).
 // Por defecto el panel trabaja solo con Supabase.
 export async function renderCatalogReview(view, { compare = false, filterValue = null } = {}) {
   mount(view, h("p", { class: "muted" }, "Revisando el catálogo…"));
 
   let result, sourceErrors;
   try {
-    const noSources = { legacyProducts: null, sheetRows: null, errors: [] };
+    const noSources = { legacyProducts: null, errors: [] };
     const [categories, products, variants, images, legacyIds, sources] = await Promise.all([
       api.listCategories(), api.listProducts(), api.listAllVariantsWithCosts(), listAllImages(),
       compare ? api.listProductLegacyIds() : [], compare ? loadSources() : noSources,
@@ -178,7 +150,7 @@ export async function renderCatalogReview(view, { compare = false, filterValue =
     return;
   }
 
-  const { rows, missingLegacy, missingSheet, sheetWithoutPrice, hasLegacy, hasSheet } = result;
+  const { rows, missingLegacy, hasLegacy } = result;
   const blocked = rows.filter((r) => r.blocked);
   const withWarnings = rows.filter((r) => !r.blocked && r.issues.length);
   const published = rows.filter((r) => r.product.is_active).length;
@@ -273,7 +245,7 @@ export async function renderCatalogReview(view, { compare = false, filterValue =
   const sources = [];
   if (!compare) {
     sources.push(
-      h("p", { class: "muted" }, "Opcional, solo durante la transición: busca diferencias con js/products.js y la hoja WEB."),
+      h("p", { class: "muted" }, "Opcional, solo durante la transición: busca diferencias con el catálogo anterior (js/products.js)."),
       h("div", { class: "actions" },
         h("button", { type: "button", class: "btn-ghost", onClick: () => renderCatalogReview(view, { compare: true, filterValue: filter.value }) },
           "Comparar con el catálogo anterior")));
@@ -282,13 +254,7 @@ export async function renderCatalogReview(view, { compare = false, filterValue =
   if (compare) sources.push(h("ul", { class: "change-list" },
     !hasLegacy ? null : h("li", {}, missingLegacy.length
       ? `Faltan en la base ${missingLegacy.length} productos de js/products.js: ${missingLegacy.map((p) => p.name).join(", ")}.`
-      : "Todos los productos de js/products.js están en la base."),
-    !hasSheet ? null : h("li", {}, missingSheet.length
-      ? `Faltan en la base ${missingSheet.length} presentaciones de la hoja WEB con precio: ${missingSheet.map((r) => `${r.Nombre} ${r.Peso}`).join(", ")}.`
-      : "Todas las presentaciones de la hoja WEB con precio están en la base."),
-    sheetWithoutPrice.length
-      ? h("li", {}, `${sheetWithoutPrice.length} filas de la hoja no tienen precio de venta: son presentaciones que no se venden, no se importan y no reciben stock (${sheetWithoutPrice.map((r) => `${r.Nombre} ${r.Peso}`).join(", ")}).`)
-      : null));
+      : "Todos los productos de js/products.js están en la base.")));
 
   // Presentaciones activas sin precio: no se venden. Se desactivan (no se borran:
   // así se conserva su historial y sus relaciones).

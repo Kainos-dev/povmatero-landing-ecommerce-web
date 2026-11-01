@@ -104,28 +104,27 @@ export async function listVariants(productId) {
   }));
 }
 
-// Todas las variantes con su costo, SKU e ID de la hoja WEB (si vino de la importación).
+// Todas las variantes con su costo y SKU.
 // Para la tabla de precios y stock y la importación de costos.
 export async function listAllVariantsWithCosts() {
   const [variants, costs, links] = await Promise.all([
     supabase.from("product_variants").select(VARIANT_COLUMNS).order("product_id").order("sort_order").order("id").then(check),
     supabase.from("variant_costs").select("variant_id, cost").then(check),
-    supabase.from("variant_internal").select("variant_id, sku, legacy_sheet_id").then(check),
+    supabase.from("variant_internal").select("variant_id, sku").then(check),
   ]);
   const costByVariant = new Map(costs.map((c) => [c.variant_id, Number(c.cost)]));
-  const internal = new Map(links.map((l) => [l.variant_id, l]));
+  const skuByVariant = new Map(links.map((l) => [l.variant_id, l.sku]));
 
   return variants.map((v) => ({
     ...v,
     price: Number(v.price),
     cost: costByVariant.has(v.id) ? costByVariant.get(v.id) : null,
-    sku: internal.get(v.id)?.sku ?? null,
-    sheet_id: internal.get(v.id)?.legacy_sheet_id ?? null,
+    sku: skuByVariant.get(v.id) ?? null,
   }));
 }
 
 // ---------- SKU (interno, por variante) ----------
-// El SKU vive en variant_internal (solo admins), junto con el ID de la hoja WEB.
+// El SKU vive en variant_internal (solo admins).
 // Se compara siempre recortando espacios, respetando mayúsculas y minúsculas.
 export function normalizeSku(value) {
   const s = String(value ?? "").trim();
@@ -141,7 +140,7 @@ async function listSkus(variantIds) {
 }
 
 // Guarda (o borra con null) el SKU de una variante. Solo toca la columna sku:
-// el resto de variant_internal (por ejemplo legacy_sheet_id) queda igual.
+// el resto de variant_internal queda igual.
 export async function saveVariantSku(variantId, sku) {
   const value = normalizeSku(sku);
   const updated = check(
@@ -149,20 +148,6 @@ export async function saveVariantSku(variantId, sku) {
   );
   if (updated.length === 0 && value !== null) {
     check(await supabase.from("variant_internal").insert({ variant_id: variantId, sku: value }));
-  }
-}
-
-// Vínculo de una variante con su fila (columna ID) de la hoja WEB. Solo se usa
-// para la importación inicial de stock; nunca se pisa un vínculo existente.
-export async function saveVariantSheetLink(variantId, sheetId) {
-  const updated = check(
-    await supabase.from("variant_internal").update({ legacy_sheet_id: sheetId })
-      .eq("variant_id", variantId).is("legacy_sheet_id", null).select("variant_id")
-  );
-  if (updated.length) return;
-  const existing = check(await supabase.from("variant_internal").select("variant_id").eq("variant_id", variantId));
-  if (!existing.length) {
-    check(await supabase.from("variant_internal").insert({ variant_id: variantId, legacy_sheet_id: sheetId }));
   }
 }
 

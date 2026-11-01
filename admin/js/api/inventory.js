@@ -57,3 +57,15 @@ export async function getCurrentUserId() {
 export function isInsufficientStockError(err) {
   return err?.code === "23514" && String(err?.message ?? "").includes("stock_check");
 }
+
+// Últimos movimientos de todo el inventario (para Inicio).
+export async function listRecentMovements(limit = 8) {
+  return check(
+    await supabase
+      .from("inventory_movements")
+      .select(MOVEMENT_COLUMNS)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(limit)
+  );
+}

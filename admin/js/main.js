@@ -1,5 +1,7 @@
 import { getCurrentUser, signIn, signOut, getAdminRole, onSignedOut } from "./auth.js";
 import { startRouter, stopRouter } from "./router.js";
+import { setSession, getSession } from "./session.js";
+import { icon } from "./icons.js";
 
 const views = {
   loading: document.getElementById("viewLoading"),
@@ -14,7 +16,8 @@ const userEmail   = document.getElementById("userEmail");
 const userRole    = document.getElementById("userRole");
 const logoutBtn   = document.getElementById("logoutButton");
 
-const ROLE_LABELS = { owner: "Dueño", admin: "Administrador" };
+// Íconos del menú (barra lateral, barra inferior y enlaces de cuenta).
+document.querySelectorAll("[data-icon]").forEach((el) => el.prepend(icon(el.dataset.icon)));
 
 function show(name) {
   Object.entries(views).forEach(([key, el]) => { el.hidden = key !== name; });
@@ -30,8 +33,9 @@ function showLogin(message = "") {
 }
 
 function showPanel(user, role) {
+  setSession({ email: user.email, role });
   userEmail.textContent = user.email ?? "";
-  userRole.textContent = ROLE_LABELS[role] ?? role;
+  userRole.textContent = getSession().roleLabel;
   show("panel");
   startRouter(document.getElementById("adminContent"));
 }

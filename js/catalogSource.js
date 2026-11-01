@@ -2,7 +2,7 @@
 //
 // Lee la vista public.storefront_catalog (solo productos, variantes y
 // categorías publicados), la galería de imágenes y el orden de las categorías.
-// La tienda ya no consulta js/products.js ni la hoja WEB de Google Sheets.
+// La tienda ya no consulta js/products.js.
 //
 // Formato que usan catalog.js, modal.js y cart.js:
 //   { id, slug, name, category, categoryName, description, price, image, gallery, variants? }

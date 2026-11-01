@@ -32,7 +32,8 @@ function plural(n, one, many) {
   return `${n} ${n === 1 ? one : many}`;
 }
 
-export async function renderProductList(view) {
+// query (desde Inicio u otro enlace): { estado: "active" | "draft", categoria: slug, q: texto }
+export async function renderProductList(view, query = {}) {
   mount(view, h("p", { class: "muted" }, "Cargando productos…"));
 
   let products, categories;
@@ -162,14 +163,18 @@ export async function renderProductList(view) {
     });
 
     return h("tr", { class: "row-link", onClick: () => { location.hash = href; } },
-      h("td", { class: "center", onClick: (e) => { if (e.target === e.currentTarget) { e.stopPropagation(); check.click(); } } }, check),
-      h("td", {}, h("a", { href }, product.name)),
-      h("td", {}, categoryName.get(product.category_id) ?? "—"),
-      h("td", {}, s.variants ?? h("span", { class: "badge badge-warn" }, "Sin precio")),
-      h("td", {}, s.price),
-      h("td", { class: "num" }, s.stock),
-      h("td", {}, h("span", { class: product.is_active ? "badge badge-ok" : "badge" },
-        product.is_active ? "Publicado" : "Borrador"))
+      h("td", { class: "center c-check", onClick: (e) => { if (e.target === e.currentTarget) { e.stopPropagation(); check.click(); } } }, check),
+      h("td", { class: "c-name" }, h("a", { href }, product.name)),
+      h("td", { class: "c-meta", "data-label": "Categoría" }, categoryName.get(product.category_id) ?? "—"),
+      h("td", { class: "c-meta", "data-label": "Variantes" }, s.variants ?? h("span", { class: "badge badge-warn" }, "Sin precio")),
+      h("td", { class: "c-meta", "data-label": "Precio" }, s.price),
+      h("td", { class: "num c-meta", "data-label": "Stock" }, s.stock),
+      h("td", { class: "c-state" }, h("span", { class: product.is_active ? "badge badge-ok" : "badge" },
+        product.is_active ? "Publicado" : "Borrador")),
+      // Solo en el celular: los datos de las columnas en una línea.
+      h("td", { class: "c-meta-line", "aria-hidden": "true" },
+        [categoryName.get(product.category_id), s.variants ?? "Sin precio", s.price, s.stock !== "—" ? `stock ${s.stock}` : null]
+          .filter(Boolean).join(" · "))
     );
   }
 
@@ -210,6 +215,12 @@ export async function renderProductList(view) {
     syncSelection();
   }
 
+  // Filtros iniciales que llegan en el enlace.
+  if (query.estado === "active" || query.estado === "draft") statusFilter.value = query.estado;
+  const fromSlug = categories.find((c) => c.slug === query.categoria);
+  if (fromSlug) categoryFilter.value = String(fromSlug.id);
+  if (query.q) search.value = query.q;
+
   search.addEventListener("input", render);
   categoryFilter.addEventListener("change", render);
   statusFilter.addEventListener("change", render);
@@ -223,7 +234,7 @@ export async function renderProductList(view) {
     count,
     bulkBar,
     h("div", { class: "table-wrap" },
-      h("table", { class: "table" },
+      h("table", { class: "table table-cards table-products" },
         h("thead", {}, h("tr", {},
           h("th", { class: "center" }, selectAll),
           ["Producto", "Categoría", "Variantes", "Precio", "Stock", "Estado"].map((t) => h("th", {}, t))

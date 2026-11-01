@@ -2,12 +2,13 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="robots" content="noindex, nofollow" />
+  <meta name="theme-color" content="#ffffff" />
   <title>Panel · povmatero</title>
   <link rel="icon" href="/images/iconoPestaña.ico" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <!-- Rutas absolutas: funcionan tanto en /admin como en /admin/ -->
   <link rel="stylesheet" href="/css/base/variables.css" />
   <link rel="stylesheet" href="/css/base/reset.css" />
@@ -24,8 +25,10 @@
   <!-- Login -->
   <section class="view view-center" id="viewLogin" hidden>
     <form class="login-card" id="loginForm" novalidate>
-      <h1 class="brand">POVMATERO</h1>
-      <p class="muted">Panel de administración</p>
+      <div class="login-head">
+        <span class="povmatero-wordmark povmatero-wordmark--sm admin-wordmark">POVMATERO</span>
+        <p class="muted">Panel de administración</p>
+      </div>
 
       <label class="field">
         <span>Email</span>
@@ -39,36 +42,58 @@
 
       <p class="form-error" id="loginError" role="alert" hidden></p>
 
-      <button type="submit" class="btn-primary" id="loginButton">Ingresar</button>
+      <button type="submit" class="btn-primary btn-block" id="loginButton">Ingresar</button>
 
-      <a href="/" class="store-link">← Volver a la tienda</a>
+      <a href="/" class="store-link">Volver a la tienda</a>
     </form>
   </section>
 
   <!-- Panel -->
-  <section class="view" id="viewPanel" hidden>
-    <header class="admin-header">
-      <div class="admin-header-left">
+  <section class="view admin-shell" id="viewPanel" hidden>
+    <!-- Escritorio: barra lateral -->
+    <aside class="sidebar" aria-label="Menú del panel">
+      <a href="#/inicio" class="sidebar-brand" aria-label="Inicio del panel">
         <span class="povmatero-wordmark povmatero-wordmark--sm admin-wordmark">POVMATERO</span>
-        <nav class="admin-nav">
-          <a href="#/productos">Productos</a>
-          <a href="#/precios">Precios</a>
-          <a href="#/stock">Stock</a>
-          <a href="#/imagenes">Imágenes</a>
-          <a href="#/importar-costos">Importar costos</a>
-          <a href="#/revision">Revisión</a>
-          <a href="#/clientes">Clientes</a>
-        </nav>
+      </a>
+      <nav class="side-nav" id="sideNav">
+        <a href="#/inicio" data-nav data-icon="home">Inicio</a>
+        <a href="#/productos" data-nav data-icon="box">Productos</a>
+        <a href="#/precios" data-nav data-icon="tag">Precios</a>
+        <a href="#/stock" data-nav data-icon="stock">Stock</a>
+        <a href="#/clientes" data-nav data-icon="users">Clientes</a>
+        <p class="side-group">Herramientas</p>
+        <a href="#/importar-costos" data-nav data-icon="upload">Importar costos</a>
+        <a href="#/imagenes" data-nav data-icon="image">Verificar imágenes</a>
+        <a href="#/revision" data-nav data-icon="check">Revisión del catálogo</a>
+      </nav>
+      <div class="side-account">
+        <span class="side-email" id="userEmail"></span>
+        <span class="side-role" id="userRole"></span>
+        <div class="side-links">
+          <a href="/" class="side-link" data-icon="store">Ver tienda</a>
+          <button type="button" class="side-link" id="logoutButton" data-icon="logout">Cerrar sesión</button>
+        </div>
       </div>
-      <div class="admin-user">
-        <a href="/" class="btn-ghost store-button">← Ver tienda</a>
-        <span id="userEmail"></span>
-        <span class="role-badge" id="userRole"></span>
-        <button type="button" class="btn-ghost" id="logoutButton">Cerrar sesión</button>
-      </div>
+    </aside>
+
+    <!-- Celular: barra superior -->
+    <header class="topbar">
+      <a href="#/inicio" aria-label="Inicio del panel">
+        <span class="povmatero-wordmark povmatero-wordmark--sm admin-wordmark">POVMATERO</span>
+      </a>
+      <a href="/" class="topbar-store" data-icon="store">Tienda</a>
     </header>
 
     <main class="admin-main" id="adminContent"></main>
+
+    <!-- Celular: barra inferior -->
+    <nav class="tabbar" id="tabBar" aria-label="Secciones">
+      <a href="#/inicio" data-nav data-icon="home">Inicio</a>
+      <a href="#/productos" data-nav data-icon="box">Productos</a>
+      <a href="#/precios" data-nav data-icon="tag">Precios</a>
+      <a href="#/stock" data-nav data-icon="stock">Stock</a>
+      <a href="#/mas" data-nav data-icon="more">Más</a>
+    </nav>
   </section>
 
   <script type="module" src="/admin/js/main.js"></script>

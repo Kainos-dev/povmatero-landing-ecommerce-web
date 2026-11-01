@@ -1,4 +1,7 @@
-// Navegación del panel por hash (#/productos, #/productos/nuevo, #/productos/12).
+// Navegación del panel por hash (#/inicio, #/productos, #/productos/12, #/stock?f=zero).
+// Lo que va después de "?" se pasa a la pantalla como filtros iniciales.
+import { renderHome } from "./views/home.js";
+import { renderMore } from "./views/more.js";
 import { renderProductList } from "./views/productList.js";
 import { renderProductEdit } from "./views/productEdit.js";
 import { renderPriceTable } from "./views/priceTable.js";
@@ -8,42 +11,56 @@ import { renderCatalogReview } from "./views/catalogReview.js";
 import { renderStockTable } from "./views/stockTable.js";
 import { renderCustomers } from "./views/customers.js";
 
-const DEFAULT_ROUTE = "#/productos";
+const DEFAULT_ROUTE = "#/inicio";
 
+// [patrón, pantalla, sección del menú que se marca]
 const routes = [
-  [/^#\/productos\/?$/,        (view) => renderProductList(view)],
-  [/^#\/productos\/nuevo\/?$/, (view) => renderProductEdit(view, null)],
-  [/^#\/productos\/(\d+)\/?$/, (view, m) => renderProductEdit(view, Number(m[1]))],
-  [/^#\/precios\/?$/,          (view) => renderPriceTable(view)],
-  [/^#\/stock\/?$/,            (view) => renderStockTable(view)],
-  [/^#\/imagenes\/?$/,         (view) => renderImageMigration(view)],
-  [/^#\/importar-costos\/?$/,  (view) => renderCostImport(view)],
-  [/^#\/revision\/?$/,         (view) => renderCatalogReview(view)],
-  [/^#\/clientes\/?$/,         (view) => renderCustomers(view)],
+  [/^#\/inicio\/?$/,           (view, m, q) => renderHome(view, q),                 "#/inicio"],
+  [/^#\/productos\/?$/,        (view, m, q) => renderProductList(view, q),          "#/productos"],
+  [/^#\/productos\/nuevo\/?$/, (view) => renderProductEdit(view, null),             "#/productos"],
+  [/^#\/productos\/(\d+)\/?$/, (view, m) => renderProductEdit(view, Number(m[1])),  "#/productos"],
+  [/^#\/precios\/?$/,          (view) => renderPriceTable(view),                    "#/precios"],
+  [/^#\/stock\/?$/,            (view, m, q) => renderStockTable(view, q),           "#/stock"],
+  [/^#\/clientes\/?$/,         (view) => renderCustomers(view),                     "#/clientes"],
+  [/^#\/imagenes\/?$/,         (view) => renderImageMigration(view),                "#/imagenes"],
+  [/^#\/importar-costos\/?$/,  (view) => renderCostImport(view),                    "#/importar-costos"],
+  [/^#\/revision\/?$/,         (view) => renderCatalogReview(view),                 "#/revision"],
+  [/^#\/mas\/?$/,              (view) => renderMore(view),                          "#/mas"],
 ];
+
+// Secciones que en el celular viven dentro de «Más».
+const IN_MORE = new Set(["#/clientes", "#/imagenes", "#/importar-costos", "#/revision", "#/mas"]);
 
 let container = null;
 let listening = false;
 
-function highlightNav() {
-  document.querySelectorAll(".admin-nav a").forEach((a) => {
-    a.classList.toggle("active", location.hash.startsWith(a.getAttribute("href")));
+function highlightNav(section) {
+  document.querySelectorAll("[data-nav]").forEach((a) => {
+    const target = a.getAttribute("href");
+    const on = target === section || (target === "#/mas" && IN_MORE.has(section));
+    a.classList.toggle("active", on);
+    if (on) a.setAttribute("aria-current", "page");
+    else a.removeAttribute("aria-current");
   });
 }
 
 function route() {
   if (!container) return;
-  const hash = location.hash || DEFAULT_ROUTE;
+  const full = location.hash || DEFAULT_ROUTE;
+  const [hash, queryString = ""] = full.split("?");
+  const query = Object.fromEntries(new URLSearchParams(queryString));
 
-  for (const [pattern, render] of routes) {
+  for (const [pattern, render, section] of routes) {
     const match = hash.match(pattern);
     if (match) {
       // Cada pantalla se dibuja en un contenedor nuevo: si se navega mientras
       // carga, lo que llegue tarde queda en un elemento ya descartado.
       const view = document.createElement("div");
+      view.className = "page";
       container.replaceChildren(view);
-      highlightNav();
-      render(view, match);
+      highlightNav(section);
+      window.scrollTo(0, 0);
+      render(view, match, query);
       return;
     }
   }

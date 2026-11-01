@@ -1,21 +1,12 @@
 // Stock: todas las presentaciones que controlan stock (hoy, las yerbas).
 // Supabase es la única fuente del stock: para cambiarlo se escribe la cantidad
 // contada y se registra un movimiento por la diferencia (entrada o ajuste).
-// La hoja WEB solo sirve para la importación inicial.
 import * as api from "../api/catalog.js";
 import { registerMovement, getVariantStock } from "../api/inventory.js";
 import { h, mount, formatPrice, errorMessage, normalizeText, toast } from "../ui.js";
 
-const SHEET_URL = "https://opensheet.elk.sh/1TFmZ1hbO5bXh5MGktpUzM7MJTZwyoknVLyVHRNBbwso/WEB";
-const IMPORT_REASON = "Carga inicial de stock (hoja WEB)";
 const ENTRY_REASON = "Ingreso de mercadería";
 const ADJUST_REASON = "Conteo físico";
-
-// Precio de la hoja: "$5,600" → 5600; vacío o inválido → 0 (no comercializable).
-export function sheetPrice(text) {
-  const n = Number(String(text ?? "").replace("$", "").replace(/,/g, "").trim());
-  return Number.isFinite(n) && n > 0 ? n : 0;
-}
 
 // "12" → 12; vacío o inválido → null.
 function readCount(text) {
@@ -25,20 +16,8 @@ function readCount(text) {
   return Number.isInteger(n) && n >= 0 ? n : NaN;
 }
 
-const sheetKey = (name, size) => `${normalizeText(name).trim()}|${normalizeText(size).replace(/\s+/g, "")}`;
-
-// Busca la fila de la hoja de una variante: primero por su vínculo (columna ID),
-// después por nombre del producto + presentación. Exportada para pruebas.
-export function matchSheetRow(variant, productName, sheetById, sheetByName) {
-  if (variant.sheet_id != null && sheetById.has(variant.sheet_id)) {
-    return { row: sheetById.get(variant.sheet_id), by: "id" };
-  }
-  const candidates = sheetByName.get(sheetKey(productName, variant.name)) ?? [];
-  if (candidates.length === 1) return { row: candidates[0], by: "name" };
-  return { row: null, by: candidates.length > 1 ? "ambiguous" : "none" };
-}
-
-export async function renderStockTable(view) {
+// query (desde Inicio): { f: "zero" | "low" }
+export async function renderStockTable(view, query = {}) {
   mount(view, h("p", { class: "muted" }, "Cargando stock…"));
 
   let products, categories, variants;
@@ -55,9 +34,8 @@ export async function renderStockTable(view) {
     return;
   }
 
-  // Ediciones: variantId → { target: "texto", imported?: { sheetId, by } }
+  // Ediciones: variantId → { target: "texto" }
   const edits = new Map();
-  const sheetInfo = new Map();   // variantId → texto de la columna "Hoja WEB"
   let saving = false;
   let lastErrors = [];
 
@@ -65,10 +43,8 @@ export async function renderStockTable(view) {
   const showFilter = h("select", { class: "input", "aria-label": "Mostrar" },
     h("option", { value: "" }, "Todas"),
     h("option", { value: "zero" }, "Sin stock"),
+    h("option", { value: "low" }, "Stock bajo (1 unidad)"),
     h("option", { value: "changed" }, "Con cambios sin guardar"));
-  const importButton = h("button", { type: "button", class: "btn-ghost",
-    title: "Completa las presentaciones de yerba que tienen stock 0 con la cantidad de la hoja. No guarda nada." },
-    "Importación inicial desde la hoja WEB");
   const info = h("p", { class: "muted" });
   const notice = h("div");
   const tbody = h("tbody");
@@ -89,7 +65,7 @@ export async function renderStockTable(view) {
         (a.category?.sort_order ?? 0) - (b.category?.sort_order ?? 0)
         || a.p.name.localeCompare(b.p.name, "es")
         || a.v.sort_order - b.v.sort_order || a.v.id - b.v.id);
-    return { rows, isYerba: (r) => r.category?.slug === "yerbas" };
+    return { rows };
   }
   idx = index();
 
@@ -98,10 +74,10 @@ export async function renderStockTable(view) {
     return e ? readCount(e.target) : null;
   };
 
-  function setTarget(r, value, imported = null) {
+  function setTarget(r, value) {
     const n = readCount(value);
     if (String(value).trim() === "" || n === r.v.stock) edits.delete(r.v.id);
-    else edits.set(r.v.id, { target: String(value), imported });
+    else edits.set(r.v.id, { target: String(value) });
   }
 
   // ---------- Tabla ----------
@@ -110,6 +86,7 @@ export async function renderStockTable(view) {
     return idx.rows.filter((r) => {
       if (q && !normalizeText(`${r.p.name} ${r.v.name}`).includes(q)) return false;
       if (showFilter.value === "zero" && r.v.stock !== 0) return false;
+      if (showFilter.value === "low" && r.v.stock !== 1) return false;
       if (showFilter.value === "changed" && !edits.has(r.v.id)) return false;
       return true;
     });
@@ -127,16 +104,15 @@ export async function renderStockTable(view) {
     const e = edits.get(r.v.id);
     const input = h("input", { class: "input input-num input-sm", type: "number", min: "0", step: "1", placeholder: String(r.v.stock),
       value: e?.target ?? "", "aria-label": `Nuevo stock de ${r.p.name} ${r.v.name}` });
-    const diff = h("td", { class: "num" }, diffText(r));
+    const diff = h("td", { class: "num c-diff" }, diffText(r));
     const tr = h("tr", { class: [e ? "row-dirty" : "", r.p.is_active ? "" : "row-inactive"].join(" ").trim() },
-      h("td", {}, first ? h("a", { href: `#/productos/${r.p.id}` }, r.p.name) : h("span", { class: "muted", "aria-hidden": "true" }, "↳"),
+      h("td", { class: first ? "c-prod" : "c-prod c-cont" }, first ? h("a", { href: `#/productos/${r.p.id}` }, r.p.name) : h("span", { class: "muted", "aria-hidden": "true" }, "↳"),
         first && !r.p.is_active ? h("span", { class: "muted" }, " (borrador)") : null),
-      h("td", {}, r.v.name, r.v.is_active ? null : h("span", { class: "muted" }, " (inactiva)")),
-      h("td", { class: "num" }, formatPrice(r.v.price)),
-      h("td", { class: "num" }, h("strong", {}, String(r.v.stock))),
-      h("td", {}, input),
-      diff,
-      h("td", { class: "muted" }, sheetInfo.get(r.v.id) ?? "")
+      h("td", { class: "c-var" }, r.v.name, r.v.is_active ? null : h("span", { class: "muted" }, " (inactiva)")),
+      h("td", { class: "num c-price" }, formatPrice(r.v.price)),
+      h("td", { class: "num c-stock", "data-label": "Hay" }, h("strong", { class: r.v.stock === 0 ? "text-alert" : "" }, String(r.v.stock))),
+      h("td", { class: "c-input" }, input),
+      diff
     );
     input.addEventListener("input", () => {
       setTarget(r, input.value);
@@ -152,7 +128,7 @@ export async function renderStockTable(view) {
     let last = null;
     mount(tbody, list.length
       ? list.map((r) => { const first = r.p.id !== last; last = r.p.id; return row(r, first); })
-      : h("tr", {}, h("td", { colspan: "7", class: "empty" }, "No hay presentaciones que coincidan.")));
+      : h("tr", {}, h("td", { colspan: "6", class: "empty" }, "No hay presentaciones que coincidan.")));
     const units = idx.rows.reduce((s, r) => s + r.v.stock, 0);
     const zero = idx.rows.filter((r) => r.v.stock === 0).length;
     info.textContent = `${idx.rows.length} presentaciones controlan stock · ${units} unidades · ${zero} en 0`;
@@ -168,7 +144,7 @@ export async function renderStockTable(view) {
       const label = `${r.p.name} · ${r.v.name}`;
       if (Number.isNaN(t)) { problems.push(`${label}: la cantidad debe ser un número entero mayor o igual a 0.`); continue; }
       if (t === r.v.stock) continue;
-      changes.push({ r, label, target: t, delta: t - r.v.stock, imported: e.imported });
+      changes.push({ r, label, target: t, delta: t - r.v.stock });
     }
     return { changes, problems };
   }
@@ -185,10 +161,9 @@ export async function renderStockTable(view) {
         discard));
       return;
     }
-    const anyImported = changes.some((c) => c.imported);
     const entryReason = h("input", { class: "input", maxlength: "200", value: ENTRY_REASON, "aria-label": "Motivo de las entradas" });
     const adjustReason = h("input", { class: "input", maxlength: "200", value: ADJUST_REASON, "aria-label": "Motivo de los ajustes" });
-    const manualEntries = changes.filter((c) => !c.imported && c.delta > 0).length;
+    const manualEntries = changes.filter((c) => c.delta > 0).length;
     const adjustments = changes.filter((c) => c.delta < 0).length;
     const confirm = h("button", { type: "button", class: "btn-primary btn-inline", disabled: saving || problems.length > 0 || !changes.length },
       saving ? "Guardando…" : "Confirmar y guardar");
@@ -202,9 +177,7 @@ export async function renderStockTable(view) {
         : "No hay cambios para guardar."),
       problems.length ? h("div", { class: "form-error" }, h("ul", {}, problems.map((t) => h("li", {}, t)))) : null,
       h("ul", { class: "change-list" }, changes.map((c) => h("li", {}, h("strong", {}, c.label),
-        `: ${c.r.v.stock} → ${c.target} (${c.delta > 0 ? `entrada +${c.delta}` : `ajuste ${c.delta}`})`,
-        c.imported ? ` · hoja WEB fila ${c.imported.sheetId}` : ""))),
-      anyImported ? h("p", { class: "muted" }, `Las cantidades traídas de la hoja se registran como “${IMPORT_REASON}”.`) : null,
+        `: ${c.r.v.stock} → ${c.target} (${c.delta > 0 ? `entrada +${c.delta}` : `ajuste ${c.delta}`})`))),
       manualEntries ? h("label", { class: "field" }, h("span", {}, "Motivo de las entradas"), entryReason) : null,
       adjustments ? h("label", { class: "field" }, h("span", {}, "Motivo de los ajustes"), adjustReason) : null,
       h("div", { class: "actions" }, confirm,
@@ -216,7 +189,7 @@ export async function renderStockTable(view) {
     saving = true;
     renderBar(true);
     const failed = [];
-    let ok = 0, linked = 0;
+    let ok = 0;
     for (const c of changes) {
       try {
         // El stock pudo cambiar desde que se abrió la pantalla (otra pestaña, una venta):
@@ -230,15 +203,9 @@ export async function renderStockTable(view) {
           variantId: c.r.v.id,
           type: c.delta > 0 ? "entrada" : "ajuste",
           quantity: c.delta,
-          reason: c.imported ? IMPORT_REASON : c.delta > 0 ? reasons.entry : reasons.adjust,
-          reference: c.imported ? `Hoja WEB fila ${c.imported.sheetId}` : null,
+          reason: c.delta > 0 ? reasons.entry : reasons.adjust,
         });
         ok++;
-        // Si se encontró por nombre, se guarda el vínculo con la fila de la hoja.
-        if (c.imported?.by === "name") {
-          try { await api.saveVariantSheetLink(c.r.v.id, c.imported.sheetId); linked++; }
-          catch (err) { console.error(err); failed.push(`${c.label}: el stock se guardó, pero no el vínculo con la fila ${c.imported.sheetId} de la hoja (${errorMessage(err)}).`); }
-        }
       } catch (err) {
         console.error(err);
         failed.push(`${c.label}: ${errorMessage(err)}`);
@@ -249,84 +216,16 @@ export async function renderStockTable(view) {
     try { await load(); idx = index(); } catch (err) { console.error(err); lastErrors.push(`No se pudo recargar: ${errorMessage(err)}. Recargá la página.`); }
     saving = false;
     toast(failed.length ? `Se registraron ${ok} de ${changes.length}. Revisá los avisos.` : `${ok} ${ok === 1 ? "movimiento registrado" : "movimientos registrados"}.`, failed.length ? "error" : "ok");
-    renderNotice(linked ? h("p", { class: "notice-info" }, linked === 1 ? "Se vinculó 1 presentación con su fila de la hoja." : `Se vincularon ${linked} presentaciones con su fila de la hoja.`) : null);
+    renderNotice();
     if (showFilter.value === "changed") showFilter.value = "";
     renderTable();
     renderBar();
   }
 
-  function renderNotice(extra = null) {
+  function renderNotice() {
     mount(notice,
-      lastErrors.length ? h("div", { class: "form-error" }, h("ul", {}, lastErrors.map((t) => h("li", {}, t)))) : null,
-      extra);
+      lastErrors.length ? h("div", { class: "form-error" }, h("ul", {}, lastErrors.map((t) => h("li", {}, t)))) : null);
   }
-
-  // ---------- Importación inicial desde la hoja ----------
-  // Solo completa presentaciones de yerba con stock 0: nunca pisa cantidades ya cargadas.
-  importButton.addEventListener("click", async () => {
-    importButton.disabled = true;
-    importButton.textContent = "Leyendo la hoja…";
-    try {
-      const res = await fetch(SHEET_URL, { cache: "no-store" });
-      if (!res.ok) throw new Error(`La hoja respondió ${res.status}.`);
-      // Las filas sin precio de venta válido son presentaciones que no se venden: se ignoran.
-      const allRows = await res.json();
-      const sheet = allRows.filter((s) => sheetPrice(s.Precio) > 0);
-      const ignored = allRows.length - sheet.length;
-      const sheetById = new Map(sheet.map((s) => [Number(s.ID), s]));
-      const sheetByName = new Map();
-      for (const s of sheet) {
-        const k = sheetKey(s.Nombre, s.Peso);
-        if (!sheetByName.has(k)) sheetByName.set(k, []);
-        sheetByName.get(k).push(s);
-      }
-
-      let filled = 0, same = 0, kept = 0, byName = 0;
-      const missing = [], invalid = [];
-      sheetInfo.clear();
-      for (const r of idx.rows) {
-        if (!idx.isYerba(r) || !(r.v.price > 0)) continue;   // sin precio: no se vende, no recibe stock
-        const label = `${r.p.name} ${r.v.name}`;
-        const m = matchSheetRow(r.v, r.p.name, sheetById, sheetByName);
-        if (!m.row) {
-          // Puede ser una fila sin precio (no se vende) o que no esté en la hoja.
-          missing.push(label + (m.by === "ambiguous" ? " (más de una fila con ese nombre)" : ""));
-          sheetInfo.set(r.v.id, "no está en la hoja");
-          continue;
-        }
-        const qty = readCount(m.row.Stock ?? "0");
-        const sheetId = Number(m.row.ID);
-        sheetInfo.set(r.v.id, `fila ${sheetId}${m.by === "name" ? " (por nombre)" : ""}: ${Number.isNaN(qty) ? "inválido" : qty ?? 0}`);
-        if (Number.isNaN(qty)) { invalid.push(label); continue; }
-        const sheetQty = qty ?? 0;
-        if (sheetQty === r.v.stock) { same++; continue; }
-        if (r.v.stock !== 0) { kept++; continue; }
-        setTarget(r, String(sheetQty), { sheetId, by: m.by });
-        filled++;
-        if (m.by === "name") byName++;
-      }
-
-      renderNotice(h("div", { class: "notice-info" },
-        h("p", {}, filled
-          ? `Hoja WEB: se completó el nuevo stock de ${filled} ${filled === 1 ? "presentación" : "presentaciones"} que estaban en 0. Todavía no se guardó nada: revisá y confirmá.`
-          : "Hoja WEB leída: no hay presentaciones en 0 para completar."),
-        byName ? h("p", {}, byName === 1 ? "1 se encontró por nombre y presentación (no estaba vinculada a su fila): al guardar se vincula." : `${byName} se encontraron por nombre y presentación (no estaban vinculadas a su fila): al guardar se vinculan.`) : null,
-        same ? h("p", {}, same === 1 ? "1 ya coincide con la hoja." : `${same} ya coinciden con la hoja.`) : null,
-        kept ? h("p", {}, `${kept === 1 ? "1 ya tiene stock cargado distinto al de la hoja: no se toca" : `${kept} ya tienen stock cargado distinto al de la hoja: no se tocan`}. Si la hoja es la correcta, escribí la cantidad a mano.`) : null,
-        missing.length ? h("p", {}, `No están en la hoja: ${missing.join(", ")}.`) : null,
-        invalid.length ? h("p", {}, `Stock no válido en la hoja: ${invalid.join(", ")}.`) : null,
-        ignored ? h("p", { class: "muted" }, `${ignored} ${ignored === 1 ? "fila de la hoja no tiene" : "filas de la hoja no tienen"} precio de venta: son presentaciones que no se venden y se ignoran.`) : null));
-      if (filled) showFilter.value = "changed";
-      renderTable();
-      renderBar();
-    } catch (err) {
-      console.error(err);
-      renderNotice(h("p", { class: "form-error" }, `No se pudo leer la hoja WEB: ${err?.message || err}`));
-    } finally {
-      importButton.disabled = false;
-      importButton.textContent = "Importación inicial desde la hoja WEB";
-    }
-  });
 
   // Aviso al salir con cambios sin guardar.
   const beforeUnload = (e) => { if (edits.size && view.isConnected) { e.preventDefault(); e.returnValue = ""; } };
@@ -334,6 +233,7 @@ export async function renderStockTable(view) {
   const cleanup = () => { if (!view.isConnected) { window.removeEventListener("beforeunload", beforeUnload); window.removeEventListener("hashchange", cleanup); } };
   window.addEventListener("hashchange", cleanup);
 
+  if (query.f === "zero" || query.f === "low") showFilter.value = query.f;
   search.addEventListener("input", renderTable);
   showFilter.addEventListener("change", renderTable);
 
@@ -341,14 +241,14 @@ export async function renderStockTable(view) {
     h("div", { class: "page-header" }, h("h2", {}, "Stock")),
     h("p", { class: "muted" },
       "El stock se maneja acá y vive en Supabase. Escribí la cantidad que tenés y confirmá: se registra un movimiento por la diferencia ",
-      "(entrada si sube, ajuste si baja), con su historial en la ficha del producto. La hoja WEB solo sirve para la importación inicial."),
-    h("div", { class: "toolbar" }, search, showFilter, importButton),
+      "(entrada si sube, ajuste si baja), con su historial en la ficha del producto."),
+    h("div", { class: "toolbar" }, search, showFilter),
     info,
     notice,
     bar,
     h("div", { class: "table-wrap" },
-      h("table", { class: "table table-edit" },
-        h("thead", {}, h("tr", {}, ["Producto", "Presentación", "Precio", "Stock actual", "Nuevo stock", "Diferencia", "Hoja WEB"].map((t) => h("th", {}, t)))),
+      h("table", { class: "table table-edit table-cards table-stock" },
+        h("thead", {}, h("tr", {}, ["Producto", "Presentación", "Precio", "Stock actual", "Nuevo stock", "Diferencia"].map((t) => h("th", {}, t)))),
         tbody)));
   renderTable();
 }

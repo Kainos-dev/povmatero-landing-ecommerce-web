@@ -6,7 +6,7 @@ import { registerMovement } from "../api/inventory.js";
 import { h, mount, formatPrice, errorMessage, normalizeText, toast } from "../ui.js";
 
 const DEFAULT_REASON = "Carga inicial de stock";
-// Regla actual: solo las yerbas controlan stock (sus cantidades vienen de la hoja WEB).
+// Regla actual: solo las yerbas controlan stock.
 const STOCK_CATEGORY = "yerbas";
 
 function round2(n) {
@@ -426,7 +426,7 @@ export async function renderPriceTable(view) {
   fillCategories();
   mount(view,
     h("div", { class: "page-header" }, h("h2", {}, "Precios y stock")),
-    h("p", { class: "muted" }, "Editá SKU, precios, costos, control de stock y entradas de stock de todas las variantes. Nada se guarda hasta que revisás y confirmás. Para contar stock o hacer la importación inicial desde la hoja, usá la pantalla Stock."),
+    h("p", { class: "muted" }, "Editá SKU, precios, costos, control de stock y entradas de stock de todas las variantes. Nada se guarda hasta que revisás y confirmás. Para contar stock, usá la pantalla Stock."),
     h("div", { class: "toolbar" }, search, categoryFilter, showFilter, ruleButton),
     info,
     notice,
