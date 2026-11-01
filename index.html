@@ -20,10 +20,12 @@
        en las páginas de producto. El fondo del hero solo se precarga en la portada. -->
   <script>
     (function () {
-      var d = document.documentElement, product = /^\/producto\/[a-z0-9-]+\/?$/.test(location.pathname), seen = false;
+      var d = document.documentElement, product = /^\/producto\/[a-z0-9-]+\/?$/.test(location.pathname),
+          account = /^\/cuenta\/?$/.test(location.pathname), seen = false;
       try { seen = !!sessionStorage.getItem("povmatero-intro-seen"); } catch (e) {}
-      if (product || seen) d.classList.add("intro-seen");
+      if (product || account || seen) d.classList.add("intro-seen");
       if (product) { d.classList.add("route-product"); return; }
+      if (account) { d.classList.add("route-account"); return; }
       [["/images/fondoDesktop.webp", "(min-width: 768px)"], ["/images/fondoMobile.webp", "(max-width: 767px)"]].forEach(function (x) {
         var l = document.createElement("link");
         l.rel = "preload"; l.as = "image"; l.type = "image/webp"; l.href = x[0]; l.media = x[1];
@@ -61,6 +63,7 @@
   <link rel="stylesheet" href="/css/components/lightbox.css">
   <link rel="stylesheet" href="/css/pages/productPage.css">
   <link rel="stylesheet" href="/css/pages/product.css">
+  <link rel="stylesheet" href="/css/pages/account.css">
   <link rel="stylesheet" href="/css/pages/sobreNosotros.css">
   <link rel="stylesheet" href="/css/responsive/responsive.css">
 
@@ -246,6 +249,15 @@
   </main>
 
   <!-- =====================
+       MI CUENTA (/cuenta; la arma js/components/accountPage.js)
+  ===================== -->
+  <main class="acc-page" id="accountPage" aria-hidden="true">
+    <div class="acc-inner" id="accountPageBody">
+      <p class="acc-loading" role="status">Cargando tu cuenta…</p>
+    </div>
+  </main>
+
+  <!-- =====================
        PRODUCT MODAL
   ===================== -->
   <div class="modal-overlay" id="modalOverlay" role="dialog" aria-modal="true" aria-label="Detalle del producto">
@@ -288,6 +300,7 @@
         </svg>
         Enviar pedido por WhatsApp
       </button>
+      <p class="cart-order-note" id="cartOrderNote" role="status" hidden></p>
       <p class="cart-empty-msg" id="cartEmptyMsg">Tu carrito está vacío.</p>
     </div>
 

@@ -18,6 +18,7 @@ export function initUI() {
     cartCount: document.getElementById("cartCount"),
     cartEmptyMsg: document.getElementById("cartEmptyMsg"),
     whatsappBtn: document.getElementById("whatsappBtn"),
+    cartOrderNote: document.getElementById("cartOrderNote"),
 
     filterChips: document.querySelectorAll(".filter-chip"),
     filtersToggle: document.getElementById("filtersToggle"),
@@ -59,7 +60,7 @@ export function showToast(message) {
 // Ir a una sección de la portada desde cualquier página: en la portada se
 // desplaza; desde una página de producto, js/router.js vuelve primero al inicio.
 export function goToHomeSection(section) {
-  if (document.documentElement.classList.contains("route-product")) {
+  if ((document.documentElement.classList.contains("route-product") || document.documentElement.classList.contains("route-account"))) {
     document.dispatchEvent(new CustomEvent("povmatero:go-home", { detail: { section } }));
   } else {
     scrollToUnderHeader(document.getElementById(section));

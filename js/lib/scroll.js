@@ -91,7 +91,7 @@ export function enhanceAnchorLinks() {
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     // En una página de producto las secciones de la portada no están a la
     // vista: esos enlaces los resuelve js/router.js (vuelve al inicio primero).
-    if (document.documentElement.classList.contains("route-product")) return;
+    if ((document.documentElement.classList.contains("route-product") || document.documentElement.classList.contains("route-account"))) return;
     const link = e.target.closest('a[href^="#"]');
     const id = link?.getAttribute("href").slice(1);
     if (!id) return;

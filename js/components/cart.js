@@ -1,5 +1,6 @@
 import { escapeHtml } from "../lib/html.js";
 import { optimizedSrc, withFallback } from "../lib/images.js";
+import { hasStoredSession } from "../lib/session.js";
 
 // La foto del carrito se ve a 72 px: alcanza con una versión chica.
 const CART_IMAGE_WIDTH = 256;
@@ -99,6 +100,7 @@ export function initCart(UI) {
 
     // estado vacío
     UI.cartEmptyMsg.classList.toggle("hidden", cart.length > 0);
+    renderGuestHint();
 
     save();
   }
@@ -163,29 +165,108 @@ export function initCart(UI) {
   }
 
   // WHATSAPP
-  function sendWhatsApp() {
-
-    if (!cart.length) return;
-
-    const lines = cart.map(item => {
-      return `• ${item.name}${
-        item.variant ? ` (${item.variant})` : ""
-      } x${item.qty} — ${formatPrice(item.price * item.qty)}`;
-    });
-
-    const message = [
+  // Mensaje del pedido. Con "order" (pedido ya registrado en la cuenta) se usan
+  // las líneas y el total que devolvió la base y se agrega el número de pedido.
+  function buildMessage(order = null) {
+    const lines = order
+      ? order.items.map(i => `• ${i.product_name}${i.variant_name ? ` (${i.variant_name})` : ""} x${i.quantity} — ${formatPrice(Number(i.line_total))}`)
+      : cart.map(item => `• ${item.name}${item.variant ? ` (${item.variant})` : ""} x${item.qty} — ${formatPrice(item.price * item.qty)}`);
+    return [
       "Hola! Quiero hacer este pedido:",
+      ...(order ? [`Pedido #${order.id}`] : []),
       "",
       ...lines,
       "",
-      `Total: ${formatPrice(getCartTotal())}`,
+      `Total: ${formatPrice(order ? Number(order.total) : getCartTotal())}`,
       "",
       "¿Podrías confirmarme disponibilidad?"
     ].join("\n");
+  }
 
-    const url = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
+  const whatsappUrl = (message) => `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
 
-    window.open(url, "_blank");
+  // Con sesión iniciada, el pedido se registra en la cuenta (Mi cuenta › Mis
+  // pedidos) antes de abrir WhatsApp. Es una solicitud: no queda confirmado ni
+  // pagado. El cliente y los precios los pone la base, no este navegador.
+  async function registerOrder() {
+    const api = await import("../lib/customerAuth.js");
+    const session = await api.getSession();
+    if (!session) return null;
+    return api.createOrder(cart.map(i => ({ product_id: i.id, variant: i.variant ?? null, quantity: i.qty })));
+  }
+
+  const withTimeout = (promise, ms) => Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), ms)),
+  ]);
+
+  function showOrderNote(html) {
+    if (!UI.cartOrderNote) return;
+    UI.cartOrderNote.innerHTML = html;
+    UI.cartOrderNote.hidden = !html;
+  }
+
+  // Sin sesión: una línea discreta para invitar a ingresar (así el pedido queda
+  // guardado en la cuenta). No cambia nada del envío por WhatsApp.
+  let orderShown = false;
+  function renderGuestHint() {
+    if (orderShown || !UI.cartOrderNote) return;
+    showOrderNote(cart.length && !hasStoredSession()
+      ? `<button type="button" class="cart-note-link" data-cart-login>Ingresá a tu cuenta</button> y tus pedidos quedan guardados en «Mi cuenta».`
+      : "");
+  }
+
+  UI.cartOrderNote?.addEventListener("click", (e) => {
+    const closeCart = () => { UI.cartPanel.classList.remove("open"); UI.cartOverlay.classList.remove("open"); };
+    if (e.target.closest("[data-cart-login]")) {
+      closeCart();
+      document.dispatchEvent(new CustomEvent("povmatero:account-login", { detail: { mode: "login" } }));
+    } else if (e.target.closest("a")) {
+      closeCart();
+    }
+  });
+
+  let sending = false;
+
+  async function sendWhatsApp() {
+    if (!cart.length || sending) return;
+
+    // Sin sesión: igual que siempre, se abre WhatsApp con el mensaje.
+    if (!hasStoredSession()) {
+      window.open(whatsappUrl(buildMessage()), "_blank");
+      return;
+    }
+
+    // Con sesión: la pestaña se abre ya (si se abriera después de esperar a la
+    // base, el navegador la bloquearía) y se completa al tener el pedido.
+    const win = window.open("", "_blank");
+    try { win?.document.write("<title>WhatsApp</title><p style=\"font-family:sans-serif;padding:24px\">Abriendo WhatsApp…</p>"); } catch { /* nada */ }
+    sending = true;
+    UI.whatsappBtn.disabled = true;
+
+    let order = null;
+    try {
+      order = await withTimeout(registerOrder(), 6000);
+    } catch (err) {
+      // Si no se pudo registrar, el pedido se envía igual (sin número): la venta
+      // nunca depende de la base.
+      console.warn("No se pudo registrar el pedido en la cuenta.", err);
+    }
+
+    const url = whatsappUrl(buildMessage(order));
+    if (win && !win.closed) {
+      try { win.opener = null; } catch { /* nada */ }
+      win.location.href = url;
+    } else {
+      window.location.href = url;
+    }
+
+    orderShown = Boolean(order);
+    showOrderNote(order
+      ? `Pedido #${escapeHtml(String(order.id))} guardado en <a href="/cuenta?seccion=pedidos">Mi cuenta</a>. Es una solicitud: se confirma por WhatsApp.`
+      : "");
+    sending = false;
+    UI.whatsappBtn.disabled = false;
   }
 
   // eventos

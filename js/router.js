@@ -1,5 +1,5 @@
-// Navegación de la tienda: portada (catálogo) y páginas de producto
-// (/producto/<slug>) en el mismo documento.
+// Navegación de la tienda: portada (catálogo), páginas de producto
+// (/producto/<slug>) y «Mi cuenta» (/cuenta), en el mismo documento.
 //
 // Ir y volver de un producto no recarga la página: el catálogo queda tal cual
 // (categoría, orden de las cards) y al volver se recupera la posición de scroll.
@@ -22,6 +22,11 @@ const RELATED_SIZES = "(min-width: 1024px) 21vw, (min-width: 640px) 30vw, 72vw";
 export function slugFromPath(pathname = location.pathname) {
   return pathname.match(PRODUCT_RE)?.[1] ?? null;
 }
+
+const ACCOUNT_RE = /^\/cuenta\/?$/;
+export const isAccountPath = (pathname = location.pathname) => ACCOUNT_RE.test(pathname);
+// ¿Una página que no es la portada? (producto o cuenta)
+const isSubpage = (pathname = location.pathname) => Boolean(slugFromPath(pathname)) || isAccountPath(pathname);
 
 // ---------- Metadatos (título, descripción, canónica, Open Graph) ----------
 function meta(selector, attr, key) {
@@ -66,6 +71,9 @@ export function initRouter({ cart }) {
   const track = document.getElementById("pdpRelatedTrack");
   const prevBtn = related?.querySelector(".pdp-related-arrow.prev");
   const nextBtn = related?.querySelector(".pdp-related-arrow.next");
+  const accountPage = document.getElementById("accountPage");
+  const accountBody = document.getElementById("accountPageBody");
+  let accountModule = null;   // se carga la primera vez que se entra a /cuenta
   if (!page || !detail) return { goHome: () => {} };
 
   let catalogPromise = null;
@@ -115,16 +123,47 @@ export function initRouter({ cart }) {
   }
 
   // ---------- Vistas ----------
+  function leaveAccount() {
+    if (!html.classList.contains("route-account")) return;
+    html.classList.remove("route-account");
+    accountPage?.setAttribute("aria-hidden", "true");
+    accountModule?.leaveAccountPage();
+  }
+
   function showHomeView() {
     closeLightbox();
     galleryNav = null;
+    leaveAccount();
     html.classList.remove("route-product");
     page.setAttribute("aria-hidden", "true");
     applyHomeMeta();
   }
 
+  async function showAccountView(notice = null) {
+    closeLightbox();
+    galleryNav = null;
+    html.classList.remove("route-product");
+    page.setAttribute("aria-hidden", "true");
+    html.classList.add("route-account");
+    accountPage?.removeAttribute("aria-hidden");
+    window.scrollTo({ top: 0, behavior: "instant" });
+    document.title = "Mi cuenta — povmatero";
+    setMeta("robots", "noindex");
+    if (!accountBody) return;
+    try {
+      accountModule ??= await import("./components/accountPage.js");
+    } catch (err) {
+      console.error(err);
+      accountBody.innerHTML = `<p class="acc-loading">No pudimos cargar tu cuenta. Probá recargar la página.</p>`;
+      return;
+    }
+    if (!isAccountPath()) return;   // se navegó a otra cosa mientras cargaba
+    accountModule.renderAccountPage(accountBody, { notice });
+  }
+
   async function showProductView(slug) {
     closeLightbox();
+    leaveAccount();
     html.classList.add("route-product");
     page.removeAttribute("aria-hidden");
     window.scrollTo({ top: 0, behavior: "instant" });
@@ -168,7 +207,8 @@ export function initRouter({ cart }) {
   }
 
   // ---------- Navegación ----------
-  function render() {
+  function render(notice = null) {
+    if (isAccountPath()) return showAccountView(notice);
     const slug = slugFromPath();
     if (slug) return showProductView(slug);
     showHomeView();
@@ -178,21 +218,21 @@ export function initRouter({ cart }) {
 
   // Guarda la posición del catálogo antes de salir de la portada.
   function rememberScroll() {
-    if (!slugFromPath()) history.replaceState({ ...(history.state ?? {}), scrollY: window.scrollY }, "");
+    if (!isSubpage()) history.replaceState({ ...(history.state ?? {}), scrollY: window.scrollY }, "");
   }
 
-  function navigate(path) {
-    if (path === location.pathname) return;
+  function navigate(path, { notice = null } = {}) {
+    if (path === location.pathname + location.search) { if (notice) render(notice); return; }
     rememberScroll();
-    // depth: cuántas páginas de producto se recorrieron desde el catálogo.
-    const depth = slugFromPath() ? (history.state?.depth ?? 0) + 1 : 1;
-    history.pushState({ depth, fromCatalog: Boolean(slugFromPath()) ? history.state?.fromCatalog : true }, "", path);
-    render();
+    // depth: cuántas páginas se recorrieron desde el catálogo.
+    const depth = isSubpage() ? (history.state?.depth ?? 0) + 1 : 1;
+    history.pushState({ depth, fromCatalog: isSubpage() ? history.state?.fromCatalog : true }, "", path);
+    render(notice);
   }
 
   // Volver a la portada; "section" = id al que ir (p. ej. "productos").
   function goHome({ section = "productos" } = {}) {
-    const fromProduct = Boolean(slugFromPath());
+    const fromProduct = isSubpage();
     if (fromProduct) {
       history.pushState({}, "", "/");
       showHomeView();
@@ -232,14 +272,14 @@ export function initRouter({ cart }) {
     }
     const url = new URL(link.href, location.href);
     if (url.origin !== location.origin) return;
-    if (slugFromPath(url.pathname)) {
+    if (slugFromPath(url.pathname) || isAccountPath(url.pathname)) {
       e.preventDefault();
-      navigate(url.pathname);
+      navigate(url.pathname + url.search);
       return;
     }
-    // Desde una página de producto: enlaces a la portada (logo «/», «#hero»,
-    // «#productos»…) vuelven al inicio y van a la sección pedida.
-    if (slugFromPath() && (url.pathname === "/" || url.pathname === "/index.html" || link.getAttribute("href").startsWith("#"))) {
+    // Desde una página de producto o de cuenta: enlaces a la portada (logo «/»,
+    // «#hero», «#productos»…) vuelven al inicio y van a la sección pedida.
+    if (isSubpage() && (url.pathname === "/" || url.pathname === "/index.html" || link.getAttribute("href").startsWith("#"))) {
       e.preventDefault();
       const id = url.hash.slice(1);
       goHome({ section: id || "hero" });
@@ -249,7 +289,12 @@ export function initRouter({ cart }) {
   // Pedido de otros módulos (menú «Productos», pie): ir a una sección de la portada.
   document.addEventListener("povmatero:go-home", (e) => goHome({ section: e.detail?.section ?? "productos" }));
 
-  window.addEventListener("popstate", render);
+  // Pedido de otros módulos (ícono de cuenta, carrito): ir a una página.
+  document.addEventListener("povmatero:navigate", (e) => {
+    if (e.detail?.path) navigate(e.detail.path, { notice: e.detail.notice ?? null });
+  });
+
+  window.addEventListener("popstate", () => render());
 
   // ← → recorren las fotos en la página de producto (como en el modal).
   document.addEventListener("keydown", (e) => {
@@ -267,6 +312,7 @@ export function initRouter({ cart }) {
       render();
     },
     goHome,
+    navigate,
     isProductView: () => Boolean(slugFromPath()),
   };
 }

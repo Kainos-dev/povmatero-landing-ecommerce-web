@@ -99,6 +99,43 @@ export async function setMarketingOptIn(userId, optIn) {
   return data.marketing_opt_in;
 }
 
+// «Mis datos»: nombre, apellido y teléfono (los únicos datos del perfil que el
+// cliente puede cambiar; la base no deja tocar el email ni las fechas).
+// La RLS solo permite actualizar la fila propia.
+export async function updateProfile(userId, { firstName, lastName, phone }) {
+  const { data, error } = await supabase
+    .from("customer_profiles")
+    .update({ first_name: firstName, last_name: lastName, phone: phone || null })
+    .eq("user_id", userId)
+    .select("first_name, last_name, phone, email, marketing_opt_in")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("profile_not_found");
+  return data;
+}
+
+// «Mis pedidos»: la RLS devuelve solo los pedidos de la cuenta con sesión.
+export async function listMyOrders() {
+  const { data, error } = await supabase
+    .from("orders")
+    .select("id, total, item_count, created_at, order_items (product_name, variant_name, unit_price, quantity, line_total)")
+    .order("created_at", { ascending: false })
+    .order("id", { referencedTable: "order_items", ascending: true })
+    .limit(50);
+  if (error) throw error;
+  return data ?? [];
+}
+
+// Registra la solicitud de pedido antes de abrir WhatsApp. El cliente y los
+// precios los toma la base (ver la migración 20261103000000); acá solo viaja qué
+// producto, qué presentación y cuántas unidades.
+// items: [{ product_id, variant (nombre o null), quantity }]
+export async function createOrder(items) {
+  const { data, error } = await supabase.rpc("create_order", { items });
+  if (error) throw error;
+  return data;   // { id, total, item_count, items: [{ product_name, variant_name, unit_price, quantity, line_total }] }
+}
+
 // Solo para mostrar el acceso al panel. La base vuelve a verificarlo en cada
 // acción del panel (private.is_admin()), así que no se puede falsear desde acá.
 export async function isAdmin(userId) {

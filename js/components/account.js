@@ -1,8 +1,11 @@
-// Modal «Mi cuenta»: registro, ingreso, recuperación de contraseña y datos del
-// cliente. La lógica de Supabase vive en ../lib/customerAuth.js y se carga recién
+// Ícono de cuenta + modal de acceso: ingreso, registro y recuperación de
+// contraseña. Con la sesión iniciada, el ícono lleva a la página «Mi cuenta»
+// (/cuenta, ver accountPage.js), donde están los datos, las preferencias de
+// novedades y los pedidos.
+// La lógica de Supabase vive en ../lib/customerAuth.js y se carga recién
 // cuando hace falta (la tienda no espera a supabase-js para mostrarse).
 import { escapeHtml } from "../lib/html.js";
-import { SUPABASE_URL } from "../lib/supabaseConfig.js";
+import { SESSION_KEY, hasStoredSession } from "../lib/session.js";
 
 // Casilla de novedades: marcada por defecto (pedido del negocio). Se guarda
 // además CÓMO quedó marcada (premarcada sin tocar / marcada por la persona /
@@ -15,9 +18,6 @@ const CONTACT_EMAIL = "povmatero@gmail.com";
 const PASSWORD_MIN = 8;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const PHONE_RE = /^\+?[\d\s()-]{8,25}$/;
-
-// Clave en la que supabase-js guarda la sesión (sb-<proyecto>-auth-token).
-const SESSION_KEY = `sb-${new URL(SUPABASE_URL).hostname.split(".")[0]}-auth-token`;
 
 const EYE_LABEL = { show: "Mostrar", hide: "Ocultar" };
 
@@ -40,19 +40,35 @@ export function initAccount() {
   };
 
   // ---------- Indicador de sesión en el ícono ----------
-  function hasStoredSession() {
-    try { return Boolean(localStorage.getItem(SESSION_KEY)); } catch { return false; }
-  }
   function setSignedIn(value) {
     button.classList.toggle("is-signed-in", value);
     button.setAttribute("aria-label", value ? "Mi cuenta (sesión iniciada)" : "Ingresar o crear cuenta");
+    if (value) button.removeAttribute("aria-haspopup");
+    else button.setAttribute("aria-haspopup", "dialog");
   }
   setSignedIn(hasStoredSession());
+
+  // Ir a «Mi cuenta» (lo resuelve js/router.js sin recargar la página).
+  function goToAccount(notice = null, section = null) {
+    close();
+    setSignedIn(true);
+    document.dispatchEvent(new CustomEvent("povmatero:navigate", {
+      detail: { path: section ? `/cuenta?seccion=${section}` : "/cuenta", notice },
+    }));
+  }
 
   // Se adelanta la descarga al acercar el mouse o el dedo.
   button.addEventListener("pointerenter", () => loadApi().catch(() => {}), { once: true });
   button.addEventListener("touchstart", () => loadApi().catch(() => {}), { once: true, passive: true });
-  button.addEventListener("click", () => open());
+  // Con sesión: a «Mi cuenta». Sin sesión: el modal para ingresar.
+  // (Si la sesión guardada ya no vale, la página ofrece ingresar de nuevo.)
+  button.addEventListener("click", () => (hasStoredSession() ? goToAccount() : open()));
+
+  // Pedidos de otras partes de la tienda (página «Mi cuenta», carrito).
+  document.addEventListener("povmatero:account-login", (e) => {
+    open(() => showAuth(e.detail?.mode === "signup" ? "signup" : "login"));
+  });
+  document.addEventListener("povmatero:signed-out", () => setSignedIn(false));
 
   // ---------- Abrir / cerrar ----------
   function isOpen() { return modal.classList.contains("open"); }
@@ -121,7 +137,7 @@ export function initAccount() {
       const session = await api.getSession();
       if (!stillCurrent(token)) return;
       setSignedIn(Boolean(session));
-      if (session) await showAccount(session);
+      if (session) goToAccount();
       else showAuth("login");
     } catch (err) {
       console.error(err);
@@ -287,10 +303,9 @@ export function initAccount() {
       setBusy(form, true, "Ingresando…");
       try {
         const api = await loadApi();
-        const session = await api.signIn(form.email.value.trim(), form.password.value);
+        await api.signIn(form.email.value.trim(), form.password.value);
         form.password.value = "";
-        setSignedIn(true);
-        await showAccount(session, { message: "¡Hola de nuevo! Ya ingresaste.", ok: true });
+        goToAccount({ message: "¡Hola de nuevo! Ya ingresaste.", ok: true });
       } catch (err) {
         console.warn(err);
         const api = await loadApi().catch(() => null);
@@ -376,8 +391,7 @@ export function initAccount() {
           return;
         }
         if (result.session) {
-          setSignedIn(true);
-          await showAccount(result.session, { message: "¡Listo! Tu cuenta ya está creada.", ok: true });
+          goToAccount({ message: "¡Listo! Tu cuenta ya está creada.", ok: true });
           return;
         }
         showCheckEmail(emailValue);
@@ -473,69 +487,13 @@ export function initAccount() {
         const api = await loadApi();
         await api.updatePassword(form.password.value);
         const session = await api.getSession();
-        if (session) await showAccount(session, { message: "Listo: tu contraseña quedó actualizada.", ok: true });
+        if (session) goToAccount({ message: "Listo: tu contraseña quedó actualizada.", ok: true });
         else showAuth("login", { notice: { message: "Contraseña actualizada. Ya podés ingresar.", ok: true } });
       } catch (err) {
         const api = await loadApi().catch(() => null);
         showAlert(form, api ? api.authErrorMessage(err) : "No pudimos conectarnos. Intentá de nuevo.");
         setBusy(form, false);
       }
-    };
-  }
-
-  async function showAccount(session, notice = null) {
-    const token = render(`<p class="account-loading" role="status">Cargando tu cuenta…</p>`, ".account-close");
-    const api = await loadApi();
-    const user = session.user;
-    const [profile, admin] = await Promise.all([api.getProfile(user.id), api.isAdmin(user.id)]);
-    if (!stillCurrent(token)) return;
-
-    const name = profile?.first_name?.trim();
-    render(`
-      ${header(name ? `Hola, <strong>${escapeHtml(name)}</strong>.` : "Hola.")}
-      <div class="account-profile">
-        ${notice ? `<p class="account-alert${notice.ok ? " ok" : ""}" role="status">${escapeHtml(notice.message)}</p>` : ""}
-        <p class="account-email">${escapeHtml(user.email ?? "")}</p>
-        ${profile ? `
-          <div class="account-card">
-            <label class="account-check">
-              <input type="checkbox" name="marketing"${profile.marketing_opt_in ? " checked" : ""} />
-              <span>${escapeHtml(MARKETING_TEXT)}</span>
-            </label>
-            <p class="account-status" role="status" aria-live="polite"></p>
-          </div>
-        ` : ""}
-        ${admin ? `<a class="account-secondary account-admin" href="/admin/">Ir al panel de administración</a>` : ""}
-        <button type="button" class="account-secondary" data-logout>Cerrar sesión</button>
-      </div>
-    `, admin ? ".account-admin" : "[data-logout]");
-
-    const marketing = body.querySelector('input[name="marketing"]');
-    const status = body.querySelector(".account-status");
-    if (marketing) {
-      marketing.onchange = async () => {
-        const wanted = marketing.checked;
-        marketing.disabled = true;
-        status.textContent = "Guardando…";
-        try {
-          const saved = await api.setMarketingOptIn(user.id, wanted);
-          marketing.checked = saved;
-          status.textContent = saved ? "Listo: vas a recibir nuestras novedades." : "Listo: no vas a recibir más novedades.";
-        } catch (err) {
-          console.warn(err);
-          marketing.checked = !wanted;
-          status.textContent = "No pudimos guardar el cambio. Intentá de nuevo.";
-        } finally {
-          marketing.disabled = false;
-        }
-      };
-    }
-
-    body.querySelector("[data-logout]").onclick = async (e) => {
-      e.currentTarget.disabled = true;
-      try { await api.signOut(); } catch (err) { console.warn(err); }
-      setSignedIn(false);
-      showAuth("login", { notice: { message: "Cerraste sesión.", ok: true } });
     };
   }
 
@@ -559,7 +517,8 @@ export function initAccount() {
       } else {
         const session = await api.getSession();
         const message = result.type === "signup" ? "¡Listo! Tu email quedó confirmado y ya ingresaste." : "Ya ingresaste.";
-        open(() => (session ? showAccount(session, { message, ok: true }) : showAuth("login")));
+        if (session) goToAccount({ message, ok: true });
+        else open(() => showAuth("login"));
       }
     } catch (err) {
       console.error(err);

@@ -1,0 +1,249 @@
+/* =========================
+   MI CUENTA (/cuenta)
+   Página blanca con tarjetas negras, como la ficha de producto.
+   Los campos y botones de formulario reutilizan los del modal de cuenta
+   (css/components/account.css), pensados para fondo negro.
+========================= */
+
+/* Qué se ve según la ruta (la clase la pone el <head> y js/router.js) */
+html:not(.route-account) .acc-page { display: none; }
+.route-account .home-only,
+.route-account .pdp { display: none !important; }
+.route-account .site-header { background: #000; }
+
+.acc-page {
+  background: var(--bg);
+  color: #000;
+  padding: 92px 24px 16px; /* + 8em del footer */
+  min-height: 70vh;
+}
+
+.acc-inner {
+  max-width: 760px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.acc-loading {
+  padding: 64px 0;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+}
+
+/* ---------- Encabezado ---------- */
+.acc-head { display: flex; flex-direction: column; gap: 6px; }
+.acc-eyebrow {
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.15em;
+  color: var(--text-muted);
+}
+.acc-title {
+  font-size: clamp(28px, 5vw, 40px);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  color: #000;
+}
+.acc-lead { font-size: var(--font-size-sm); color: #555; overflow-wrap: anywhere; }
+
+.acc-notice {
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: #f4f4f4;
+  font-size: var(--font-size-sm);
+  color: #000;
+}
+.acc-notice.ok { border-left: 3px solid var(--details); }
+
+/* ---------- Pestañas ---------- */
+.acc-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #e3e3e3;
+  border-radius: 14px;
+  background: #fff;
+}
+.acc-tab {
+  padding: 11px 8px;
+  border-radius: 10px;
+  font-family: var(--font);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: #666;
+  background: none;
+  transition: background var(--t), color var(--t);
+}
+.acc-tab:hover { color: #000; }
+.acc-tab[aria-selected="true"] { background: #000; color: #fff; }
+.acc-tab:focus-visible { outline: var(--focus-outline); outline-offset: 2px; }
+
+/* ---------- Tarjetas negras ---------- */
+.acc-card {
+  background: #000;
+  color: var(--text);
+  border-radius: 20px;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.acc-card-head { display: flex; flex-direction: column; gap: 4px; }
+.acc-card h2 {
+  font-size: 0.9em;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.acc-muted { font-size: var(--font-size-sm); color: var(--text-muted); line-height: 1.5; }
+.acc-form .account-submit { align-self: flex-start; min-width: 200px; }
+.acc-static {
+  padding: 12px 0 2px;
+  font-size: var(--font-size-base);
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Interruptor de novedades ---------- */
+.acc-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  cursor: pointer;
+}
+.acc-switch-text { display: flex; flex-direction: column; gap: 4px; }
+.acc-switch-text strong { font-weight: 600; font-size: var(--font-size-base); }
+.acc-switch-text span { font-size: var(--font-size-sm); color: var(--text-muted); line-height: 1.5; }
+.acc-switch { position: relative; flex-shrink: 0; width: 52px; height: 30px; }
+.acc-switch input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 1;
+}
+.acc-switch-track {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  transition: background var(--t), border-color var(--t);
+}
+.acc-switch-track::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #8a8a8a;
+  transition: transform var(--t), background var(--t);
+}
+.acc-switch input:checked + .acc-switch-track { background: #fff; border-color: #fff; }
+.acc-switch input:checked + .acc-switch-track::after { transform: translateX(22px); background: #000; }
+.acc-switch input:focus-visible + .acc-switch-track { outline: var(--focus-outline); outline-offset: 3px; box-shadow: var(--focus-ring); }
+.acc-switch input:disabled + .acc-switch-track { opacity: 0.6; }
+.acc-switch-state { font-size: var(--font-size-sm); color: var(--text-secondary); min-height: 1.4em; }
+
+/* ---------- Pedidos ---------- */
+.acc-orders-note { font-size: var(--font-size-sm); color: #555; }
+.acc-orders { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.acc-order { gap: 14px; }
+.acc-order-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.acc-order-head h2 { margin-bottom: 4px; }
+.acc-order-tag {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border: 1px solid #333;
+  border-radius: 999px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.acc-order-items {
+  list-style: none;
+  margin: 0;
+  padding: 14px 0 0;
+  border-top: 1px solid #1f1f1f;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.acc-order-items li {
+  display: grid;
+  grid-template-columns: 2.6em minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: baseline;
+  font-size: var(--font-size-sm);
+}
+.acc-qty { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.acc-item-name { color: var(--text); overflow-wrap: anywhere; }
+.acc-item-name small { display: block; color: var(--text-muted); font-size: 12px; margin-top: 2px; }
+.acc-item-total { font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+.acc-order-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding-top: 14px;
+  border-top: 1px solid #1f1f1f;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+.acc-order-total strong { font-size: var(--font-size-lg); color: var(--text); font-variant-numeric: tabular-nums; }
+.acc-orders-empty { align-items: flex-start; }
+.acc-link-btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+
+/* ---------- Acciones de la página (sobre blanco) ---------- */
+.acc-actions,
+.acc-foot { display: flex; flex-wrap: wrap; gap: 10px; }
+.acc-foot { padding-top: 8px; border-top: 1px solid #ececec; }
+.acc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  padding: 12px 22px;
+  border-radius: 12px;
+  border: 1px solid #000;
+  background: #000;
+  color: #fff;
+  font-family: var(--font);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background var(--t), color var(--t), border-color var(--t);
+}
+.acc-btn:hover { background: var(--details); border-color: var(--details); }
+.acc-btn-ghost { background: #fff; color: #000; border-color: #d6d6d6; }
+.acc-btn-ghost:hover { background: #fff; border-color: #000; }
+.acc-btn:disabled { opacity: 0.6; cursor: progress; }
+.acc-btn:focus-visible { outline: var(--focus-outline); outline-offset: 2px; }
+.acc-empty { display: flex; flex-direction: column; gap: 14px; align-items: flex-start; padding: 48px 0; }
+
+/* ---------- Celular ---------- */
+@media (max-width: 768px) {
+  .acc-page { padding: 84px 16px 16px; }
+  .acc-inner { gap: 16px; }
+  .acc-card { padding: 22px 18px; border-radius: 16px; }
+  .acc-form .account-submit { align-self: stretch; }
+  .acc-actions .acc-btn,
+  .acc-foot .acc-btn { flex: 1 1 100%; }
+  .acc-tab { padding: 11px 4px; font-size: 12.5px; }
+}
+@media (max-width: 420px) {
+  .acc-form .account-row { grid-template-columns: 1fr; }
+}

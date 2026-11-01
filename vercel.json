@@ -58,6 +58,10 @@
     {
       "source": "/producto/:slug",
       "destination": "/index.html"
+    },
+    {
+      "source": "/cuenta",
+      "destination": "/index.html"
     }
   ]
 }
