@@ -1,6 +1,6 @@
 import { escapeHtml } from "../lib/html.js";
 import { optimizedSrc, withFallback } from "../lib/images.js";
-import { hasStoredSession } from "../lib/session.js";
+import { hasStoredSession, storedUserId, SESSION_KEY } from "../lib/session.js";
 import { track } from "../lib/track.js";
 
 // La foto del carrito se ve a 72 px: alcanza con una versión chica.
@@ -8,20 +8,69 @@ const CART_IMAGE_WIDTH = 256;
 
 // El carrito se guarda en este navegador (producto, presentación y cantidad) y,
 // al volver, se reconstruye con el catálogo actual: precios, fotos y stock al día.
-const STORAGE_KEY = "povmatero-cart-v1";
+//
+// Hay un carrito por dueño: uno de invitado y uno por cada cuenta que ingresó en
+// este navegador. Así nunca se ve el carrito de otra persona:
+//   * al ingresar o registrarse desde la tienda, lo que había como invitado se
+//     suma al carrito de la cuenta (y el de invitado queda vacío);
+//   * al cerrar sesión se ve el carrito de invitado; el de la cuenta queda
+//     guardado para la próxima vez;
+//   * si la sesión cambia por otro lado (el panel, otra pestaña), solo se cambia
+//     de carrito, sin sumar nada (un admin no hereda el carrito de nadie).
+const CART_PREFIX = "povmatero-cart-v2:";
+const LEGACY_KEY = "povmatero-cart-v1";   // carrito único de antes (sin dueño)
 
-function readSaved() {
+const cartKey = (owner) => `${CART_PREFIX}${owner ? `u:${owner}` : "guest"}`;
+
+function readSaved(key) {
   try {
-    const data = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]");
+    const data = JSON.parse(localStorage.getItem(key) ?? "[]");
     return Array.isArray(data) ? data : [];
   } catch {
     return [];
   }
 }
 
+function writeSaved(key, items) {
+  try {
+    if (items.length) localStorage.setItem(key, JSON.stringify(items));
+    else localStorage.removeItem(key);
+  } catch {
+    // Sin almacenamiento disponible (modo privado): el carrito dura lo que la pestaña.
+  }
+}
+
+// Une listas guardadas: el mismo producto y presentación queda en una sola
+// línea con las cantidades sumadas (el stock se controla al rearmar).
+function mergeSaved(...lists) {
+  const lines = new Map();
+  for (const list of lists) {
+    for (const s of list) {
+      const id = Number(s?.id);
+      const qty = Math.floor(Number(s?.qty) || 0);
+      if (!Number.isInteger(id) || qty < 1) continue;
+      const variant = s.variant ?? null;
+      const k = JSON.stringify([id, variant]);
+      const line = lines.get(k);
+      if (line) line.qty += qty;
+      else lines.set(k, { id, variant, qty });
+    }
+  }
+  return [...lines.values()];
+}
+
 export function initCart(UI) {
 
   let cart = [];
+  let products = null;            // catálogo actual (llega con restore)
+  let owner = storedUserId();     // null = invitado
+
+  // El carrito único de antes pasa a quien está usando el navegador ahora.
+  try {
+    const legacy = readSaved(LEGACY_KEY);
+    if (legacy.length) writeSaved(cartKey(owner), mergeSaved(readSaved(cartKey(owner)), legacy));
+    localStorage.removeItem(LEGACY_KEY);
+  } catch { /* sin almacenamiento */ }
 
   const WHATSAPP_NUMBER = "5491160554815";
 
@@ -34,6 +83,11 @@ export function initCart(UI) {
   }
 
   function update() {
+    render();
+    save();
+  }
+
+  function render() {
     UI.cartItems.innerHTML = "";
 
     cart.forEach(item => {
@@ -102,25 +156,22 @@ export function initCart(UI) {
     // estado vacío
     UI.cartEmptyMsg.classList.toggle("hidden", cart.length > 0);
     renderGuestHint();
-
-    save();
   }
 
   function save() {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(cart.map(i => ({ id: i.id, variant: i.variant ?? null, qty: i.qty }))));
-    } catch {
-      // Sin almacenamiento disponible (modo privado): el carrito dura lo que la pestaña.
-    }
+    // Sin catálogo todavía no hay nada armado: no se pisa lo guardado.
+    if (!products) return;
+    writeSaved(cartKey(owner), cart.map(i => ({ id: i.id, variant: i.variant ?? null, qty: i.qty })));
   }
 
-  // Rearma el carrito guardado con los productos publicados de ahora. Lo que ya no
-  // está publicado o no tiene stock se quita; la cantidad se ajusta al stock.
-  function restore(products) {
-    const saved = readSaved();
-    if (!saved.length || cart.length) return;
+  // Rearma el carrito guardado del dueño actual con los productos publicados de
+  // ahora. Lo que ya no está publicado o no tiene stock se quita; la cantidad se
+  // ajusta al stock.
+  function load() {
+    cart = [];
+    if (!products) { render(); return; }
     const byId = new Map(products.map(p => [p.id, p]));
-    for (const s of saved) {
+    for (const s of mergeSaved(readSaved(cartKey(owner)))) {
       const product = byId.get(s.id);
       if (!product) continue;
       let price = product.price, stock = product.stock ?? null, image = product.image;
@@ -140,7 +191,36 @@ export function initCart(UI) {
     update();
   }
 
+  function restore(list) {
+    products = list;
+    load();
+  }
+
+  // ¿Cambió quién tiene la sesión en este navegador? Si cambió, se pasa al
+  // carrito del nuevo dueño. "merge" (solo al ingresar o registrarse desde la
+  // tienda): lo que había como invitado se suma al carrito de la cuenta.
+  // Devuelve true si cambió el carrito.
+  function syncOwner({ merge = false } = {}) {
+    const next = storedUserId();
+    if (next === owner) return false;
+    const previous = owner;
+    owner = next;
+    if (merge && previous === null && next !== null) {
+      const guest = readSaved(cartKey(null));
+      if (guest.length) {
+        writeSaved(cartKey(next), mergeSaved(readSaved(cartKey(next)), guest));
+        writeSaved(cartKey(null), []);
+      }
+    }
+    // El aviso de pedido era del dueño anterior.
+    orderShown = false;
+    showOrderNote("");
+    load();
+    return true;
+  }
+
   function add(product) {
+    syncOwner();
 
     const existing = cart.find(item =>
       item.id === product.id &&
@@ -169,17 +249,19 @@ export function initCart(UI) {
   // WHATSAPP
   // Mensaje del pedido. Con "order" (pedido ya registrado en la cuenta) se usan
   // las líneas y el total que devolvió la base y se agrega el número de pedido.
-  function buildMessage(order = null) {
+  // "items": copia del carrito tomada al tocar «Enviar» (si la sesión cambia
+  // mientras se registra el pedido, no se mezcla con otro carrito).
+  function buildMessage(order = null, items = cart) {
     const lines = order
       ? order.items.map(i => `• ${i.product_name}${i.variant_name ? ` (${i.variant_name})` : ""} x${i.quantity} — ${formatPrice(Number(i.line_total))}`)
-      : cart.map(item => `• ${item.name}${item.variant ? ` (${item.variant})` : ""} x${item.qty} — ${formatPrice(item.price * item.qty)}`);
+      : items.map(item => `• ${item.name}${item.variant ? ` (${item.variant})` : ""} x${item.qty} — ${formatPrice(item.price * item.qty)}`);
     return [
       "Hola! Quiero hacer este pedido:",
       ...(order ? [`Pedido #${order.id}`] : []),
       "",
       ...lines,
       "",
-      `Total: ${formatPrice(order ? Number(order.total) : getCartTotal())}`,
+      `Total: ${formatPrice(order ? Number(order.total) : items.reduce((acc, item) => acc + item.price * item.qty, 0))}`,
       "",
       "¿Podrías confirmarme disponibilidad?"
     ].join("\n");
@@ -190,11 +272,19 @@ export function initCart(UI) {
   // Con sesión iniciada, el pedido se registra en la cuenta (Mi cuenta › Mis
   // pedidos) antes de abrir WhatsApp. Es una solicitud: no queda confirmado ni
   // pagado. El cliente y los precios los pone la base, no este navegador.
-  async function registerOrder() {
+  // "items" y "itemsOwner": el carrito tomado al tocar «Enviar» y de quién era.
+  // Si la sesión ya es de otra cuenta, no se registra nada a su nombre.
+  async function registerOrder(items, itemsOwner) {
     const api = await import("../lib/customerAuth.js");
     const session = await api.getSession();
     if (!session) return null;
-    return api.createOrder(cart.map(i => ({ product_id: i.id, variant: i.variant ?? null, quantity: i.qty })));
+    if (session.user?.id !== itemsOwner) throw Object.assign(new Error("La sesión cambió."), { code: "owner_changed" });
+    return api.createOrder(items.map(i => ({ product_id: i.id, variant: i.variant ?? null, quantity: i.qty })));
+  }
+
+  function sessionChangedNotice() {
+    orderShown = true;
+    showOrderNote("La sesión cambió en este navegador. Revisá el carrito antes de enviar el pedido.");
   }
 
   const withTimeout = (promise, ms) => Promise.race([
@@ -231,12 +321,18 @@ export function initCart(UI) {
   let sending = false;
 
   async function sendWhatsApp() {
-    if (!cart.length || sending) return;
+    if (sending) return;
+    // Si la sesión cambió (por ejemplo, en otra pestaña), primero se muestra el
+    // carrito que corresponde; no se envía nada.
+    if (syncOwner()) { sessionChangedNotice(); return; }
+    if (!cart.length) return;
     track("begin_checkout");
+    const items = cart.map(i => ({ ...i }));
+    const itemsOwner = owner;
 
     // Sin sesión: igual que siempre, se abre WhatsApp con el mensaje.
     if (!hasStoredSession()) {
-      window.open(whatsappUrl(buildMessage()), "_blank");
+      window.open(whatsappUrl(buildMessage(null, items)), "_blank");
       return;
     }
 
@@ -249,14 +345,22 @@ export function initCart(UI) {
 
     let order = null;
     try {
-      order = await withTimeout(registerOrder(), 6000);
+      order = await withTimeout(registerOrder(items, itemsOwner), 6000);
     } catch (err) {
+      if (err?.code === "owner_changed") {
+        try { win?.close(); } catch { /* nada */ }
+        syncOwner();
+        sessionChangedNotice();
+        sending = false;
+        UI.whatsappBtn.disabled = false;
+        return;
+      }
       // Si no se pudo registrar, el pedido se envía igual (sin número): la venta
       // nunca depende de la base.
       console.warn("No se pudo registrar el pedido en la cuenta.", err);
     }
 
-    const url = whatsappUrl(buildMessage(order));
+    const url = whatsappUrl(buildMessage(order, items));
     if (win && !win.closed) {
       try { win.opener = null; } catch { /* nada */ }
       win.location.href = url;
@@ -274,6 +378,7 @@ export function initCart(UI) {
 
   // eventos
   UI.cartBtn.onclick = () => {
+    syncOwner();
     UI.cartPanel.classList.add("open");
     UI.cartOverlay.classList.add("open");
   };
@@ -296,6 +401,18 @@ export function initCart(UI) {
       UI.cartPanel.classList.remove("open");
       UI.cartOverlay.classList.remove("open");
     }
+  });
+
+  // Sesión iniciada o cerrada en esta pestaña (js/components/account.js y
+  // «Mi cuenta»). Solo al ingresar o registrarse se suma el carrito de invitado.
+  document.addEventListener("povmatero:signed-in", () => syncOwner({ merge: true }));
+  document.addEventListener("povmatero:signed-out", () => syncOwner());
+
+  // Otras pestañas (tienda o panel): cambio de sesión o del carrito del dueño actual.
+  window.addEventListener("storage", (e) => {
+    if (e.key === null) { if (!syncOwner()) load(); return; }   // se borró todo
+    if (e.key === SESSION_KEY) syncOwner();
+    else if (e.key === cartKey(owner)) load();
   });
 
   return { add, restore };

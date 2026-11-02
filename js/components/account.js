@@ -63,6 +63,8 @@ export function initAccount() {
   function stayHere(message) {
     close();
     setSignedIn(true);
+    // El carrito suma lo que había como invitado al de esta cuenta (js/components/cart.js).
+    document.dispatchEvent(new CustomEvent("povmatero:signed-in"));
     if (message) showToast(message);
   }
 
