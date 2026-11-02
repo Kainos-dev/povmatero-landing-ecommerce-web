@@ -6,6 +6,7 @@
 // cuando hace falta (la tienda no espera a supabase-js para mostrarse).
 import { escapeHtml } from "../lib/html.js";
 import { SESSION_KEY, hasStoredSession } from "../lib/session.js";
+import { showToast } from "./ui.js";
 
 // Casilla de novedades: marcada por defecto (pedido del negocio). Se guarda
 // además CÓMO quedó marcada (premarcada sin tocar / marcada por la persona /
@@ -55,6 +56,14 @@ export function initAccount() {
     document.dispatchEvent(new CustomEvent("povmatero:navigate", {
       detail: { path: section ? `/cuenta?seccion=${section}` : "/cuenta", notice },
     }));
+  }
+
+  // Después de ingresar o registrarse, la persona sigue en la página donde
+  // estaba (con la sesión iniciada); «Mi cuenta» queda en el ícono.
+  function stayHere(message) {
+    close();
+    setSignedIn(true);
+    if (message) showToast(message);
   }
 
   // Se adelanta la descarga al acercar el mouse o el dedo.
@@ -305,7 +314,7 @@ export function initAccount() {
         const api = await loadApi();
         await api.signIn(form.email.value.trim(), form.password.value);
         form.password.value = "";
-        goToAccount({ message: "¡Hola de nuevo! Ya ingresaste.", ok: true });
+        stayHere("¡Hola de nuevo! Ya ingresaste.");
       } catch (err) {
         console.warn(err);
         const api = await loadApi().catch(() => null);
@@ -391,7 +400,7 @@ export function initAccount() {
           return;
         }
         if (result.session) {
-          goToAccount({ message: "¡Listo! Tu cuenta ya está creada.", ok: true });
+          stayHere("¡Listo! Tu cuenta ya está creada.");
           return;
         }
         showCheckEmail(emailValue);
@@ -487,7 +496,7 @@ export function initAccount() {
         const api = await loadApi();
         await api.updatePassword(form.password.value);
         const session = await api.getSession();
-        if (session) goToAccount({ message: "Listo: tu contraseña quedó actualizada.", ok: true });
+        if (session) stayHere("Listo: tu contraseña quedó actualizada.");
         else showAuth("login", { notice: { message: "Contraseña actualizada. Ya podés ingresar.", ok: true } });
       } catch (err) {
         const api = await loadApi().catch(() => null);
@@ -517,7 +526,7 @@ export function initAccount() {
       } else {
         const session = await api.getSession();
         const message = result.type === "signup" ? "¡Listo! Tu email quedó confirmado y ya ingresaste." : "Ya ingresaste.";
-        if (session) goToAccount({ message, ok: true });
+        if (session) stayHere(message);
         else open(() => showAuth("login"));
       }
     } catch (err) {

@@ -8,10 +8,11 @@
 // volver a loguearse. Los permisos los decide la base (RLS), nunca el navegador.
 import { supabase } from "./supabaseClient.js";
 
-// A dónde vuelve el cliente desde los emails (confirmación y recuperación).
-// Tiene que estar en Supabase → Authentication → URL Configuration → Redirect URLs.
+// A dónde vuelve el cliente desde los emails (confirmación y recuperación): a la
+// misma página de la tienda donde estaba. El dominio tiene que estar en
+// Supabase → Authentication → URL Configuration → Redirect URLs (con /** al final).
 function redirectUrl() {
-  return `${location.origin}/`;
+  return `${location.origin}${location.pathname}${location.search}`;
 }
 
 export async function getSession() {
