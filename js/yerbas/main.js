@@ -3,7 +3,7 @@
 //
 // Datos: js/yerbas/catalog.js (stock = disponible). Carrito: js/yerbas/basket.js
 // (uno por invitado y uno por cuenta). Pedido: js/yerbas/api.js (se carga al enviar).
-import { loadYerbas, productAvailable, isAvailable, availabilityText, OTHER_BRANDS } from "./catalog.js";
+import { loadYerbas, productAvailable, isAvailable, availabilityText, shelfImageFor, OTHER_BRANDS } from "./catalog.js";
 import { createBasket } from "./basket.js";
 import { optimizedSrc, withFallback } from "../lib/images.js";
 import { escapeHtml } from "../lib/html.js";
@@ -61,17 +61,20 @@ function labelColor(product) {
   return LABEL_COLORS[h % LABEL_COLORS.length];
 }
 
-// Un paquete:
-//   * con imagen de góndola (products.shelf_image: PNG vertical 2:3, cargado
-//     desde el panel): el envase entero, sin recortar ni deformar;
-//   * sin ella: paquete genérico (2:3) con la foto del catálogo como frente o,
-//     si tampoco hay, con la marca y el nombre sobre una banda de color.
-// La foto del catálogo nunca se modifica: solo se reutiliza en el genérico.
-function packHtml(product, { size = "" } = {}) {
-  if (product.shelfImage) {
+// Un paquete (góndola, ficha, carrito). Imagen, en este orden:
+//   1. la de la presentación (product_variants.shelf_image), si se pasa «variant»;
+//   2. la general del producto (products.shelf_image);
+//   3. paquete genérico (2:3) con la foto del catálogo como frente o, si
+//      tampoco hay, con la marca y el nombre sobre una banda de color.
+// Las imágenes de góndola son PNG verticales 2:3: se muestran enteras
+// (object-fit: contain), sin recortar ni deformar. La foto del catálogo nunca
+// se modifica: solo se reutiliza en el genérico.
+function packHtml(product, { variant = null, size = "", src = undefined } = {}) {
+  const image = src === undefined ? shelfImageFor(product, variant) : src;
+  if (image) {
     return `
       <span class="y-pack y-pack--shelf ${size}" data-pack-of="${product.id}" data-size="${escapeHtml(size)}">
-        <img class="y-pack-img" src="${escapeHtml(optimizedSrc(product.shelfImage, PACK_WIDTH))}" alt="" loading="lazy" decoding="async" data-src="${escapeHtml(product.shelfImage)}">
+        <img class="y-pack-img" src="${escapeHtml(optimizedSrc(image, PACK_WIDTH))}" alt="" loading="lazy" decoding="async" data-src="${escapeHtml(image)}">
       </span>`;
   }
   return genericPackHtml(product, size);
@@ -96,7 +99,8 @@ function wirePackImages(root) {
   root.querySelectorAll("img.y-pack-img:not([data-wired])").forEach((img) => {
     img.dataset.wired = "1";
     const pack = img.closest(".y-pack");
-    // Si la imagen de góndola no carga (tampoco la original), va el paquete genérico.
+    // Si una imagen de góndola no carga (tampoco la original): la de la
+    // presentación cae a la general del producto y la general, al genérico.
     // (Se escucha antes que withFallback: el primer error es el de la versión
     // optimizada, que withFallback reintenta con la original.)
     if (pack?.classList.contains("y-pack--shelf")) {
@@ -105,8 +109,10 @@ function wirePackImages(root) {
         if (original && img.getAttribute("src") !== original) return;   // withFallback reintenta
         const product = catalog?.products.find((p) => p.id === Number(pack.dataset.packOf));
         if (!product) return;
+        const failed = img.dataset.src;
+        const next = product.shelfImage && product.shelfImage !== failed ? product.shelfImage : null;
         const holder = pack.parentElement;
-        pack.outerHTML = genericPackHtml(product, pack.dataset.size);
+        pack.outerHTML = packHtml(product, { size: pack.dataset.size, src: next });
         if (holder) wirePackImages(holder);
       });
     }
@@ -119,67 +125,90 @@ function wirePackImages(root) {
 // ---------------------------------------------------------------------
 // Góndolas
 // ---------------------------------------------------------------------
-// Ancho del estante en «lugares»: cada presentación ocupa un lugar, así una
-// yerba con 500 g y 1 kg muestra sus dos paquetes juntos.
-function perRow() {
+// Medidas de la góndola según el ancho: W = ancho de un paquete de 1 kg;
+// gap = separación entre yerbas distintas (las presentaciones de una misma
+// yerba van juntas, superpuestas, sin esa separación).
+function shelfLayout() {
   const w = ui.track.clientWidth || window.innerWidth;
-  if (w >= 1100) return 12;
-  if (w >= 820) return 9;
-  if (w >= 560) return 6;
-  return 4;
+  if (w >= 1500) return { key: "xxl", W: 120, gap: 40, pad: 144 };
+  if (w >= 1100) return { key: "xl", W: 108, gap: 32, pad: 144 };
+  if (w >= 820) return { key: "lg", W: 108, gap: 34, pad: 144 };
+  if (w >= 560) return { key: "md", W: 100, gap: 28, pad: 48 };
+  return { key: "sm", W: 92, gap: 22, pad: 44 };
 }
 
-// Reparte las yerbas en estantes sin separar las presentaciones de una misma
-// yerba, con estantes parejos (no uno lleno y otro casi vacío).
-function shelfRows(products, max) {
-  const total = products.reduce((n, p) => n + Math.min(p.variants.length, max), 0);
-  const target = Math.ceil(total / Math.ceil(total / max));
+// Composición de un grupo de dos: el de menos gramos adelante (más chico) y el
+// otro detrás, apenas elevado y corrido en diagonal. La superposición es leve
+// (≈ un cuarto del paquete de atrás), así se ven los dos enteros.
+const SHELVES_MAX = 1280;     // igual que .y-shelves { max-width } en yerbas.css
+const FRONT_SCALE = 0.82;      // 500 g frente a 1 kg
+const FRONT_LEFT = 0.74;       // dónde empieza el de adelante, en anchos de W
+const groupUnits = (n) => (n === 1 ? 1 : n === 2 ? FRONT_LEFT + FRONT_SCALE : 1 + (n - 1) * 0.66);
+const shown = (p) => Math.min(p.variants.length, 4);
+
+// Reparte las yerbas en estantes por ancho real, sin separar las
+// presentaciones de una yerba, con estantes parejos.
+function shelfRows(products, layout) {
+  // Ancho útil: el de la góndola sin márgenes, con el tope de .y-shelves (1280 px).
+  const avail = Math.max(layout.W * 2, Math.min(SHELVES_MAX, (ui.track.clientWidth || window.innerWidth) - layout.pad) - 12);
+  const width = (p) => groupUnits(shown(p)) * layout.W;
+  const total = products.reduce((s, p) => s + width(p), 0) + layout.gap * (products.length - 1);
+  const target = total / Math.max(1, Math.ceil(total / avail));
   const rows = [[]];
   let used = 0;
   for (const p of products) {
-    const span = Math.min(p.variants.length, max);
-    if (used && (used + span > max || used >= target)) { rows.push([]); used = 0; }
+    const add = width(p) + (used ? layout.gap : 0);
+    if (used && (used + add > avail || used >= target - layout.W * 0.3)) { rows.push([]); used = 0; }
     rows.at(-1).push(p);
-    used += span;
+    used += width(p) + (rows.at(-1).length > 1 ? layout.gap : 0);
   }
   return rows;
 }
 
-// Altura relativa de cada paquete: el de menos gramos se dibuja más bajo.
-function packScale(product, variant) {
-  const max = Math.max(...product.variants.map((v) => v.grams ?? 0));
-  if (!variant.grams || !max || variant.grams >= max) return 1;
-  return Math.max(0.7, 0.62 + 0.38 * (variant.grams / max));
+// Orden visual del grupo: atrás el más grande, adelante el más chico.
+function groupOrder(p) {
+  const list = p.variants.slice(0, 4);
+  if (list.length < 2) return list;
+  return [...list].sort((a, b) => (b.grams ?? 0) - (a.grams ?? 0));
+}
+
+function variantLabel(p, v) {
+  return `${p.name} ${v.label}, ${isAvailable(v) ? money(v.price) : "agotado"}`;
 }
 
 function itemHtml(brand, p) {
   const out = !productAvailable(p);
   const name = brand.name === OTHER_BRANDS ? p.name : shortName(p);
-  const states = p.variants.map((v) => `${v.label} ${isAvailable(v) ? money(v.price) : "agotado"}`).join(", ");
+  const order = groupOrder(p);
+  const n = order.length;
+  const big = order[0];
   return `
-    <button type="button" class="y-item${out ? " is-out" : ""}" data-product="${p.id}"
-      style="--n:${p.variants.length}" aria-label="${escapeHtml(`${p.name}: ${states}`)}">
-      <span class="y-variants">
-        ${p.variants.map((v) => {
+    <div class="y-item y-item--n${Math.min(n, 3)}${out ? " is-out" : ""}" data-product="${p.id}" style="--units:${groupUnits(n)}">
+      <div class="y-group">
+        ${order.map((v, i) => {
           const vOut = !isAvailable(v);
+          // En un grupo de dos, el más chico (adelante) se dibuja a escala.
+          const scale = n === 2 && i === 1 && (v.grams ?? 0) < (big.grams ?? 0) ? FRONT_SCALE : n === 2 && i === 1 ? 0.92 : 1;
+          const role = n === 1 ? "solo" : i === 0 ? "back" : i === n - 1 ? "front" : "mid";
           return `
-            <span class="y-variant${vOut ? " is-out" : ""}" data-variant="${v.id}" style="--scale:${packScale(p, v)}">
-              <span class="y-variant-pack">${packHtml(p)}${vOut ? `<span class="y-out-tag">Agotado</span>` : ""}<span class="y-item-badge" hidden></span></span>
-            </span>`;
+            <button type="button" class="y-variant y-variant--${role}${vOut ? " is-out" : ""}" data-variant="${v.id}"
+              style="--scale:${scale};--i:${i}" aria-label="${escapeHtml(variantLabel(p, v))}">
+              <span class="y-variant-pack">${packHtml(p, { variant: v })}${vOut ? `<span class="y-out-tag">Agotado</span>` : ""}<span class="y-item-badge" hidden></span></span>
+            </button>`;
         }).join("")}
-      </span>
-      <span class="y-item-meta">
+      </div>
+      <button type="button" class="y-item-meta" data-open tabindex="-1" aria-hidden="true">
         <span class="y-item-name">${escapeHtml(name)}</span>
         <span class="y-variant-labels">
-          ${p.variants.map((v) => `
+          ${order.map((v) => `
             <span class="y-variant-label${isAvailable(v) ? "" : " is-out"}">${escapeHtml(v.label)}<b>${isAvailable(v) ? money(v.price) : "Agotado"}</b></span>`).join("")}
         </span>
-      </span>
-    </button>`;
+      </button>
+    </div>`;
 }
 
 function renderAisle() {
-  const max = perRow();
+  const layout = shelfLayout();
   ui.track.removeAttribute("aria-busy");
   if (!catalog.brands.length) {
     ui.track.innerHTML = `<section class="y-gondola y-empty"><p>Por ahora no hay yerbas publicadas. Volvé pronto.</p><a class="y-btn-ghost" href="/">Ir a la tienda</a></section>`;
@@ -187,9 +216,7 @@ function renderAisle() {
     return;
   }
   ui.track.innerHTML = catalog.brands.map((b, i) => {
-    const rows = shelfRows(b.products, max);
-    // Mismo ancho de lugar en todos los estantes de la marca.
-    const slots = Math.max(...rows.map((r) => r.reduce((n, p) => n + Math.min(p.variants.length, max), 0)));
+    const rows = shelfRows(b.products, layout);
     const available = b.products.filter(productAvailable).length;
     return `
       <section class="y-gondola" id="g-${b.key}" data-index="${i}" aria-label="${escapeHtml(b.name)}" aria-roledescription="góndola">
@@ -197,7 +224,7 @@ function renderAisle() {
           <h2>${escapeHtml(b.name)}</h2>
           <p>${b.products.length} ${b.products.length === 1 ? "yerba" : "yerbas"}${available < b.products.length ? ` · ${b.products.length - available} agotada${b.products.length - available === 1 ? "" : "s"}` : ""}</p>
         </header>
-        <div class="y-shelves" style="--slots:${Math.max(slots, max >= 9 ? 1 : max)}">
+        <div class="y-shelves" style="--pack-w:${layout.W}px;--group-gap:${layout.gap}px">
           ${rows.map((row) => `<div class="y-shelf">${row.map((p) => itemHtml(b, p)).join("")}</div>`).join("")}
         </div>
       </section>`;
@@ -250,19 +277,20 @@ ui.track.addEventListener("click", (e) => {
   const item = e.target.closest(".y-item");
   if (!item) return;
   const product = catalog.products.find((p) => p.id === Number(item.dataset.product));
-  if (product) openProduct(product, item);
+  if (!product) return;
+  const variant = e.target.closest(".y-variant[data-variant]");
+  openProduct(product, { focusVariant: variant ? Number(variant.dataset.variant) : null });
 });
 
 // Cambio de ancho: se rearman las filas (3 por estante en celular, más en pantallas grandes).
 let lastPerRow = null;
 window.addEventListener("resize", () => {
   if (!catalog) return;
-  const n = perRow();
+  const n = shelfLayout().key + ":" + Math.round((ui.track.clientWidth || 0) / 40);
   if (n !== lastPerRow) { lastPerRow = n; renderAisle(); }
   else setCurrent(current, { scroll: true, instant: true });
 });
 
-// Cuántas unidades de cada producto hay en el carrito (insignia sobre el paquete).
 // Cuántas unidades de cada presentación hay en el carrito (sobre su paquete).
 function renderBadges() {
   if (!catalog) return;
@@ -332,8 +360,9 @@ function stepperHtml(value, max, label) {
 }
 
 // ---------- Presentaciones de un paquete ----------
-function openProduct(product) {
+function openProduct(product, { focusVariant = null } = {}) {
   const chosen = new Map();   // variantId → cantidad elegida en esta hoja
+  const biggest = groupOrder(product)[0];
   track("product_view", { path: "/yerbas", productId: product.id });
 
   function room(v) {
@@ -350,7 +379,7 @@ function openProduct(product) {
       <div class="y-sheet-grip" aria-hidden="true"></div>
       ${closeBtn}
       <div class="y-sheet-head">
-        <span class="y-sheet-pack">${packHtml(product, { size: "y-pack--lg" })}</span>
+        <span class="y-sheet-pack">${packHtml(product, { variant: biggest, size: "y-pack--lg" })}</span>
         <div>
           ${product.brand ? `<p class="y-sheet-kicker">${escapeHtml(product.brand)}</p>` : ""}
           <h2 id="productSheetTitle">${escapeHtml(product.name)}</h2>
@@ -364,7 +393,8 @@ function openProduct(product) {
           const max = room(v);
           const vOut = !isAvailable(v);
           return `
-            <li class="y-pres${vOut ? " is-out" : ""}" data-variant="${v.id}">
+            <li class="y-pres${vOut ? " is-out" : ""}${v.id === focusVariant ? " is-focus" : ""}" data-variant="${v.id}">
+              <span class="y-pres-thumb" style="--scale:${packScale(product, v)}">${packHtml(product, { variant: v, size: "y-pack--xs" })}</span>
               <div class="y-pres-info">
                 <strong>${escapeHtml(v.label)}</strong>
                 <span class="y-pres-price">${money(v.price)}</span>
@@ -394,20 +424,36 @@ function openProduct(product) {
     }
     if (e.target.closest("[data-add]")) {
       let units = 0;
-      for (const [id, n] of chosen) {
+      const added = [...chosen];
+      // El carrito se dibuja al agregar; los paquetitos nuevos esperan a que
+      // «llegue» la animación (ver flyToCart).
+      arriving.push(...added.map(([id, n]) => [id, n]));
+      for (const [id, n] of added) {
         basket.add(id, n);
         units += n;
         track("add_to_cart", { path: "/yerbas", productId: product.id });
       }
       if (!units) return;
+      const sheetPack = ui.productSheet.querySelector(".y-sheet-pack .y-pack")?.getBoundingClientRect();
       hideSheet();
-      bumpCart();
+      flyToCart(product, added, sheetPack);
       showToast(units === 1 ? "Agregaste 1 paquete al carrito" : `Agregaste ${units} paquetes al carrito`);
     }
   };
 
   render();
   showSheet(ui.productSheet);
+  // Tocar una presentación en la góndola la deja a mano en la ficha.
+  if (focusVariant) {
+    requestAnimationFrame(() => ui.productSheet.querySelector(`[data-variant="${focusVariant}"] [data-step="1"]:not([disabled])`)?.focus({ preventScroll: true }));
+  }
+}
+
+// Altura relativa en miniaturas (ficha y carrito): el de menos gramos, más bajo.
+function packScale(product, variant) {
+  const max = Math.max(...product.variants.map((v) => v.grams ?? 0));
+  if (!variant.grams || !max || variant.grams >= max) return 1;
+  return FRONT_SCALE;
 }
 
 // ---------- Carrito visual ----------
@@ -417,6 +463,12 @@ function cartLines() {
     .filter((l) => l.product);
 }
 
+// Paquetes dentro del carrito: hasta MAX_IN_CART unidades, en el orden del
+// carrito, con su imagen (presentación → general → genérico) y a escala
+// (500 g más chico que 1 kg). Asoman por encima de la canasta.
+const MAX_IN_CART = 8;
+let arriving = [];   // [variantId, unidades] que todavía «vuelan» hacia el carrito
+
 function renderDock() {
   const lines = catalog ? cartLines() : [];
   const units = lines.reduce((n, l) => n + l.qty, 0);
@@ -425,21 +477,109 @@ function renderDock() {
   ui.dock.classList.toggle("has-items", units > 0);
   ui.total.textContent = units ? money(total) : "Tu carrito";
   ui.dock.setAttribute("aria-label", units ? `Carrito: ${units} ${units === 1 ? "paquete" : "paquetes"}, ${money(total)}` : "Carrito vacío");
-  // Paquetitos dentro del carrito (hasta 12): se llena a medida que se agrega.
   const minis = [];
-  for (const l of lines) for (let i = 0; i < l.qty && minis.length < 12; i++) minis.push(l.product);
-  ui.dock.style.setProperty("--fill", String(Math.min(units, 12) / 12));
-  ui.load.innerHTML = minis.map((p, i) =>
-    p.shelfImage
-      ? `<span class="y-mini y-mini--shelf" style="--i:${i}"><img src="${escapeHtml(optimizedSrc(p.shelfImage, 128))}" alt="" decoding="async"></span>`
-      : `<span class="y-mini" style="--label:${labelColor(p)};--i:${i}">${p.image ? `<img src="${escapeHtml(optimizedSrc(p.image, 128))}" alt="" decoding="async">` : ""}</span>`).join("");
+  for (const l of lines) for (let i = 0; i < l.qty && minis.length < MAX_IN_CART; i++) minis.push(l);
+  ui.load.dataset.count = String(minis.length);
+  ui.load.innerHTML = minis.map((l, i) =>
+    `<span class="y-mini" data-variant="${l.variant_id}" style="--scale:${packScale(l.product, l.variant)};--i:${i}">${packHtml(l.product, { variant: l.variant, size: "y-pack--mini" })}</span>`).join("");
+  ui.load.querySelectorAll("img").forEach((img) => img.removeAttribute("loading"));
+  wirePackImages(ui.load);
+  // Lo que todavía está en el aire no se ve en la canasta hasta que llega.
+  for (const [id, n] of arriving) {
+    const mine = [...ui.load.querySelectorAll(`.y-mini[data-variant="${id}"]`)];
+    mine.slice(Math.max(0, mine.length - n)).forEach((m) => m.classList.add("is-arriving"));
+  }
 }
 
 function bumpCart() {
   ui.dock.classList.remove("bump");
   void ui.dock.offsetWidth;
   ui.dock.classList.add("bump");
-  ui.load.lastElementChild?.classList.add("drop");
+}
+
+// ---------- Animación: el paquete viaja de la góndola al carrito ----------
+// Una copia del paquete sale desde su lugar en la góndola (el original se
+// queda) y hace un arco hasta la canasta: sube un poco y se acerca (sensación
+// de profundidad) y baja achicándose. Al llegar, aparece en la canasta y el
+// carrito reacciona. Solo transform/opacity (fluido) y sin capturar toques.
+// Con «reducir movimiento» no hay viaje: el carrito se actualiza directo.
+const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+const FLIGHT_MS = 680;
+
+function flyToCart(product, added, fallbackRect) {
+  const basketRect = ui.load.getBoundingClientRect();
+  const canAnimate = typeof Element.prototype.animate === "function" && !reduceMotion?.matches && basketRect.width > 0;
+  if (!canAnimate) {
+    arriving = [];
+    renderDock();
+    return;
+  }
+  let k = 0;
+  for (const [id, n] of added) {
+    const variant = catalog.byVariant.get(id)?.variant;
+    const copies = Math.min(n, 2);   // hasta 2 copias por presentación: se lee la cantidad sin saturar
+    for (let c = 0; c < copies; c++) launch(product, variant, id, c === copies - 1, k++ * 110, fallbackRect);
+  }
+}
+
+function launch(product, variant, id, last, delay, fallbackRect) {
+  const source = ui.track.querySelector(`.y-variant[data-variant="${id}"] .y-pack`);
+  let r = source?.getBoundingClientRect();
+  const visible = r && r.width > 0 && r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth;
+  if (!visible) r = fallbackRect?.width ? fallbackRect : { left: innerWidth / 2 - 40, top: innerHeight * 0.4, width: 80, height: 120 };
+
+  const fly = document.createElement("div");
+  fly.className = "y-flight";
+  fly.setAttribute("aria-hidden", "true");
+  fly.style.cssText = `left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px`;
+  // Copia del paquete ya dibujado (no se vuelve a decodificar la imagen).
+  const inner = document.createElement("div");
+  inner.className = "y-flight-inner";
+  if (visible) {
+    const copy = source.cloneNode(true);
+    copy.querySelectorAll(".y-out-tag, .y-item-badge").forEach((el) => el.remove());
+    inner.append(copy);
+  } else {
+    inner.innerHTML = packHtml(product, { variant });
+    inner.querySelectorAll("img").forEach((img) => img.removeAttribute("loading"));
+  }
+  fly.append(inner);
+  document.body.append(fly);
+
+  const t = ui.load.getBoundingClientRect();
+  const dx = t.left + t.width / 2 - (r.left + r.width / 2);
+  const dy = t.top + t.height * 0.62 - (r.top + r.height / 2);
+  const end = Math.max(0.12, Math.min(0.6, 34 / r.width));
+  const lift = Math.max(50, Math.min(150, Math.abs(dy) * 0.32));
+  const duration = FLIGHT_MS + Math.min(160, Math.hypot(dx, dy) * 0.12);
+  const timing = { duration, delay, fill: "both" };
+
+  fly.animate([{ transform: "translateX(0)" }, { transform: `translateX(${dx}px)` }],
+    { ...timing, easing: "cubic-bezier(.42,0,.48,1)" });
+  // Solo transform y opacity: el navegador lo anima fuera del hilo principal,
+  // así sigue fluido aunque la página esté actualizando el carrito.
+  const flight = inner.animate([
+    { transform: "translateY(0) scale(1) rotate(0deg)", opacity: 1 },
+    { transform: `translateY(${-lift}px) scale(1.12) rotate(-7deg)`, opacity: 1, offset: 0.38, easing: "cubic-bezier(.4,0,.8,.6)" },
+    { transform: `translateY(${dy}px) scale(${end}) rotate(5deg)`, opacity: 0.96 },
+  ], { ...timing, easing: "cubic-bezier(.25,.1,.35,1)" });
+
+  const done = () => { fly.remove(); land(id, last); };
+  flight.finished.then(done, done);
+}
+
+function land(id, all) {
+  const waiting = [...ui.load.querySelectorAll(`.y-mini.is-arriving[data-variant="${id}"]`)];
+  (all ? waiting : waiting.slice(0, 1)).forEach((m) => {
+    m.classList.remove("is-arriving");
+    m.classList.add("drop");
+  });
+  const entry = arriving.find(([v]) => v === id);
+  if (entry) {
+    entry[1] = all ? 0 : entry[1] - 1;
+    if (entry[1] <= 0) arriving = arriving.filter((e) => e !== entry);
+  }
+  bumpCart();
 }
 
 ui.dock.addEventListener("click", () => openCart());
@@ -493,7 +633,7 @@ function renderCartSheet() {
           const max = l.variant.stock === null ? MAX_PER_PRESENTATION : Math.min(l.variant.stock, MAX_PER_PRESENTATION);
           return `
             <li class="y-line" data-variant="${l.variant_id}">
-              <span class="y-line-pack">${packHtml(l.product, { size: "y-pack--xs" })}</span>
+              <span class="y-line-pack" style="--scale:${packScale(l.product, l.variant)}">${packHtml(l.product, { variant: l.variant, size: "y-pack--line" })}</span>
               <div class="y-line-info">
                 <strong>${escapeHtml(l.product.name)}</strong>
                 <span>${escapeHtml(l.variant.label)} · ${money(l.variant.price)}</span>
@@ -682,7 +822,7 @@ async function refreshCatalog() {
     console.warn("Yerbas: no se pudo actualizar.", err);
     return;
   }
-  lastPerRow = perRow();
+  lastPerRow = shelfLayout().key + ":" + Math.round((ui.track.clientWidth || 0) / 40);
   renderAisle();
   const changes = basket.reconcile(catalog);
   renderDock();
@@ -700,6 +840,8 @@ async function start() {
   });
   renderDock();
   track("page_view", { path: "/yerbas" });
+  // La ayuda de abajo se va sola a los pocos segundos (o al deslizar).
+  setTimeout(() => ui.hint.classList.add("is-gone"), 6000);
 
   try {
     catalog = await loadYerbas();
@@ -709,7 +851,7 @@ async function start() {
     ui.track.innerHTML = `<section class="y-gondola y-empty"><p>No pudimos cargar las yerbas. Probá recargar la página en unos minutos.</p><button type="button" class="y-btn-ghost" onclick="location.reload()">Reintentar</button></section>`;
     return;
   }
-  lastPerRow = perRow();
+  lastPerRow = shelfLayout().key + ":" + Math.round((ui.track.clientWidth || 0) / 40);
   renderAisle();
   const changes = basket.reconcile(catalog);
   renderDock();

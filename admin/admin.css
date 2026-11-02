@@ -1410,3 +1410,20 @@ a.move:hover { background: var(--a-sunken); }
 .shelf-status { font-size: var(--a-text-xs); color: var(--a-fg-2); min-height: 0; }
 .shelf-status:empty { display: none; }
 .shelf-warn { color: #8a5a00; }
+
+/* Imágenes por presentación (dentro de cada tarjeta de #/gondola) */
+.shelf-variants { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--a-line); padding-top: 10px; }
+.shelf-variants-title { font-size: var(--a-text-xs); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--a-fg-2); margin: 0; }
+.shelf-variant-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.shelf-variant { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 10px; align-items: start; }
+.shelf-variant-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.shelf-variant-body strong { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: var(--a-text-sm); }
+.shelf-source { font-size: var(--a-text-xs); color: var(--a-fg-2); }
+.shelf-frame--sm { padding: 8% 10% 12%; border-radius: 8px; }
+.shelf-frame--sm .shelf-empty { font-size: 10px; }
+.shelf-frame.is-fallback img { opacity: 0.45; filter: grayscale(0.4) drop-shadow(0 4px 4px rgba(0, 0, 0, 0.5)); }
+@media (max-width: 600px) {
+  .shelf-grid { grid-template-columns: 1fr; }
+  .shelf-card > .shelf-frame { width: 150px; align-self: center; }
+  .shelf-variant-body .shelf-actions > .btn-ghost { flex: 0 1 auto; }
+}

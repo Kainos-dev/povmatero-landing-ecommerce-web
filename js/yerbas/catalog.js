@@ -9,7 +9,8 @@
 //   product: { id, slug, name, brand, image, shelfImage, variants }
 //     image:      foto del catálogo (se usa como frente del paquete genérico)
 //     shelfImage: PNG del envase para la góndola (products.shelf_image), o null
-//   variant: { id, name, label, grams, price, stock, image }   stock null = no se controla
+//   variant: { id, name, label, grams, price, stock, image, shelfImage }   stock null = no se controla
+//     shelfImage: PNG propio de esa presentación (product_variants.shelf_image), o null
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from "../lib/supabaseConfig.js";
 
 // Góndolas en este orden; las yerbas sin marca van a «Otras marcas», al final.
@@ -22,15 +23,18 @@ const BASE_COLUMNS = [
   "variant_id", "variant_name", "price", "track_stock", "stock", "variant_image",
   "product_sort", "variant_sort",
 ];
-const COLUMNS = [...BASE_COLUMNS, "shelf_image"].join(",");
-
 const urlFor = (columns) =>
-  `${SUPABASE_URL}/rest/v1/storefront_catalog?select=${columns}&category_slug=eq.yerbas` +
+  `${SUPABASE_URL}/rest/v1/storefront_catalog?select=${columns.join(",")}&category_slug=eq.yerbas` +
   `&order=product_sort.asc,product_id.asc,variant_sort.asc&apikey=${SUPABASE_PUBLISHABLE_KEY}`;
-export const YERBAS_URL = urlFor(COLUMNS);
-// Sin la columna shelf_image (antes de aplicar la migración 20261106000000):
-// la góndola funciona igual, con el paquete genérico.
-const YERBAS_URL_NO_SHELF = urlFor(BASE_COLUMNS.join(","));
+// Imágenes de góndola: la de cada presentación (variant_shelf_image, migración
+// 20261107000000) y la general del producto (shelf_image, 20261106000000).
+// Si la base todavía no tiene alguna de esas columnas (400), se pide sin ella:
+// la góndola funciona igual, con lo que haya.
+export const YERBAS_URL = urlFor([...BASE_COLUMNS, "shelf_image", "variant_shelf_image"]);
+const FALLBACK_URLS = [
+  urlFor([...BASE_COLUMNS, "shelf_image"]),
+  urlFor(BASE_COLUMNS),
+];
 
 const TIMEOUT_MS = 10000;
 
@@ -61,8 +65,10 @@ async function fetchRows() {
   try {
     // Sin sesión ni cookies: siempre lo mismo que ve un visitante.
     let res = await fetch(YERBAS_URL, { signal: controller.signal });
-    // 400 = la vista todavía no tiene shelf_image: se pide sin esa columna.
-    if (res.status === 400) res = await fetch(YERBAS_URL_NO_SHELF, { signal: controller.signal });
+    for (const url of FALLBACK_URLS) {
+      if (res.status !== 400) break;
+      res = await fetch(url, { signal: controller.signal });
+    }
     if (!res.ok) throw new Error(`Supabase ${res.status}`);
     return await res.json();
   } finally {
@@ -106,7 +112,8 @@ export function buildCatalog(rows) {
       grams: presentationGrams(r.variant_name),
       price: Number(r.price),
       stock: r.track_stock ? Math.max(0, Number(r.stock ?? 0)) : null,
-      image: r.variant_image ?? null,
+      image: r.variant_image ?? null,                 // foto del catálogo (no se usa en la góndola)
+      shelfImage: r.variant_shelf_image ?? null,       // imagen de góndola propia de la presentación
     });
   }
 
@@ -142,6 +149,10 @@ export function buildCatalog(rows) {
 function slugKey(name) {
   return String(name).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
+
+// Imagen de góndola de una presentación: la propia, si no la general del
+// producto, si no null (paquete genérico).
+export const shelfImageFor = (product, variant) => variant?.shelfImage ?? product.shelfImage ?? null;
 
 // ¿Queda algo para pedir de este producto?
 export const isAvailable = (variant) => variant.stock === null || variant.stock > 0;
