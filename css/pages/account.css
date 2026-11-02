@@ -172,6 +172,10 @@ html:not(.route-account) .acc-page { display: none; }
   color: var(--text-secondary);
   white-space: nowrap;
 }
+.acc-order-tag--wait { border-color: #8a6a2b; color: #e2c48a; }
+.acc-order-tag--ok   { border-color: #3f7a4a; color: #a8dcb2; }
+.acc-order-tag--done { border-color: #666; color: var(--text); }
+.acc-order-tag--off  { border-color: #444; color: var(--text-muted); }
 .acc-order-items {
   list-style: none;
   margin: 0;

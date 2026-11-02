@@ -181,6 +181,11 @@ export function initRouter({ cart }) {
     if (slugFromPath() !== slug) return; // se navegó a otra cosa mientras cargaba
 
     const product = catalog.products.find((p) => p.slug === slug);
+    // Las yerbas se piden desde /yerbas (su propio carrito, stock y pedidos).
+    if (product?.category === "yerbas") {
+      location.replace("/yerbas");
+      return;
+    }
     if (!product) {
       renderMessage("Este producto no está disponible. Mirá el resto del catálogo.");
       applyNotFoundMeta();

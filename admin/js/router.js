@@ -11,6 +11,9 @@ import { renderCostImport } from "./views/costImport.js";
 import { renderCatalogReview } from "./views/catalogReview.js";
 import { renderCustomers } from "./views/customers.js";
 import { renderStats } from "./views/stats.js";
+import { renderOrders } from "./views/orders.js";
+import { renderOrderDetail } from "./views/orderDetail.js";
+import { countPending } from "./api/orders.js";
 
 const DEFAULT_ROUTE = "#/inicio";
 
@@ -20,6 +23,8 @@ const routes = [
   [/^#\/productos\/?$/,        (view, m, q) => renderProductList(view, q),          "#/productos"],
   [/^#\/productos\/nuevo\/?$/, (view) => renderProductEdit(view, null),             "#/productos"],
   [/^#\/productos\/(\d+)\/?$/, (view, m, q) => renderProductEdit(view, Number(m[1]), q), "#/productos"],
+  [/^#\/pedidos\/?$/,          (view, m, q) => renderOrders(view, q),               "#/pedidos"],
+  [/^#\/pedidos\/(\d+)\/?$/,   (view, m) => renderOrderDetail(view, Number(m[1])),  "#/pedidos"],
   [/^#\/inventario\/?$/,       (view, m, q) => renderInventory(view, q),            "#/inventario"],
   [/^#\/clientes\/?$/,         (view) => renderCustomers(view),                     "#/clientes"],
   [/^#\/imagenes\/?$/,         (view) => renderImageMigration(view),                "#/imagenes"],
@@ -30,7 +35,26 @@ const routes = [
 ];
 
 // Secciones que en el celular viven dentro de «Más».
-const IN_MORE = new Set(["#/estadisticas", "#/imagenes", "#/importar-precios", "#/revision", "#/mas"]);
+const IN_MORE = new Set(["#/clientes", "#/estadisticas", "#/imagenes", "#/importar-precios", "#/revision", "#/mas"]);
+
+// Marca en «Pedidos» con los pedidos de yerbas pendientes (sin vencer).
+let badgeTimer = 0;
+export function refreshOrdersBadge() {
+  clearTimeout(badgeTimer);
+  badgeTimer = setTimeout(async () => {
+    let n = 0;
+    try { n = await countPending(); } catch { return; }
+    document.querySelectorAll('[data-nav][href="#/pedidos"]').forEach((a) => {
+      if (n > 0) {
+        a.dataset.count = n > 99 ? "99+" : String(n);
+        a.setAttribute("aria-label", `Pedidos (${n} ${n === 1 ? "pendiente" : "pendientes"})`);
+      } else {
+        delete a.dataset.count;
+        a.removeAttribute("aria-label");
+      }
+    });
+  }, 150);
+}
 
 let container = null;
 let listening = false;
@@ -68,6 +92,7 @@ function route() {
       view.className = "page";
       container.replaceChildren(view);
       highlightNav(section);
+      refreshOrdersBadge();
       window.scrollTo(0, 0);
       render(view, match, query);
       return;

@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Yerbas — povmatero</title>
+  <meta name="description" content="Elegí tus yerbas en la góndola de Povmatero y enviá tu pedido por WhatsApp.">
+  <meta property="og:title" content="Yerbas — povmatero">
+  <meta property="og:description" content="Armá tu pedido de yerbas y envialo por WhatsApp.">
+  <meta property="og:image" content="https://povmatero-landing-ecommerce-web.vercel.app/images/Logo.jpeg">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://povmatero-landing-ecommerce-web.vercel.app/yerbas">
+  <link rel="canonical" href="https://povmatero-landing-ecommerce-web.vercel.app/yerbas">
+  <meta name="theme-color" content="#0d0c0b">
+
+  <!-- Yerbas desde Supabase, en paralelo con el resto de la página.
+       Misma URL que YERBAS_URL en js/yerbas/catalog.js (si cambia allá, copiarla acá). -->
+  <link rel="preconnect" href="https://gubrehbalkfvzwsndbcv.supabase.co" crossorigin />
+  <link rel="preload" as="fetch" crossorigin="anonymous" fetchpriority="high" href="https://gubrehbalkfvzwsndbcv.supabase.co/rest/v1/storefront_catalog?select=product_id,product_slug,product_name,brand,cover_image,variant_id,variant_name,price,track_stock,stock,variant_image,product_sort,variant_sort&amp;category_slug=eq.yerbas&amp;order=product_sort.asc,product_id.asc,variant_sort.asc&amp;apikey=sb_publishable_cMxTBYTgJm1wQ2FkJ37uZg_XNyogu7M" />
+
+  <link rel="stylesheet" href="/css/base/variables.css">
+  <link rel="stylesheet" href="/css/base/reset.css">
+  <link rel="stylesheet" href="/css/base/base.css">
+  <link rel="stylesheet" href="/css/components/toast.css">
+  <link rel="stylesheet" href="/css/components/account.css">
+  <link rel="stylesheet" href="/css/pages/yerbas.css">
+
+  <link rel="modulepreload" href="/js/yerbas/main.js">
+  <link rel="modulepreload" href="/js/yerbas/catalog.js">
+  <link rel="modulepreload" href="/js/yerbas/basket.js">
+  <link rel="modulepreload" href="/js/lib/supabaseConfig.js">
+  <link rel="modulepreload" href="/js/lib/session.js">
+  <link rel="modulepreload" href="/js/lib/images.js">
+</head>
+<body class="y-page">
+
+  <header class="y-top">
+    <a href="/" class="y-back" aria-label="Volver a la tienda">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="18" height="18" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+      <img src="/images/Logo-header.webp" alt="povmatero" width="55" height="48">
+    </a>
+    <div class="y-heading">
+      <p class="y-eyebrow">Góndola de</p>
+      <h1>Yerbas</h1>
+    </div>
+    <button type="button" class="account-btn y-icon-btn" id="accountBtn" aria-label="Ingresar o crear cuenta" aria-haspopup="dialog" aria-controls="accountModal">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="20" height="20" aria-hidden="true">
+        <circle cx="12" cy="8" r="4"/>
+        <path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/>
+      </svg>
+    </button>
+  </header>
+
+  <nav class="y-brands" id="brandTabs" aria-label="Marcas"></nav>
+
+  <main class="y-aisle" id="aisle">
+    <div class="y-track" id="track" aria-busy="true">
+      <section class="y-gondola y-gondola--loading" aria-label="Cargando yerbas">
+        <div class="y-shelf"><span class="y-skel"></span><span class="y-skel"></span><span class="y-skel"></span></div>
+        <div class="y-shelf"><span class="y-skel"></span><span class="y-skel"></span><span class="y-skel"></span></div>
+      </section>
+    </div>
+    <button type="button" class="y-pager y-pager--prev" id="prevBrand" aria-label="Marca anterior" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="22" height="22" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+    </button>
+    <button type="button" class="y-pager y-pager--next" id="nextBrand" aria-label="Marca siguiente" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="22" height="22" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+    </button>
+    <p class="y-hint" id="swipeHint">Tocá un paquete para elegir · deslizá para cambiar de marca</p>
+  </main>
+
+  <!-- Carrito: se va llenando a medida que se agregan paquetes -->
+  <button type="button" class="y-cart" id="cartDock" aria-haspopup="dialog" aria-controls="cartSheet" aria-label="Carrito vacío">
+    <span class="y-cart-art" aria-hidden="true">
+      <svg class="y-cart-back" viewBox="0 0 160 112">
+        <path d="M6 16h18l8 16" />
+        <path d="M44 84h96" />
+        <path d="M46 84l-6-8" />
+        <circle cx="56" cy="98" r="8" />
+        <circle cx="128" cy="98" r="8" />
+      </svg>
+      <span class="y-cart-load" id="cartLoad"></span>
+      <svg class="y-cart-front" viewBox="0 0 160 112">
+        <path class="y-cart-basket" d="M30 32h124l-14 46H42z" />
+        <path class="y-cart-mesh" d="M58 32l3 46M86 32l1 46M114 32l-2 46M138 32l-5 46M36 48h112M40 63h104" />
+      </svg>
+      <span class="y-cart-count" id="cartCount">0</span>
+    </span>
+    <span class="y-cart-total" id="cartTotal">Tu carrito</span>
+  </button>
+
+  <div class="y-scrim" id="scrim" hidden></div>
+
+  <!-- Presentaciones de un paquete -->
+  <section class="y-sheet" id="productSheet" role="dialog" aria-modal="true" aria-labelledby="productSheetTitle" tabindex="-1" hidden></section>
+
+  <!-- Detalle del carrito y envío -->
+  <section class="y-sheet y-sheet--cart" id="cartSheet" role="dialog" aria-modal="true" aria-labelledby="cartSheetTitle" tabindex="-1" hidden></section>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <!-- Modal «Mi cuenta» (el contenido lo arma js/components/account.js) -->
+  <div class="account-modal" id="accountModal" aria-hidden="true">
+    <div class="account-overlay" data-account-close></div>
+    <div class="account-box" role="dialog" aria-modal="true" aria-labelledby="accountTitle" tabindex="-1">
+      <button type="button" class="account-close" aria-label="Cerrar" data-account-close>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16" aria-hidden="true">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+      <div class="account-body" id="accountBody"></div>
+    </div>
+  </div>
+
+  <script type="module" src="/js/yerbas/main.js"></script>
+</body>
+</html>

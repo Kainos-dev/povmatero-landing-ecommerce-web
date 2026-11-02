@@ -1,5 +1,5 @@
 // «Más»: en el celular reúne lo que no entra en la barra inferior
-// (clientes, herramientas y cuenta). En escritorio todo está en la barra lateral.
+// (clientes, estadísticas, herramientas y cuenta). En escritorio todo está en la barra lateral.
 import { h, mount } from "../ui.js";
 import { icon } from "../icons.js";
 import { getSession } from "../session.js";
@@ -26,6 +26,10 @@ export function renderMore(view) {
 
   mount(view,
     h("div", { class: "page-header" }, h("h1", {}, "Más")),
+    h("section", { class: "panel" },
+      h("div", { class: "panel-head" }, h("h2", {}, "Gestión")),
+      h("ul", { class: "task-list" },
+        item("#/clientes", "users", "Clientes", "Cuentas registradas y preferencias de novedades"))),
     h("section", { class: "panel" },
       h("div", { class: "panel-head" }, h("h2", {}, "Análisis")),
       h("ul", { class: "task-list" },

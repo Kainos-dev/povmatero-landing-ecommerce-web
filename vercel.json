@@ -62,6 +62,10 @@
     {
       "source": "/cuenta",
       "destination": "/index.html"
+    },
+    {
+      "source": "/yerbas",
+      "destination": "/yerbas.html"
     }
   ]
 }

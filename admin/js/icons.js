@@ -15,6 +15,8 @@ const PATHS = {
   trash: '<path d="M4 7h16M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13M9 7V4h6v3"/>',
   chart: '<path d="M4 20V4M4 20h16"/><path d="m7 15 4-4 3 3 5-6"/>',
   chevron: '<path d="m9 6 6 6-6 6"/>',
+  orders: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 3h6v3H9zM9 11h6M9 15h6"/>',
+  chat: '<path d="M4 20l1.4-4A8 8 0 1 1 8.5 19z"/><path d="M9 10h6M9 13.5h4"/>',
 };
 
 const template = document.createElement("template");

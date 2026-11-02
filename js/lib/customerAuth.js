@@ -119,7 +119,7 @@ export async function updateProfile(userId, { firstName, lastName, phone }) {
 export async function listMyOrders() {
   const { data, error } = await supabase
     .from("orders")
-    .select("id, total, item_count, created_at, order_items (product_name, variant_name, unit_price, quantity, line_total)")
+    .select("id, total, item_count, created_at, kind, status, expires_at, order_items (product_name, variant_name, unit_price, quantity, line_total)")
     .order("created_at", { ascending: false })
     .order("id", { referencedTable: "order_items", ascending: true })
     .limit(50);

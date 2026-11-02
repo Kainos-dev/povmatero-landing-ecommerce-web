@@ -18,6 +18,22 @@ const TIME = new Intl.DateTimeFormat("es-AR", { hour: "2-digit", minute: "2-digi
 
 const money = (n) => "$" + Number(n).toLocaleString("es-AR", { maximumFractionDigits: 2 });
 
+// Pedidos de yerbas: estado que ve el cliente (los de la tienda no tienen estados).
+const YERBA_STATUS = {
+  pendiente:  ["Pendiente de confirmación", ""],
+  confirmado: ["Confirmado", "ok"],
+  preparando: ["En preparación", "ok"],
+  listo:      ["Listo", "ok"],
+  entregado:  ["Entregado", "done"],
+  cancelado:  ["Cancelado", "off"],
+};
+function orderTag(o) {
+  if (o.kind !== "yerbas") return `<span class="acc-order-tag">Enviado por WhatsApp</span>`;
+  const expired = o.status === "pendiente" && o.expires_at && new Date(o.expires_at) <= new Date();
+  const [label, tone] = expired ? ["Reserva vencida", "off"] : (YERBA_STATUS[o.status] ?? [o.status ?? "", ""]);
+  return `<span class="acc-order-tag acc-order-tag--${tone || "wait"}">${escapeHtml(label)}</span>`;
+}
+
 let unsubscribe = null;
 let renderToken = 0;
 
@@ -326,6 +342,7 @@ async function renderOrders(panel) {
         <h2>Todavía no hay pedidos</h2>
         <p class="acc-muted">Cuando envíes un pedido por WhatsApp con tu sesión iniciada, va a quedar guardado acá.</p>
         <a class="account-submit acc-link-btn" href="/#productos">Ver productos</a>
+        <a class="account-secondary acc-link-btn" href="/yerbas">Pedir yerbas</a>
       </div>`;
     return;
   }
@@ -340,10 +357,10 @@ async function renderOrders(panel) {
           <li class="acc-card acc-order">
             <div class="acc-order-head">
               <div>
-                <h2>Pedido #${escapeHtml(String(o.id))}</h2>
+                <h2>${o.kind === "yerbas" ? "Yerbas · " : ""}Pedido #${escapeHtml(String(o.id))}</h2>
                 <p class="acc-muted"><time datetime="${escapeHtml(o.created_at)}">${escapeHtml(DATE.format(date))} · ${escapeHtml(TIME.format(date))}</time></p>
               </div>
-              <span class="acc-order-tag">Enviado por WhatsApp</span>
+              ${orderTag(o)}
             </div>
             <ul class="acc-order-items">
               ${items.map((i) => `

@@ -51,6 +51,11 @@ export function initFilters(UI, catalogPromise, render, showError) {
   }
 
   function select(btn, { fromUser = false } = {}) {
+    // Las yerbas tienen su propia página (/yerbas, con su carrito y sus pedidos).
+    if (btn.dataset.category === "yerbas") {
+      if (fromUser) location.href = "/yerbas";
+      return;
+    }
     chips().forEach((b) => b.classList.remove("active"));
     btn.classList.add("active");
     show(btn.dataset.category, { scroll: fromUser });
