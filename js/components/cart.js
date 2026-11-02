@@ -173,8 +173,7 @@ export function initCart(UI) {
     const byId = new Map(products.map(p => [p.id, p]));
     for (const s of mergeSaved(readSaved(cartKey(owner)))) {
       const product = byId.get(s.id);
-      // Las yerbas ya no se piden desde este carrito: tienen el suyo en /yerbas.
-      if (!product || product.category === "yerbas") continue;
+      if (!product) continue;
       let price = product.price, stock = product.stock ?? null, image = product.image;
       if (product.variants) {
         const v = product.variants.find(x => x.name === s.variant);

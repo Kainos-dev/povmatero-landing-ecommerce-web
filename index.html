@@ -108,7 +108,6 @@
 
       <!-- DESKTOP NAV -->
       <nav class="header-nav">
-        <a href="/yerbas">YERBAS</a>
         <a href="#">CONTACTO</a>
         <a href="javascript:void(0)" id="headerAbout">SOBRE NOSOTROS</a>
       </nav>
@@ -212,6 +211,14 @@
        PRODUCT GRID (Las card se integran con js)
   ===================== -->
   <main class="catalog-section home-only">
+    <!-- Con el filtro «Yerbas»: acceso a /yerbas (la góndola, con su propio carrito y pedidos) -->
+    <aside class="yerbas-promo" id="yerbasPromo" aria-label="Pedido de yerbas" hidden>
+      <p class="yerbas-promo-text">
+        <span class="yerbas-promo-eyebrow">Pedido de yerbas</span>
+        También podés armar tu pedido en la góndola: reservamos tus paquetes por 24 h y lo coordinamos por WhatsApp.
+      </p>
+      <a class="yerbas-promo-link" href="/yerbas">Ir a la góndola <span aria-hidden="true">→</span></a>
+    </aside>
     <div class="product-grid" id="productGrid" aria-busy="true">
       <!-- Lugar reservado mientras carga el catálogo (se reemplaza al llegar los productos) -->
       <div class="product-card skeleton-card" aria-hidden="true"><div class="card-image-wrap"></div><div class="card-body"><span></span><span></span></div></div>
@@ -489,7 +496,7 @@
 
       <!-- <nav class="mobile-menu-links"> -->
         <a href="/#productos" id="mobileProductos">Productos</a>
-        <a href="/yerbas">Yerbas</a>
+        <a href="/yerbas">Pedido de Yerbas</a>
         <a href="#" id="mobileContacto">Contacto</a>
         <a href="#" id="mobileAbout">Sobre Nosotros</a>
       <!-- </nav> -->

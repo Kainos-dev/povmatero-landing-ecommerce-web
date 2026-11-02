@@ -73,3 +73,49 @@
 .variantes .variante{
   color: black;
 }
+/* Acceso a /yerbas (la góndola): aparece solo con el filtro «Yerbas».
+   Discreto: una línea con borde fino, sin color de fondo ni imágenes. */
+.yerbas-promo {
+  max-width: 90vw;
+  margin: 0 auto 28px;
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  border: 1px solid #e3e3e3;
+  border-left: 3px solid var(--details);
+  border-radius: var(--radius);
+  color: #333;
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+}
+.yerbas-promo[hidden] { display: none; }
+.yerbas-promo-eyebrow {
+  display: block;
+  font-size: var(--font-size-xs);
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  color: var(--details);
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+.yerbas-promo-link {
+  flex-shrink: 0;
+  padding: 8px 14px;
+  border: 1px solid #000;
+  border-radius: var(--radius);
+  color: #000;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background var(--t), color var(--t);
+}
+.yerbas-promo-link:hover,
+.yerbas-promo-link:focus-visible { background: #000; color: #fff; }
+
+@media (max-width: 600px) {
+  .yerbas-promo { flex-direction: column; align-items: flex-start; gap: 6px; margin-bottom: 20px; padding: 10px 14px; font-size: var(--font-size-xs); }
+  .yerbas-promo-link { padding: 0; border: 0; text-decoration: underline; text-underline-offset: 3px; }
+  .yerbas-promo-link:hover, .yerbas-promo-link:focus-visible { background: none; color: var(--details); }
+}

@@ -50,14 +50,13 @@ export function initFilters(UI, catalogPromise, render, showError) {
     return container ? [...container.querySelectorAll(".filter-chip")] : [];
   }
 
+  // Con el filtro «Yerbas» aparece un acceso discreto a /yerbas (la góndola).
+  const yerbasPromo = document.getElementById("yerbasPromo");
+
   function select(btn, { fromUser = false } = {}) {
-    // Las yerbas tienen su propia página (/yerbas, con su carrito y sus pedidos).
-    if (btn.dataset.category === "yerbas") {
-      if (fromUser) location.href = "/yerbas";
-      return;
-    }
     chips().forEach((b) => b.classList.remove("active"));
     btn.classList.add("active");
+    if (yerbasPromo) yerbasPromo.hidden = btn.dataset.category !== "yerbas";
     show(btn.dataset.category, { scroll: fromUser });
   }
 
