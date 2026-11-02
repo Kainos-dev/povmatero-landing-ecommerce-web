@@ -6,8 +6,10 @@
 //
 // Formato:
 //   { brands: [{ key, name, products }], products, byVariant: Map<variantId, { product, variant }> }
-//   product: { id, slug, name, brand, image, variants }
-//   variant: { id, name, label, price, stock, image }   stock null = no se controla
+//   product: { id, slug, name, brand, image, shelfImage, variants }
+//     image:      foto del catálogo (se usa como frente del paquete genérico)
+//     shelfImage: PNG del envase para la góndola (products.shelf_image), o null
+//   variant: { id, name, label, grams, price, stock, image }   stock null = no se controla
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from "../lib/supabaseConfig.js";
 
 // Góndolas en este orden; las yerbas sin marca van a «Otras marcas», al final.
@@ -15,15 +17,20 @@ import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from "../lib/supabaseConfig.js
 const BRAND_ORDER = ["Canarias", "Rei Verde", "Sara", "Armiño"];
 export const OTHER_BRANDS = "Otras marcas";
 
-const COLUMNS = [
+const BASE_COLUMNS = [
   "product_id", "product_slug", "product_name", "brand", "cover_image",
   "variant_id", "variant_name", "price", "track_stock", "stock", "variant_image",
   "product_sort", "variant_sort",
-].join(",");
+];
+const COLUMNS = [...BASE_COLUMNS, "shelf_image"].join(",");
 
-export const YERBAS_URL =
-  `${SUPABASE_URL}/rest/v1/storefront_catalog?select=${COLUMNS}&category_slug=eq.yerbas` +
+const urlFor = (columns) =>
+  `${SUPABASE_URL}/rest/v1/storefront_catalog?select=${columns}&category_slug=eq.yerbas` +
   `&order=product_sort.asc,product_id.asc,variant_sort.asc&apikey=${SUPABASE_PUBLISHABLE_KEY}`;
+export const YERBAS_URL = urlFor(COLUMNS);
+// Sin la columna shelf_image (antes de aplicar la migración 20261106000000):
+// la góndola funciona igual, con el paquete genérico.
+const YERBAS_URL_NO_SHELF = urlFor(BASE_COLUMNS.join(","));
 
 const TIMEOUT_MS = 10000;
 
@@ -37,12 +44,25 @@ export function presentationLabel(name) {
   return text === "Único" ? "Unidad" : text;
 }
 
+// Gramos de una presentación («500gr» → 500, «1kg» → 1000), para dibujar
+// los paquetes chicos más bajos. null si no se puede saber.
+export function presentationGrams(name) {
+  const text = String(name ?? "").trim().replace(",", ".");
+  let m = text.match(/^(\d+(?:\.\d+)?)\s*(?:g|gr|grs|gramos)\.?$/i);
+  if (m) return Number(m[1]);
+  m = text.match(/^(\d+(?:\.\d+)?)\s*(?:kg|kgs|kilo|kilos)\.?$/i);
+  if (m) return Number(m[1]) * 1000;
+  return null;
+}
+
 async function fetchRows() {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
     // Sin sesión ni cookies: siempre lo mismo que ve un visitante.
-    const res = await fetch(YERBAS_URL, { signal: controller.signal });
+    let res = await fetch(YERBAS_URL, { signal: controller.signal });
+    // 400 = la vista todavía no tiene shelf_image: se pide sin esa columna.
+    if (res.status === 400) res = await fetch(YERBAS_URL_NO_SHELF, { signal: controller.signal });
     if (!res.ok) throw new Error(`Supabase ${res.status}`);
     return await res.json();
   } finally {
@@ -74,6 +94,7 @@ export function buildCatalog(rows) {
         name: r.product_name,
         brand: r.brand ?? null,
         cover: r.cover_image ?? null,
+        shelfImage: r.shelf_image ?? null,
         variants: [],
       };
       byId.set(r.product_id, p);
@@ -82,6 +103,7 @@ export function buildCatalog(rows) {
       id: r.variant_id,
       name: r.variant_name,
       label: presentationLabel(r.variant_name),
+      grams: presentationGrams(r.variant_name),
       price: Number(r.price),
       stock: r.track_stock ? Math.max(0, Number(r.stock ?? 0)) : null,
       image: r.variant_image ?? null,

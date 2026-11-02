@@ -138,20 +138,23 @@ html.y-locked, html.y-locked body { overflow: hidden; }
 
 .y-shelves { max-width: 1120px; margin: 0 auto; }
 
-/* Un estante: paquetes apoyados sobre una tabla de madera */
+/* Un estante: paquetes apoyados sobre una tabla de madera.
+   Se mide en «lugares»: cada presentación ocupa uno, así una yerba con
+   500 g y 1 kg muestra sus dos paquetes juntos. */
 .y-shelf {
-  --meta-h: 48px;             /* nombre (2 líneas) + precio, debajo de la tabla */
+  --meta-h: 64px;             /* nombre (hasta 2 líneas) + presentación y precio */
   --meta-gap: 20px;           /* espacio de la tabla */
+  --slot-max: 92px;           /* ancho máximo de un paquete */
   position: relative;
   display: grid;
-  grid-template-columns: repeat(var(--per-row, 3), minmax(0, 150px));
+  grid-template-columns: repeat(var(--slots, 4), minmax(0, var(--slot-max)));
   justify-content: center;
   align-items: end;
-  gap: 0 12px;
-  padding: 14px 6px 0;
+  gap: 0 14px;
+  padding: 18px 6px 0;
   margin-bottom: 18px;
 }
-/* la tabla queda justo debajo de los paquetes; nombre y precio, abajo de la tabla */
+/* la tabla queda justo debajo de los paquetes; nombres y precios, abajo de la tabla */
 .y-shelf::after {
   content: "";
   position: absolute;
@@ -177,82 +180,101 @@ html.y-locked, html.y-locked body { overflow: hidden; }
   pointer-events: none;
 }
 
-/* ---------- Paquete (en el estante) ---------- */
+/* ---------- Una yerba en el estante (con sus presentaciones) ---------- */
 .y-item {
+  grid-column: span var(--n, 1);
   position: relative;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   text-align: center;
   color: var(--text);
   padding: 0;
   min-width: 0;
   -webkit-tap-highlight-color: transparent;
 }
-.y-item-pack {
+.y-variants,
+.y-variant-labels {
+  display: grid;
+  grid-template-columns: repeat(var(--n, 1), minmax(0, 1fr));
+  column-gap: 6px;
+}
+.y-variants { align-items: end; }
+.y-variant { position: relative; display: flex; justify-content: center; align-items: flex-end; }
+/* el paquete de menos gramos, más bajo (y angosto: no se deforma) */
+.y-variant-pack {
   position: relative;
-  width: min(100%, 118px);
+  width: calc(100% * var(--scale, 1));
   transition: transform 0.18s ease;
   transform-origin: 50% 100%;
 }
-.y-item:hover .y-item-pack,
-.y-item:focus-visible .y-item-pack { transform: translateY(-4px) rotate(-1.5deg); }
-.y-item:active .y-item-pack { transform: scale(0.97); }
+.y-item:hover .y-variant-pack,
+.y-item:focus-visible .y-variant-pack { transform: translateY(-4px); }
+.y-item:active .y-variant-pack { transform: scale(0.97); }
 .y-item:focus-visible { outline: none; }
-.y-item:focus-visible .y-pack { box-shadow: 0 0 0 2px #000, 0 0 0 4px #fff; }
+.y-item:focus-visible .y-variants { outline: 2px solid #fff; outline-offset: 4px; border-radius: 4px; }
 
 .y-item-meta {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  width: 100%;
+  align-items: stretch;
+  gap: 2px;
   height: var(--meta-h);
   margin-top: var(--meta-gap);
 }
 .y-item-name {
   font-size: 12px;
-  line-height: 1.25;
+  line-height: 1.2;
   font-weight: 600;
-  max-width: 100%;
+  height: 2.4em;              /* dos líneas: los precios quedan alineados */
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  overflow-wrap: anywhere;
 }
-.y-item-price { font-size: 11px; color: var(--text-secondary); margin-top: 1px; font-variant-numeric: tabular-nums; }
+.y-variant-label {
+  display: flex;
+  flex-direction: column;
+  font-size: 10.5px;
+  line-height: 1.25;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.y-variant-label b { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+.y-variant-label.is-out b { color: var(--text-muted); font-weight: 500; }
 
 .y-item-badge {
   position: absolute;
-  top: -8px;
-  right: -6px;
-  min-width: 22px;
-  height: 22px;
-  padding: 0 6px;
-  border-radius: 11px;
+  top: -9px;
+  right: -7px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
   background: #fff;
   color: #000;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
-  line-height: 22px;
+  line-height: 20px;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
-  z-index: 2;
+  z-index: 3;
 }
 
-/* Agotado: apagado, sin color */
-.y-item.is-out .y-pack { filter: grayscale(1) brightness(0.55) contrast(0.9); }
+/* Agotado: cada presentación por separado, apagada y con su etiqueta */
+.y-variant.is-out .y-pack { filter: grayscale(1) brightness(0.5) contrast(0.9); }
 .y-item.is-out .y-item-name { color: var(--text-muted); }
-.y-item.is-out .y-item-price { color: var(--text-muted); }
 .y-out-tag {
   position: absolute;
   left: 50%;
-  top: 46%;
+  top: 50%;
   transform: translate(-50%, -50%) rotate(-8deg);
-  padding: 3px 8px;
+  padding: 2px 6px;
   border: 1px solid rgba(255, 255, 255, 0.75);
-  background: rgba(0, 0, 0, 0.72);
+  background: rgba(0, 0, 0, 0.75);
   color: #fff;
-  font-size: 10px;
-  letter-spacing: 0.16em;
+  font-size: 9px;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   white-space: nowrap;
   z-index: 2;
@@ -263,7 +285,7 @@ html.y-locked, html.y-locked body { overflow: hidden; }
   position: relative;
   display: block;
   width: 100%;
-  aspect-ratio: 5 / 7;
+  aspect-ratio: 2 / 3;
   border-radius: 7px 7px 5px 5px;
   background: linear-gradient(180deg, #fbf8f2 0%, var(--paper) 55%, #e6dfd2 100%);
   box-shadow: 0 10px 14px -8px rgba(0, 0, 0, 0.85);
@@ -352,13 +374,18 @@ html.y-locked, html.y-locked body { overflow: hidden; }
   font-size: 1em;
   overflow-wrap: anywhere;
 }
-.y-item .y-pack { font-size: clamp(11px, 3.2vw, 15px); }
+.y-item .y-pack { font-size: clamp(9px, 2.6vw, 13px); }
 
-/* Envase real (PNG vertical): se muestra la foto sola, sin paquete genérico */
-.y-pack--photo { background: none; box-shadow: none; border-radius: 0; overflow: visible; }
-.y-pack--photo::after, .y-pack--photo::before, .y-pack--photo .y-pack-seal { display: none; }
-.y-pack--photo .y-pack-face { inset: 0; overflow: visible; }
-.y-pack--photo .y-pack-img { object-fit: contain; object-position: 50% 100%; filter: drop-shadow(0 8px 8px rgba(0, 0, 0, 0.6)); }
+/* Imagen de góndola (PNG vertical 2:3, idealmente sin fondo): el envase entero,
+   apoyado en el estante. contain: si no es exactamente 2:3, no se deforma. */
+.y-pack--shelf { background: none; box-shadow: none; border-radius: 0; overflow: visible; }
+.y-pack--shelf::after, .y-pack--shelf::before { display: none; }
+.y-pack--shelf .y-pack-img {
+  object-fit: contain;
+  object-position: 50% 100%;
+  filter: drop-shadow(0 8px 7px rgba(0, 0, 0, 0.55));
+}
+.y-variant.is-out .y-pack--shelf { filter: grayscale(1) brightness(0.5) contrast(0.9); }
 
 .y-pack--lg { font-size: 14px; }
 .y-pack--xs { font-size: 6px; border-radius: 4px 4px 3px 3px; box-shadow: 0 3px 6px -3px rgba(0, 0, 0, 0.5); }
@@ -366,8 +393,8 @@ html.y-locked, html.y-locked body { overflow: hidden; }
 /* ---------- Cargando / vacío ---------- */
 .y-skel {
   display: block;
-  aspect-ratio: 5 / 7;
-  width: min(100%, 118px);
+  aspect-ratio: 2 / 3;
+  width: min(100%, 92px);
   margin: 0 auto;
   border-radius: 7px;
   background: linear-gradient(100deg, #1d1a17 30%, #2a2622 50%, #1d1a17 70%) 0 0 / 300% 100%;
@@ -480,6 +507,8 @@ html.y-locked, html.y-locked body { overflow: hidden; }
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 .y-mini img { width: 100%; height: 100%; object-fit: cover; }
+.y-mini--shelf { background: none; border-top: 0; box-shadow: none; }
+.y-mini--shelf img { object-fit: contain; }
 .y-mini.drop { animation: y-drop 0.45s cubic-bezier(.3, 1.4, .6, 1); }
 @keyframes y-drop {
   from { transform: translateY(-46px) rotate(-14deg); opacity: 0; }
@@ -737,13 +766,13 @@ html.y-locked, html.y-locked body { overflow: hidden; }
   .y-brands { justify-content: center; }
   .y-gondola { padding-left: 72px; padding-right: 72px; }
   .y-gondola-head h2 { font-size: 34px; }
-  .y-item-pack { width: min(100%, 120px); }
+  .y-shelf { --slot-max: 108px; }
   .y-item-name { font-size: 13px; }
   .y-item .y-pack { font-size: 15px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .y-sheet, .y-scrim, .y-item-pack { transition: none; }
+  .y-sheet, .y-scrim, .y-variant-pack { transition: none; }
   .y-mini.drop, .y-cart.bump .y-cart-art, .y-skel { animation: none; }
   .y-track { scroll-behavior: auto; }
 }

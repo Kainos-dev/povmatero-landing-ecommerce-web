@@ -61,10 +61,23 @@ function labelColor(product) {
   return LABEL_COLORS[h % LABEL_COLORS.length];
 }
 
-// Un paquete: si hay foto vertical (el envase real, PNG), se muestra tal cual;
-// si es una etiqueta apaisada, va como frente de un paquete genérico; sin foto,
-// un paquete genérico con la marca y el nombre.
+// Un paquete:
+//   * con imagen de góndola (products.shelf_image: PNG vertical 2:3, cargado
+//     desde el panel): el envase entero, sin recortar ni deformar;
+//   * sin ella: paquete genérico (2:3) con la foto del catálogo como frente o,
+//     si tampoco hay, con la marca y el nombre sobre una banda de color.
+// La foto del catálogo nunca se modifica: solo se reutiliza en el genérico.
 function packHtml(product, { size = "" } = {}) {
+  if (product.shelfImage) {
+    return `
+      <span class="y-pack y-pack--shelf ${size}" data-pack-of="${product.id}" data-size="${escapeHtml(size)}">
+        <img class="y-pack-img" src="${escapeHtml(optimizedSrc(product.shelfImage, PACK_WIDTH))}" alt="" loading="lazy" decoding="async" data-src="${escapeHtml(product.shelfImage)}">
+      </span>`;
+  }
+  return genericPackHtml(product, size);
+}
+
+function genericPackHtml(product, size = "") {
   const img = product.image
     ? `<img class="y-pack-img" src="${escapeHtml(optimizedSrc(product.image, PACK_WIDTH))}" alt="" loading="lazy" decoding="async" data-src="${escapeHtml(product.image)}">`
     : "";
@@ -79,39 +92,94 @@ function packHtml(product, { size = "" } = {}) {
     </span>`;
 }
 
-// Etiqueta apaisada → frente del paquete; envase vertical → foto sola.
 function wirePackImages(root) {
-  root.querySelectorAll("img.y-pack-img").forEach((img) => {
+  root.querySelectorAll("img.y-pack-img:not([data-wired])").forEach((img) => {
+    img.dataset.wired = "1";
+    const pack = img.closest(".y-pack");
+    // Si la imagen de góndola no carga (tampoco la original), va el paquete genérico.
+    // (Se escucha antes que withFallback: el primer error es el de la versión
+    // optimizada, que withFallback reintenta con la original.)
+    if (pack?.classList.contains("y-pack--shelf")) {
+      img.addEventListener("error", () => {
+        const original = img.dataset.originalSrc;
+        if (original && img.getAttribute("src") !== original) return;   // withFallback reintenta
+        const product = catalog?.products.find((p) => p.id === Number(pack.dataset.packOf));
+        if (!product) return;
+        const holder = pack.parentElement;
+        pack.outerHTML = genericPackHtml(product, pack.dataset.size);
+        if (holder) wirePackImages(holder);
+      });
+    }
     withFallback(img, img.dataset.src);
-    const decide = () => {
-      if (!img.naturalWidth) return;
-      const pack = img.closest(".y-pack");
-      pack?.classList.toggle("y-pack--photo", img.naturalHeight > img.naturalWidth * 1.15);
-      pack?.classList.add("is-loaded");
-    };
-    if (img.complete) decide(); else img.addEventListener("load", decide, { once: true });
+    const loaded = () => pack?.classList.add("is-loaded");
+    if (img.complete && img.naturalWidth) loaded(); else img.addEventListener("load", loaded, { once: true });
   });
-}
-
-function priceFrom(product) {
-  const prices = product.variants.map((v) => v.price);
-  const min = Math.min(...prices);
-  return prices.length > 1 && Math.max(...prices) !== min ? `desde ${money(min)}` : money(min);
 }
 
 // ---------------------------------------------------------------------
 // Góndolas
 // ---------------------------------------------------------------------
+// Ancho del estante en «lugares»: cada presentación ocupa un lugar, así una
+// yerba con 500 g y 1 kg muestra sus dos paquetes juntos.
 function perRow() {
   const w = ui.track.clientWidth || window.innerWidth;
-  if (w >= 1100) return 6;
-  if (w >= 820) return 5;
-  if (w >= 560) return 4;
-  return 3;
+  if (w >= 1100) return 12;
+  if (w >= 820) return 9;
+  if (w >= 560) return 6;
+  return 4;
+}
+
+// Reparte las yerbas en estantes sin separar las presentaciones de una misma
+// yerba, con estantes parejos (no uno lleno y otro casi vacío).
+function shelfRows(products, max) {
+  const total = products.reduce((n, p) => n + Math.min(p.variants.length, max), 0);
+  const target = Math.ceil(total / Math.ceil(total / max));
+  const rows = [[]];
+  let used = 0;
+  for (const p of products) {
+    const span = Math.min(p.variants.length, max);
+    if (used && (used + span > max || used >= target)) { rows.push([]); used = 0; }
+    rows.at(-1).push(p);
+    used += span;
+  }
+  return rows;
+}
+
+// Altura relativa de cada paquete: el de menos gramos se dibuja más bajo.
+function packScale(product, variant) {
+  const max = Math.max(...product.variants.map((v) => v.grams ?? 0));
+  if (!variant.grams || !max || variant.grams >= max) return 1;
+  return Math.max(0.7, 0.62 + 0.38 * (variant.grams / max));
+}
+
+function itemHtml(brand, p) {
+  const out = !productAvailable(p);
+  const name = brand.name === OTHER_BRANDS ? p.name : shortName(p);
+  const states = p.variants.map((v) => `${v.label} ${isAvailable(v) ? money(v.price) : "agotado"}`).join(", ");
+  return `
+    <button type="button" class="y-item${out ? " is-out" : ""}" data-product="${p.id}"
+      style="--n:${p.variants.length}" aria-label="${escapeHtml(`${p.name}: ${states}`)}">
+      <span class="y-variants">
+        ${p.variants.map((v) => {
+          const vOut = !isAvailable(v);
+          return `
+            <span class="y-variant${vOut ? " is-out" : ""}" data-variant="${v.id}" style="--scale:${packScale(p, v)}">
+              <span class="y-variant-pack">${packHtml(p)}${vOut ? `<span class="y-out-tag">Agotado</span>` : ""}<span class="y-item-badge" hidden></span></span>
+            </span>`;
+        }).join("")}
+      </span>
+      <span class="y-item-meta">
+        <span class="y-item-name">${escapeHtml(name)}</span>
+        <span class="y-variant-labels">
+          ${p.variants.map((v) => `
+            <span class="y-variant-label${isAvailable(v) ? "" : " is-out"}">${escapeHtml(v.label)}<b>${isAvailable(v) ? money(v.price) : "Agotado"}</b></span>`).join("")}
+        </span>
+      </span>
+    </button>`;
 }
 
 function renderAisle() {
-  const base = perRow();
+  const max = perRow();
   ui.track.removeAttribute("aria-busy");
   if (!catalog.brands.length) {
     ui.track.innerHTML = `<section class="y-gondola y-empty"><p>Por ahora no hay yerbas publicadas. Volvé pronto.</p><a class="y-btn-ghost" href="/">Ir a la tienda</a></section>`;
@@ -119,16 +187,9 @@ function renderAisle() {
     return;
   }
   ui.track.innerHTML = catalog.brands.map((b, i) => {
-    // En el celular, las marcas con más de 6 yerbas van de a 4 por estante
-    // (así entran en una pantalla sin hacer los paquetes demasiado chicos).
-    // En pantallas anchas, toda la marca en un estante si entra (hasta 8);
-    // si no, en dos estantes parejos.
-    const count = b.products.length;
-    const n = base === 3 ? (count > 6 ? 4 : 3)
-      : base >= 6 ? (count <= 8 ? Math.max(count, 4) : Math.ceil(count / 2))
-      : base;
-    const rows = [];
-    for (let k = 0; k < b.products.length; k += n) rows.push(b.products.slice(k, k + n));
+    const rows = shelfRows(b.products, max);
+    // Mismo ancho de lugar en todos los estantes de la marca.
+    const slots = Math.max(...rows.map((r) => r.reduce((n, p) => n + Math.min(p.variants.length, max), 0)));
     const available = b.products.filter(productAvailable).length;
     return `
       <section class="y-gondola" id="g-${b.key}" data-index="${i}" aria-label="${escapeHtml(b.name)}" aria-roledescription="góndola">
@@ -136,22 +197,8 @@ function renderAisle() {
           <h2>${escapeHtml(b.name)}</h2>
           <p>${b.products.length} ${b.products.length === 1 ? "yerba" : "yerbas"}${available < b.products.length ? ` · ${b.products.length - available} agotada${b.products.length - available === 1 ? "" : "s"}` : ""}</p>
         </header>
-        <div class="y-shelves" style="--per-row:${n}">
-          ${rows.map((row) => `
-            <div class="y-shelf">
-              ${row.map((p) => {
-                const out = !productAvailable(p);
-                return `
-                  <button type="button" class="y-item${out ? " is-out" : ""}" data-product="${p.id}"
-                    aria-label="${escapeHtml(p.name)}, ${escapeHtml(out ? "agotada" : priceFrom(p))}">
-                    <span class="y-item-pack">${packHtml(p)}${out ? `<span class="y-out-tag">Agotado</span>` : ""}<span class="y-item-badge" hidden></span></span>
-                    <span class="y-item-meta">
-                      <span class="y-item-name">${escapeHtml(b.name === OTHER_BRANDS ? p.name : shortName(p))}</span>
-                      <span class="y-item-price">${out ? "Sin stock" : escapeHtml(priceFrom(p))}</span>
-                    </span>
-                  </button>`;
-              }).join("")}
-            </div>`).join("")}
+        <div class="y-shelves" style="--slots:${Math.max(slots, max >= 9 ? 1 : max)}">
+          ${rows.map((row) => `<div class="y-shelf">${row.map((p) => itemHtml(b, p)).join("")}</div>`).join("")}
         </div>
       </section>`;
   }).join("");
@@ -216,19 +263,15 @@ window.addEventListener("resize", () => {
 });
 
 // Cuántas unidades de cada producto hay en el carrito (insignia sobre el paquete).
+// Cuántas unidades de cada presentación hay en el carrito (sobre su paquete).
 function renderBadges() {
   if (!catalog) return;
-  const perProduct = new Map();
-  for (const l of basket.lines()) {
-    const hit = catalog.byVariant.get(l.variant_id);
-    if (hit) perProduct.set(hit.product.id, (perProduct.get(hit.product.id) ?? 0) + l.qty);
-  }
-  ui.track.querySelectorAll(".y-item").forEach((item) => {
-    const n = perProduct.get(Number(item.dataset.product)) ?? 0;
-    const badge = item.querySelector(".y-item-badge");
+  ui.track.querySelectorAll(".y-variant[data-variant]").forEach((v) => {
+    const n = basket.qty(Number(v.dataset.variant));
+    const badge = v.querySelector(".y-item-badge");
     badge.hidden = n === 0;
     badge.textContent = n;
-    item.classList.toggle("in-cart", n > 0);
+    v.classList.toggle("in-cart", n > 0);
   });
 }
 
@@ -387,7 +430,9 @@ function renderDock() {
   for (const l of lines) for (let i = 0; i < l.qty && minis.length < 12; i++) minis.push(l.product);
   ui.dock.style.setProperty("--fill", String(Math.min(units, 12) / 12));
   ui.load.innerHTML = minis.map((p, i) =>
-    `<span class="y-mini" style="--label:${labelColor(p)};--i:${i}">${p.image ? `<img src="${escapeHtml(optimizedSrc(p.image, 128))}" alt="" decoding="async">` : ""}</span>`).join("");
+    p.shelfImage
+      ? `<span class="y-mini y-mini--shelf" style="--i:${i}"><img src="${escapeHtml(optimizedSrc(p.shelfImage, 128))}" alt="" decoding="async"></span>`
+      : `<span class="y-mini" style="--label:${labelColor(p)};--i:${i}">${p.image ? `<img src="${escapeHtml(optimizedSrc(p.image, 128))}" alt="" decoding="async">` : ""}</span>`).join("");
 }
 
 function bumpCart() {

@@ -8,6 +8,7 @@ import { h, mount, field, showError, toast, errorMessage, slugify, SLUG_RE, form
 import { renderStockPanel } from "./stockPanel.js";
 import { renderImagesPanel } from "./imagesPanel.js";
 import { imageSource, removeProductFiles } from "../api/images.js";
+import { removeShelfFiles } from "../api/shelfImages.js";
 import { icon } from "../icons.js";
 
 const TABS = [
@@ -649,7 +650,10 @@ export async function renderProductEdit(view, productId, query = {}) {
       // El producto ya no existe; los archivos de Storage se borran después.
       // Si eso falla, quedan archivos sin uso, pero ningún registro roto.
       let filesNote = "";
-      try { await removeProductFiles(product.id, info.images.map((i) => i.src)); }
+      try {
+        await removeProductFiles(product.id, info.images.map((i) => i.src));
+        await removeShelfFiles(product.id);   // imagen de góndola (/yerbas), si tenía
+      }
       catch (err) { console.error(err); filesNote = " Algunas fotos no se pudieron borrar de Storage (no afecta la tienda)."; }
       toast(`«${product.name}» se eliminó.${filesNote}`, filesNote ? "error" : "ok");
       location.hash = "#/productos?estado=draft";

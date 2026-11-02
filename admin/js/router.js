@@ -14,6 +14,7 @@ import { renderStats } from "./views/stats.js";
 import { renderOrders } from "./views/orders.js";
 import { renderOrderDetail } from "./views/orderDetail.js";
 import { countPending } from "./api/orders.js";
+import { renderShelfImages } from "./views/shelfImages.js";
 
 const DEFAULT_ROUTE = "#/inicio";
 
@@ -31,11 +32,12 @@ const routes = [
   [/^#\/importar-(costos|precios)\/?$/, (view) => renderCostImport(view),             "#/importar-precios"],
   [/^#\/revision\/?$/,         (view) => renderCatalogReview(view),                 "#/revision"],
   [/^#\/estadisticas\/?$/,     (view) => renderStats(view),                         "#/estadisticas"],
+  [/^#\/gondola\/?$/,          (view) => renderShelfImages(view),                   "#/gondola"],
   [/^#\/mas\/?$/,              (view) => renderMore(view),                          "#/mas"],
 ];
 
 // Secciones que en el celular viven dentro de «Más».
-const IN_MORE = new Set(["#/clientes", "#/estadisticas", "#/imagenes", "#/importar-precios", "#/revision", "#/mas"]);
+const IN_MORE = new Set(["#/clientes", "#/gondola", "#/estadisticas", "#/imagenes", "#/importar-precios", "#/revision", "#/mas"]);
 
 // Marca en «Pedidos» con los pedidos de yerbas pendientes (sin vencer).
 let badgeTimer = 0;
