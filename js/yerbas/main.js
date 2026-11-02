@@ -273,6 +273,26 @@ ui.track.addEventListener("scroll", () => {
   }, 80);
 }, { passive: true });
 
+// Tocar o hacer clic en un paquete: reacciona todo el grupo de esa yerba.
+// (Solo visual: no cambia qué presentación se eligió ni cómo abre la ficha.)
+let pressedGroup = null;
+let pressedAt = 0;
+function releaseGroup() {
+  const group = pressedGroup;
+  if (!group) return;
+  pressedGroup = null;
+  setTimeout(() => group.classList.remove("is-pressed"), Math.max(0, 140 - (Date.now() - pressedAt)));
+}
+ui.track.addEventListener("pointerdown", (e) => {
+  const group = e.target.closest(".y-variant")?.closest(".y-group");
+  if (!group) return;
+  pressedGroup = group;
+  pressedAt = Date.now();
+  group.classList.add("is-pressed");
+}, { passive: true });
+for (const type of ["pointerup", "pointercancel", "pointerleave"]) ui.track.addEventListener(type, releaseGroup, { passive: true });
+ui.track.addEventListener("scroll", releaseGroup, { passive: true });   // deslizar entre marcas no deja el grupo hundido
+
 ui.track.addEventListener("click", (e) => {
   const item = e.target.closest(".y-item");
   if (!item) return;
@@ -362,7 +382,6 @@ function stepperHtml(value, max, label) {
 // ---------- Presentaciones de un paquete ----------
 function openProduct(product, { focusVariant = null } = {}) {
   const chosen = new Map();   // variantId → cantidad elegida en esta hoja
-  const biggest = groupOrder(product)[0];
   track("product_view", { path: "/yerbas", productId: product.id });
 
   function room(v) {
@@ -379,7 +398,7 @@ function openProduct(product, { focusVariant = null } = {}) {
       <div class="y-sheet-grip" aria-hidden="true"></div>
       ${closeBtn}
       <div class="y-sheet-head">
-        <span class="y-sheet-pack">${packHtml(product, { variant: biggest, size: "y-pack--lg" })}</span>
+        <span class="y-sheet-pack">${packHtml(product, { size: "y-pack--lg" })}</span>
         <div>
           ${product.brand ? `<p class="y-sheet-kicker">${escapeHtml(product.brand)}</p>` : ""}
           <h2 id="productSheetTitle">${escapeHtml(product.name)}</h2>

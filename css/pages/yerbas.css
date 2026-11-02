@@ -215,11 +215,18 @@ html.y-locked, html.y-locked body { overflow: hidden; }
   transition: transform 0.18s ease;
   transform-origin: 50% 100%;
 }
-/* La que se señala pasa adelante: cada presentación se elige por separado */
-.y-variant:hover, .y-variant:focus-visible { z-index: 4; }
-.y-variant:hover .y-variant-pack,
-.y-variant:focus-visible .y-variant-pack { transform: translateY(-5px); }
-.y-variant:active .y-variant-pack { transform: scale(0.97); }
+/* El grupo reacciona junto: al señalar o tocar cualquiera de sus
+   presentaciones, se mueven las dos (sin cambiar quién queda adelante).
+   Cada paquete sigue siendo su propio botón. */
+@media (hover: hover) {
+  .y-group:hover .y-variant-pack { transform: translateY(-5px); }
+}
+/* con teclado (no con el mouse): el grupo del paquete enfocado también se levanta */
+.y-group:has(.y-variant:focus-visible) .y-variant-pack { transform: translateY(-5px); }
+/* tocar (celular) o hacer clic: el grupo se hunde un poco (lo marca main.js) */
+.y-group.is-pressed .y-variant-pack { transform: translateY(-2px) scale(0.97); }
+/* con teclado, el paquete enfocado pasa adelante para que se vea su contorno */
+.y-variant:focus-visible { z-index: 4; }
 .y-variant:focus-visible { outline: none; }
 .y-variant:focus-visible .y-pack { outline: 2px solid #fff; outline-offset: 3px; border-radius: 4px; }
 
