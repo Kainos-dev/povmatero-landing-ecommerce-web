@@ -184,6 +184,8 @@ a { color: inherit; }
 .page { max-width: 1160px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
 /* Las pantallas existentes separan sus bloques con márgenes propios */
 .page > * { margin-top: 0; margin-bottom: 0; }
+/* Una página dentro de otra (Inventario, Estadísticas): ocupa todo el ancho */
+.page .page { width: 100%; max-width: none; margin: 0; }
 
 /* ---------- Encabezado de página ---------- */
 .page-header {
@@ -888,6 +890,86 @@ a.move:hover { background: var(--a-sunken); }
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
+}
+
+/* =====================================================================
+   Estadísticas
+   Monocromo (como el resto del panel): período actual en negro sólido,
+   período anterior en gris con trazo punteado (no depende solo del color).
+   ===================================================================== */
+.toolbar-stats { align-items: center; }
+.toolbar-stats .segmented button {
+  font: inherit;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--a-fg-2);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.toolbar-stats .segmented button.active { background: var(--a-bg); color: var(--a-fg); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+.date-range { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--a-muted); }
+.toolbar .input-date { flex: 0 0 auto; width: auto; }
+
+.stats-6 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.page.is-loading { opacity: 0.55; transition: opacity var(--t); }
+
+.chart-wrap { position: relative; }
+.chart-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.chart-grid { stroke: var(--a-line); stroke-width: 1; }
+.chart-base { stroke: var(--a-line-2); stroke-width: 1; }
+.chart-tick { fill: var(--a-muted); font-size: 11px; font-family: var(--font); }
+.chart-line { fill: none; stroke: var(--a-fg); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.chart-line-prev { stroke: #767676; stroke-dasharray: 5 4; }
+.chart-dot { fill: var(--a-fg); stroke: var(--a-bg); stroke-width: 2; }
+.chart-cross { stroke: var(--a-muted); stroke-width: 1; }
+.chart-svg rect:focus { outline: none; }
+.chart-svg rect:focus-visible { outline: 2px solid var(--a-fg); }
+.chart-tip {
+  position: absolute;
+  top: 8px;
+  min-width: 170px;
+  padding: 10px 12px;
+  border-radius: var(--a-radius);
+  background: var(--a-bg);
+  border: 1px solid var(--a-line);
+  box-shadow: var(--a-pop);
+  font-size: var(--a-text-sm);
+  pointer-events: none;
+}
+.chart-tip-date { color: var(--a-fg-2); margin-bottom: 4px !important; }
+.chart-tip-row { display: flex; align-items: center; gap: 6px; color: var(--a-fg-2); }
+.chart-tip-row strong { color: var(--a-fg); font-variant-numeric: tabular-nums; }
+.chart-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: var(--a-text-sm); color: var(--a-fg-2); }
+.chart-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+.key { display: inline-block; width: 16px; height: 0; border-top: 2px solid var(--a-fg); }
+.key-prev { border-top: 2px dashed #767676; }
+.chart-table summary { cursor: pointer; font-size: var(--a-text-sm); color: var(--a-fg-2); }
+.chart-table[open] summary { margin-bottom: 10px; }
+
+.rank,
+.funnel { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.rank-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 14px; }
+.rank-label { min-width: 0; overflow-wrap: anywhere; }
+.rank-sub { color: var(--a-muted); font-size: var(--a-text-xs); }
+.rank-value { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rank-bar { height: 4px; margin-top: 5px; border-radius: 2px; background: var(--a-surface); overflow: hidden; }
+.rank-bar span { display: block; height: 100%; border-radius: 2px; background: #767676; }
+.rank-bar-strong { height: 8px; border-radius: 4px; }
+.rank-bar-strong span { background: var(--a-fg); border-radius: 4px; }
+
+@media (max-width: 1100px) {
+  .grid-3 { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 600px) {
+  .stats-6 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .toolbar-stats .segmented { align-self: stretch; width: 100%; }
+  .toolbar-stats .segmented button { flex: 1; padding: 9px 6px; }
+  .chart-tip { min-width: 150px; }
 }
 
 /* =====================================================================

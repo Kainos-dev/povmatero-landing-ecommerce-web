@@ -32,7 +32,14 @@ function showLogin(message = "") {
   show("login");
 }
 
+// Los navegadores donde ingresa un administrador no se cuentan en las
+// estadísticas de la tienda (ver js/lib/track.js).
+function excludeFromStats() {
+  try { localStorage.setItem("povmatero-no-track", "1"); } catch { /* sin almacenamiento */ }
+}
+
 function showPanel(user, role) {
+  excludeFromStats();
   setSession({ email: user.email, role });
   userEmail.textContent = user.email ?? "";
   userRole.textContent = getSession().roleLabel;

@@ -12,6 +12,7 @@ import { closeLightbox, isLightboxOpen } from "./components/lightbox.js";
 import { scrollToUnderHeader } from "./lib/scroll.js";
 import { absoluteSrc } from "./lib/images.js";
 import { escapeHtml } from "./lib/html.js";
+import { track as trackEvent } from "./lib/track.js";
 
 const SITE_URL = "https://povmatero-landing-ecommerce-web.vercel.app";
 const PRODUCT_RE = /^\/producto\/([a-z0-9]+(?:-[a-z0-9]+)*)\/?$/;
@@ -137,6 +138,7 @@ export function initRouter({ cart }) {
     html.classList.remove("route-product");
     page.setAttribute("aria-hidden", "true");
     applyHomeMeta();
+    trackEvent("page_view", { path: "/" });
   }
 
   async function showAccountView(notice = null) {
@@ -149,6 +151,7 @@ export function initRouter({ cart }) {
     window.scrollTo({ top: 0, behavior: "instant" });
     document.title = "Mi cuenta — povmatero";
     setMeta("robots", "noindex");
+    trackEvent("page_view", { path: "/cuenta" });
     if (!accountBody) return;
     try {
       accountModule ??= await import("./components/accountPage.js");
@@ -184,6 +187,8 @@ export function initRouter({ cart }) {
       return;
     }
 
+    trackEvent("page_view", { path: productPath(product) });
+    trackEvent("product_view", { path: productPath(product), productId: product.id });
     crumb.textContent = product.categoryName ?? product.category;
     galleryNav = renderProductDetail(detail, product, { cart, layout: "page" }).step;
     renderRelated(product, catalog.products);

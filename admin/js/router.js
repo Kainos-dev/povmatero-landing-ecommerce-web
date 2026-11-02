@@ -10,6 +10,7 @@ import { renderImageMigration } from "./views/imageMigration.js";
 import { renderCostImport } from "./views/costImport.js";
 import { renderCatalogReview } from "./views/catalogReview.js";
 import { renderCustomers } from "./views/customers.js";
+import { renderStats } from "./views/stats.js";
 
 const DEFAULT_ROUTE = "#/inicio";
 
@@ -24,11 +25,12 @@ const routes = [
   [/^#\/imagenes\/?$/,         (view) => renderImageMigration(view),                "#/imagenes"],
   [/^#\/importar-(costos|precios)\/?$/, (view) => renderCostImport(view),             "#/importar-precios"],
   [/^#\/revision\/?$/,         (view) => renderCatalogReview(view),                 "#/revision"],
+  [/^#\/estadisticas\/?$/,     (view) => renderStats(view),                         "#/estadisticas"],
   [/^#\/mas\/?$/,              (view) => renderMore(view),                          "#/mas"],
 ];
 
 // Secciones que en el celular viven dentro de «Más».
-const IN_MORE = new Set(["#/imagenes", "#/importar-precios", "#/revision", "#/mas"]);
+const IN_MORE = new Set(["#/estadisticas", "#/imagenes", "#/importar-precios", "#/revision", "#/mas"]);
 
 let container = null;
 let listening = false;

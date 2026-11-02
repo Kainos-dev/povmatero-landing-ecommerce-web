@@ -1,6 +1,7 @@
 import { escapeHtml } from "../lib/html.js";
 import { optimizedSrc, withFallback } from "../lib/images.js";
 import { hasStoredSession } from "../lib/session.js";
+import { track } from "../lib/track.js";
 
 // La foto del carrito se ve a 72 px: alcanza con una versión chica.
 const CART_IMAGE_WIDTH = 256;
@@ -161,6 +162,7 @@ export function initCart(UI) {
     }
 
     update();
+    track("add_to_cart", { productId: product.id });
     return true;
   }
 
@@ -230,6 +232,7 @@ export function initCart(UI) {
 
   async function sendWhatsApp() {
     if (!cart.length || sending) return;
+    track("begin_checkout");
 
     // Sin sesión: igual que siempre, se abre WhatsApp con el mensaje.
     if (!hasStoredSession()) {
