@@ -141,47 +141,56 @@ html.y-locked, html.y-locked body { overflow: hidden; }
 /* Un estante: tabla de madera con las yerbas paradas encima. Cada yerba es un
    grupo con sus presentaciones juntas; entre yerbas distintas hay una
    separación (--group-gap). Medidas: --pack-w = ancho del paquete de 1 kg
-   (lo fija main.js según el ancho de la pantalla). */
+   (lo fija main.js según el ancho de la pantalla).
+   La tabla tiene profundidad: una superficie (--depth) detrás del borde de
+   adelante. El paquete de adelante apoya en el borde; el de atrás, sobre la
+   superficie, más al fondo: los dos quedan apoyados en el mismo estante. */
 .y-shelf {
-  --meta-h: 64px;             /* nombre (hasta 2 líneas) + presentaciones y precios */
-  --meta-gap: 20px;           /* espacio de la tabla */
+  --pad-top: 22px;
+  --group-h: calc(var(--pack-w, 92px) * 1.56);   /* alto de un paquete 2:3 + el fondo de la tabla */
+  --depth: calc(var(--pack-w, 92px) * 0.085);     /* profundidad visible de la tabla */
+  --edge: 13px;                                   /* grosor del borde de adelante */
   position: relative;
   display: flex;
   justify-content: center;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 0 var(--group-gap, 22px);
-  padding: 22px 6px 0;
-  margin-bottom: 18px;
+  padding: var(--pad-top) 6px 0;
+  margin-bottom: 16px;
 }
-/* la tabla queda justo debajo de los paquetes; nombres y precios, abajo de la tabla */
+/* superficie de la tabla (de atrás, más oscura, hacia el borde) */
+.y-shelf::before {
+  content: "";
+  position: absolute;
+  left: -6px;
+  right: -6px;
+  top: calc(var(--pad-top) + var(--group-h) - var(--depth));
+  height: var(--depth);
+  background: linear-gradient(180deg, #1c140e 0%, #2e2017 55%, #3d2b1f 100%);
+  z-index: 0;
+  pointer-events: none;
+}
+/* borde de adelante de la tabla */
 .y-shelf::after {
   content: "";
   position: absolute;
   left: -6px;
   right: -6px;
-  bottom: calc(var(--meta-h) + var(--meta-gap) - 14px);
-  height: 14px;
-  border-radius: 2px;
+  top: calc(var(--pad-top) + var(--group-h));
+  height: var(--edge);
+  border-radius: 0 0 2px 2px;
   background:
     linear-gradient(180deg, var(--wood-edge) 0 2px, transparent 2px),
     linear-gradient(180deg, var(--wood) 0%, var(--wood-dark) 100%);
   box-shadow: 0 10px 18px -6px rgba(0, 0, 0, 0.8), inset 0 -2px 0 rgba(0, 0, 0, 0.35);
-}
-/* sombra de los paquetes sobre la tabla */
-.y-shelf::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: calc(var(--meta-h) + var(--meta-gap));
-  height: 10px;
-  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.35));
+  z-index: 1;
   pointer-events: none;
 }
 
 /* ---------- Una yerba en el estante ---------- */
 .y-item {
   position: relative;
+  z-index: 2;                 /* paquetes y carteles por encima de la tabla */
   flex: 0 0 auto;
   width: calc(var(--pack-w, 92px) * var(--units, 1));
   display: flex;
@@ -189,8 +198,7 @@ html.y-locked, html.y-locked body { overflow: hidden; }
   color: var(--text);
   min-width: 0;
 }
-/* Grupo: alto de un paquete 2:3 + lo que sube el de atrás */
-.y-group { position: relative; height: calc(var(--pack-w, 92px) * 1.56); }
+.y-group { position: relative; height: var(--group-h); }
 .y-variant {
   position: absolute;
   bottom: 0;
@@ -200,20 +208,32 @@ html.y-locked, html.y-locked body { overflow: hidden; }
   z-index: 1;
   -webkit-tap-highlight-color: transparent;
 }
-/* Dos presentaciones: la grande atrás, apenas más arriba (más al fondo del
-   estante) y a la izquierda; la chica adelante, a la derecha, tapando solo
-   el borde de la de atrás. */
-.y-item--n2 .y-variant--back { bottom: calc(var(--pack-w, 92px) * 0.06); z-index: 1; }
+/* Dos presentaciones: la grande atrás (sobre la superficie, más al fondo) y
+   a la izquierda; la chica adelante (en el borde), a la derecha, tapando
+   solo el borde de la de atrás. */
+.y-item--n2 .y-variant--back { bottom: calc(var(--depth) * 0.8); z-index: 1; }
 .y-item--n2 .y-variant--front { left: calc(var(--pack-w, 92px) * 0.74); z-index: 2; }
 .y-item--n2 .y-variant--back:not(.is-out) .y-pack { filter: brightness(0.92); }
 /* Tres o más (poco común): escalonadas */
-.y-item--n3 .y-variant { left: calc(var(--pack-w, 92px) * 0.66 * var(--i, 0)); bottom: calc(var(--pack-w, 92px) * 0.06 * (2 - var(--i, 0))); z-index: calc(1 + var(--i, 0)); }
+.y-item--n3 .y-variant { left: calc(var(--pack-w, 92px) * 0.66 * var(--i, 0)); bottom: calc(var(--depth) * 0.4 * (2 - var(--i, 0))); z-index: calc(1 + var(--i, 0)); }
 
 .y-variant-pack {
   position: relative;
   display: block;
   transition: transform 0.18s ease;
   transform-origin: 50% 100%;
+}
+/* Sombra de contacto: la base del paquete apoyada sobre la madera */
+.y-variant-pack::before {
+  content: "";
+  position: absolute;
+  left: 4%;
+  right: 4%;
+  bottom: -3px;
+  height: 8px;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0.35) 60%, transparent);
+  z-index: -1;
+  pointer-events: none;
 }
 /* El grupo reacciona junto: al señalar o tocar cualquiera de sus
    presentaciones, se mueven las dos (sin cambiar quién queda adelante).
@@ -230,13 +250,55 @@ html.y-locked, html.y-locked body { overflow: hidden; }
 .y-variant:focus-visible { outline: none; }
 .y-variant:focus-visible .y-pack { outline: 2px solid #fff; outline-offset: 3px; border-radius: 4px; }
 
+/* ---------- Carteles de precio (en el borde de la tabla) ----------
+   Uno por presentación, debajo de su paquete: «500 g · $5.600».
+   En pantallas angostas va en dos líneas para que no se pisen. */
+.y-tags {
+  position: relative;
+  height: var(--tag-h, 19px);
+  margin-top: 3px;            /* sobre el borde de la tabla */
+}
+.y-tag {
+  position: absolute;
+  top: 0;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3em;
+  padding: 3px 6px;
+  border-radius: 2px;
+  background: #000;
+  color: #fff;
+  font-size: 10px;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+.y-tag-size { color: rgba(255, 255, 255, 0.72); }
+.y-tag-size::after { content: "·"; margin-left: 0.3em; color: rgba(255, 255, 255, 0.45); }
+.y-tag-price { font-weight: 700; }
+.y-tag.is-out { background: #1b1b1b; color: #8c8c8c; }
+.y-tag.is-out .y-tag-size { color: #8c8c8c; }
+.y-tag.is-out .y-tag-price { font-weight: 500; }
+/* posición: una sola, centrada; dos, cada una alineada con el borde de su paquete */
+.y-tag--solo { left: 50%; transform: translateX(-50%); }
+.y-item--n2 .y-tag--back { left: 0; }
+.y-item--n2 .y-tag--front { right: 0; }
+.y-item--n3 .y-tags { display: flex; justify-content: space-between; gap: 2px; height: auto; }
+.y-item--n3 .y-tag { position: static; }
+/* angosto: en dos líneas (presentación chica arriba, precio abajo) */
+.y-shelves[data-tags="stack"] { --tag-h: 29px; }
+.y-shelves[data-tags="stack"] .y-tag { flex-direction: column; align-items: flex-start; gap: 0; padding: 3px 6px 4px; }
+.y-shelves[data-tags="stack"] .y-tag-size { font-size: 9px; letter-spacing: 0.04em; }
+.y-shelves[data-tags="stack"] .y-tag-size::after { content: none; }
+.y-shelves[data-tags="stack"] .y-tag-price { font-size: 11px; }
+.y-shelves[data-tags="stack"] .y-tag--solo { align-items: center; }
+.y-shelves[data-tags="stack"] .y-item--n2 .y-tag--front { align-items: flex-end; }
+
 .y-item-meta {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 2px;
-  height: var(--meta-h);
-  margin-top: var(--meta-gap);
+  display: block;
+  margin-top: 5px;
   padding: 0;
   color: inherit;
   text-align: center;
@@ -245,27 +307,12 @@ html.y-locked, html.y-locked body { overflow: hidden; }
   font-size: 12px;
   line-height: 1.2;
   font-weight: 600;
-  height: 2.4em;              /* dos líneas: los precios quedan alineados */
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   overflow-wrap: anywhere;
 }
-.y-variant-labels { display: grid; grid-template-columns: 1fr; }
-/* debajo de cada paquete: la grande a la izquierda, la chica a la derecha */
-.y-item--n2 .y-variant-labels { grid-template-columns: 58% 42%; }
-.y-item--n3 .y-variant-labels { grid-auto-flow: column; grid-auto-columns: 1fr; }
-.y-variant-label {
-  display: flex;
-  flex-direction: column;
-  font-size: 10.5px;
-  line-height: 1.25;
-  color: var(--text-secondary);
-  white-space: nowrap;
-}
-.y-variant-label b { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
-.y-variant-label.is-out b { color: var(--text-muted); font-weight: 500; }
 
 .y-item-badge {
   position: absolute;
@@ -311,7 +358,7 @@ html.y-locked, html.y-locked body { overflow: hidden; }
   aspect-ratio: 2 / 3;
   border-radius: 7px 7px 5px 5px;
   background: linear-gradient(180deg, #fbf8f2 0%, var(--paper) 55%, #e6dfd2 100%);
-  box-shadow: 0 10px 14px -8px rgba(0, 0, 0, 0.85);
+  box-shadow: 0 3px 4px -2px rgba(0, 0, 0, 0.7);
   overflow: hidden;
   isolation: isolate;
 }
@@ -406,7 +453,10 @@ html.y-locked, html.y-locked body { overflow: hidden; }
 .y-pack--shelf .y-pack-img {
   object-fit: contain;
   object-position: 50% 100%;
-  filter: drop-shadow(0 8px 7px rgba(0, 0, 0, 0.55));
+  /* --trim: margen transparente de abajo del PNG (lo mide main.js): la base
+     visible del envase queda justo sobre el estante, tenga o no margen. */
+  transform: translateY(var(--trim, 0%));
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.5));
 }
 .y-variant.is-out .y-pack--shelf { filter: grayscale(1) brightness(0.5) contrast(0.9); }
 
@@ -835,3 +885,36 @@ html.y-locked, html.y-locked body { overflow: hidden; }
   .y-flight { display: none; }
   .y-track { scroll-behavior: auto; }
 }
+
+/* ---------- Menú de cuenta (ícono de persona, con sesión) ----------
+   Misma caja que el modal de cuenta de la tienda, más compacta. */
+.y-account-menu .account-box {
+  max-width: 320px;
+  padding: 30px 24px 16px;
+  text-align: center;
+}
+.y-menu-title { margin-bottom: 2px; }
+.y-menu-email {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  margin: 6px 0 18px;
+  overflow-wrap: anywhere;
+}
+.y-menu-email:empty { display: none; }
+.y-menu-account { text-decoration: none; }
+.y-menu-logout {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 12px 8px;
+  background: none;
+  border: 0;
+  color: #ff5a4e;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.y-menu-logout:hover,
+.y-menu-logout:focus-visible { color: #ff7a70; text-decoration: underline; text-underline-offset: 4px; outline: none; }

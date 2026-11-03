@@ -7,7 +7,7 @@ import { loadYerbas, productAvailable, isAvailable, availabilityText, shelfImage
 import { createBasket } from "./basket.js";
 import { optimizedSrc, withFallback } from "../lib/images.js";
 import { escapeHtml } from "../lib/html.js";
-import { hasStoredSession } from "../lib/session.js";
+import { hasStoredSession, SESSION_KEY } from "../lib/session.js";
 import { track } from "../lib/track.js";
 import { initAccount } from "../components/account.js";
 import { showToast } from "../components/ui.js";
@@ -74,7 +74,7 @@ function packHtml(product, { variant = null, size = "", src = undefined } = {}) 
   if (image) {
     return `
       <span class="y-pack y-pack--shelf ${size}" data-pack-of="${product.id}" data-size="${escapeHtml(size)}">
-        <img class="y-pack-img" src="${escapeHtml(optimizedSrc(image, PACK_WIDTH))}" alt="" loading="lazy" decoding="async" data-src="${escapeHtml(image)}">
+        <img class="y-pack-img" src="${escapeHtml(optimizedSrc(image, PACK_WIDTH))}" alt="" loading="lazy" decoding="async" crossorigin="anonymous" data-src="${escapeHtml(image)}">
       </span>`;
   }
   return genericPackHtml(product, size);
@@ -117,9 +117,44 @@ function wirePackImages(root) {
       });
     }
     withFallback(img, img.dataset.src);
+    if (pack?.classList.contains("y-pack--shelf")) {
+      const apply = () => { const t = bottomTrim(img); if (t) pack.style.setProperty("--trim", `${t}%`); };
+      if (img.complete && img.naturalWidth) apply(); else img.addEventListener("load", apply, { once: true });
+    }
     const loaded = () => pack?.classList.add("is-loaded");
     if (img.complete && img.naturalWidth) loaded(); else img.addEventListener("load", loaded, { once: true });
   });
+}
+
+// Cuánto hay que bajar la imagen para que la base VISIBLE del envase apoye en
+// el estante: se mide el margen transparente de abajo del PNG (en % del alto
+// del lugar 2:3). No modifica la imagen ni depende de que venga recortada.
+// Si no se puede leer (sin CORS), no se corrige: se ve como antes.
+const trimCache = new Map();
+function bottomTrim(img) {
+  const key = img.dataset.src;
+  if (trimCache.has(key)) return trimCache.get(key);
+  let value = 0;
+  try {
+    const w = 24, h = Math.max(1, Math.round(w * img.naturalHeight / img.naturalWidth));
+    const canvas = document.createElement("canvas");
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0, w, h);
+    const data = ctx.getImageData(0, 0, w, h).data;
+    let empty = 0;
+    for (let y = h - 1; y >= 0; y--) {
+      let solid = false;
+      for (let x = 0; x < w; x++) if (data[(y * w + x) * 4 + 3] > 24) { solid = true; break; }
+      if (solid) break;
+      empty++;
+    }
+    // Alto de la imagen dentro del lugar 2:3 (contain): si es más ancha que 2:3, ocupa menos alto.
+    const shown = Math.min(1, (2 / 3) / (img.naturalWidth / img.naturalHeight));
+    value = Math.min(20, Math.round((empty / h) * shown * 1000) / 10);
+  } catch { value = 0; }
+  trimCache.set(key, value);
+  return value;
 }
 
 // ---------------------------------------------------------------------
@@ -197,12 +232,14 @@ function itemHtml(brand, p) {
             </button>`;
         }).join("")}
       </div>
+      <div class="y-tags" aria-hidden="true">
+        ${order.map((v, i) => {
+          const role = n === 1 ? "solo" : i === 0 ? "back" : i === n - 1 ? "front" : "mid";
+          return `<span class="y-tag y-tag--${role}${isAvailable(v) ? "" : " is-out"}" data-variant="${v.id}"><span class="y-tag-size">${escapeHtml(v.label)}</span><span class="y-tag-price">${isAvailable(v) ? money(v.price) : "Agotado"}</span></span>`;
+        }).join("")}
+      </div>
       <button type="button" class="y-item-meta" data-open tabindex="-1" aria-hidden="true">
         <span class="y-item-name">${escapeHtml(name)}</span>
-        <span class="y-variant-labels">
-          ${order.map((v) => `
-            <span class="y-variant-label${isAvailable(v) ? "" : " is-out"}">${escapeHtml(v.label)}<b>${isAvailable(v) ? money(v.price) : "Agotado"}</b></span>`).join("")}
-        </span>
       </button>
     </div>`;
 }
@@ -224,7 +261,7 @@ function renderAisle() {
           <h2>${escapeHtml(b.name)}</h2>
           <p>${b.products.length} ${b.products.length === 1 ? "yerba" : "yerbas"}${available < b.products.length ? ` · ${b.products.length - available} agotada${b.products.length - available === 1 ? "" : "s"}` : ""}</p>
         </header>
-        <div class="y-shelves" style="--pack-w:${layout.W}px;--group-gap:${layout.gap}px">
+        <div class="y-shelves" style="--pack-w:${layout.W}px;--group-gap:${layout.gap}px"${layout.W < 105 ? ' data-tags="stack"' : ""}>
           ${rows.map((row) => `<div class="y-shelf">${row.map((p) => itemHtml(b, p)).join("")}</div>`).join("")}
         </div>
       </section>`;
@@ -357,7 +394,7 @@ function hideSheet(sheet = openSheet, { restoreFocus = true } = {}) {
 
 ui.scrim.addEventListener("click", () => hideSheet());
 document.addEventListener("keydown", (e) => {
-  if (!openSheet || document.getElementById("accountModal")?.classList.contains("open")) return;
+  if (!openSheet || document.getElementById("accountModal")?.classList.contains("open") || menuIsOpen()) return;
   if (e.key === "Escape") { e.preventDefault(); hideSheet(); }
   if (e.key === "Tab") {
     const f = [...openSheet.querySelectorAll("button:not([disabled]), a[href], input")].filter((el) => el.offsetParent);
@@ -849,6 +886,80 @@ async function refreshCatalog() {
     showToast("Actualizamos tu carrito según el stock disponible.");
   }
 }
+
+// ---------------------------------------------------------------------
+// Menú de cuenta (ícono de persona con sesión iniciada)
+// En /yerbas, con sesión, el ícono abre un menú chico: «Mi cuenta» (va a
+// /cuenta) o «Cerrar sesión». Sin sesión sigue abriendo el ingreso de siempre
+// (js/components/account.js). El cierre de sesión es el mismo que en «Mi cuenta».
+// ---------------------------------------------------------------------
+const menu = $("accountMenu");
+let menuReturnFocus = null;
+
+function menuIsOpen() { return menu?.classList.contains("open"); }
+
+function sessionEmail() {
+  try { return JSON.parse(localStorage.getItem(SESSION_KEY) ?? "null")?.user?.email ?? ""; } catch { return ""; }
+}
+
+function openMenu() {
+  if (!menu) return;
+  menuReturnFocus = document.activeElement;
+  $("accountMenuEmail").textContent = sessionEmail();
+  menu.classList.add("open");
+  menu.setAttribute("aria-hidden", "false");
+  requestAnimationFrame(() => menu.querySelector("[data-menu-account]")?.focus({ preventScroll: true }));
+}
+
+function closeMenu({ restoreFocus = true } = {}) {
+  if (!menuIsOpen()) return;
+  menu.classList.remove("open");
+  menu.setAttribute("aria-hidden", "true");
+  if (restoreFocus && menuReturnFocus?.focus) menuReturnFocus.focus({ preventScroll: true });
+  menuReturnFocus = null;
+}
+
+// Se escucha antes que account.js (fase de captura): con sesión, el toque abre
+// este menú en vez de ir directo a «Mi cuenta».
+document.addEventListener("click", (e) => {
+  if (!e.target.closest?.("#accountBtn") || !hasStoredSession()) return;
+  e.preventDefault();
+  e.stopPropagation();
+  openMenu();
+}, true);
+
+menu?.addEventListener("click", async (e) => {
+  if (e.target.closest("[data-menu-close]")) return closeMenu();
+  if (e.target.closest("[data-menu-account]")) {
+    closeMenu({ restoreFocus: false });   // el enlace sigue a /cuenta
+    return;
+  }
+  const logout = e.target.closest("[data-menu-logout]");
+  if (!logout) return;
+  closeMenu();
+  try {
+    const api = await import("../lib/customerAuth.js");
+    await api.signOut();
+    document.dispatchEvent(new CustomEvent("povmatero:signed-out"));
+    showToast("Cerraste sesión.");
+  } catch (err) {
+    console.warn(err);
+    showToast("No pudimos cerrar la sesión. Intentá de nuevo.");
+  }
+});
+
+document.addEventListener("keydown", (e) => {
+  if (!menuIsOpen()) return;
+  if (e.key === "Escape") { e.preventDefault(); closeMenu(); return; }
+  if (e.key === "Tab") {
+    const f = [...menu.querySelectorAll("a[href], button")].filter((el) => el.offsetParent);
+    if (!f.length) return;
+    if (e.shiftKey && document.activeElement === f[0]) { e.preventDefault(); f.at(-1).focus(); }
+    else if (!e.shiftKey && document.activeElement === f.at(-1)) { e.preventDefault(); f[0].focus(); }
+  }
+});
+// Si la sesión se cierra por otro lado (otra pestaña, el panel), el menú se cierra.
+window.addEventListener("storage", (e) => { if (e.key === SESSION_KEY && !e.newValue) closeMenu({ restoreFocus: false }); });
 
 async function start() {
   initAccount();

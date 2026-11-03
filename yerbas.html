@@ -113,6 +113,24 @@
     </div>
   </div>
 
+  <!-- Menú de cuenta (solo con sesión iniciada): «Mi cuenta» o «Cerrar sesión».
+       Sin sesión, el ícono abre el ingreso de siempre (#accountModal). -->
+  <div class="account-modal y-account-menu" id="accountMenu" aria-hidden="true">
+    <div class="account-overlay" data-menu-close></div>
+    <div class="account-box" role="dialog" aria-modal="true" aria-labelledby="accountMenuTitle" tabindex="-1">
+      <button type="button" class="account-close" aria-label="Cerrar" data-menu-close>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16" aria-hidden="true">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+      <p class="account-title y-menu-title" id="accountMenuTitle">TU CUENTA</p>
+      <p class="y-menu-email" id="accountMenuEmail"></p>
+      <a class="account-submit y-menu-account" href="/cuenta" data-menu-account>Mi cuenta</a>
+      <button type="button" class="y-menu-logout" data-menu-logout>Cerrar sesión</button>
+    </div>
+  </div>
+
   <script type="module" src="/js/yerbas/main.js"></script>
 </body>
 </html>
