@@ -120,10 +120,7 @@ export async function renderAccountPage(root, { notice = null } = {}) {
     <section class="acc-panel" id="acc-panel-datos" role="tabpanel" aria-labelledby="acc-tab-datos"></section>
     <section class="acc-panel" id="acc-panel-preferencias" role="tabpanel" aria-labelledby="acc-tab-preferencias"></section>
     <section class="acc-panel" id="acc-panel-pedidos" role="tabpanel" aria-labelledby="acc-tab-pedidos"></section>
-    <div class="acc-foot">
-      ${admin ? `<a class="acc-btn acc-btn-ghost" href="/admin/">Ir al panel de administración</a>` : ""}
-      <button type="button" class="acc-btn acc-btn-ghost" data-logout>Cerrar sesión</button>
-    </div>`;
+    ${admin ? `<div class="acc-foot"><a class="acc-btn acc-btn-ghost" href="/admin/">Ir al panel de administración</a></div>` : ""}`;
 
   const panels = Object.fromEntries(SECTIONS.map(([k]) => [k, root.querySelector(`#acc-panel-${k}`)]));
   const loaded = new Set();
@@ -142,7 +139,7 @@ export async function renderAccountPage(root, { notice = null } = {}) {
     if (location.pathname + location.search !== url) history.replaceState(history.state, "", url);
     if (!loaded.has(key)) {
       loaded.add(key);
-      if (key === "datos") renderData(panels.datos, user, profile, (p) => { profile = p; refreshGreeting(); });
+      if (key === "datos") renderData(panels.datos, user, profile, (p) => { profile = p; refreshGreeting(); }, logout);
       if (key === "preferencias") renderPreferences(panels.preferencias, user, profile);
       if (key === "pedidos") renderOrders(panels.pedidos);
     }
@@ -163,12 +160,13 @@ export async function renderAccountPage(root, { notice = null } = {}) {
     };
   });
 
-  root.querySelector("[data-logout]").onclick = async (e) => {
+  // «Cerrar sesión» está en «Mis datos» (mismo estilo ghost que el menú de cuenta).
+  async function logout(e) {
     e.currentTarget.disabled = true;
     try { await api.signOut(); } catch (err) { console.warn(err); }
     document.dispatchEvent(new CustomEvent("povmatero:signed-out"));
     renderAccountPage(root, { notice: { message: "Cerraste sesión.", ok: true } });
-  };
+  }
 
   select(current);
 }
@@ -176,16 +174,26 @@ export async function renderAccountPage(root, { notice = null } = {}) {
 // ---------------------------------------------------------------------
 // Mis datos
 // ---------------------------------------------------------------------
-function renderData(panel, user, profile, onSaved) {
+const LOGOUT_BUTTON = `<button type="button" class="account-logout acc-logout" data-logout>Cerrar sesión</button>`;
+
+function renderData(panel, user, profile, onSaved, onLogout) {
   if (!profile) {
-    panel.innerHTML = `<div class="acc-card"><p class="acc-muted">No encontramos los datos de tu cuenta. Escribinos por WhatsApp y lo resolvemos.</p></div>`;
+    panel.innerHTML = `
+      <div class="acc-card">
+        <div class="acc-card-top"><h2>Mis datos</h2>${LOGOUT_BUTTON}</div>
+        <p class="acc-muted">No encontramos los datos de tu cuenta. Escribinos por WhatsApp y lo resolvemos.</p>
+      </div>`;
+    panel.querySelector("[data-logout]").onclick = onLogout;
     return;
   }
   panel.innerHTML = `
     <form class="acc-card acc-form" novalidate>
-      <div class="acc-card-head">
-        <h2>Mis datos</h2>
-        <p class="acc-muted">Los usamos para identificar tus pedidos y contactarte por WhatsApp.</p>
+      <div class="acc-card-top">
+        <div class="acc-card-head">
+          <h2>Mis datos</h2>
+          <p class="acc-muted">Los usamos para identificar tus pedidos y contactarte por WhatsApp.</p>
+        </div>
+        ${LOGOUT_BUTTON}
       </div>
       <div class="account-row">
         <label class="account-field">
@@ -214,6 +222,7 @@ function renderData(panel, user, profile, onSaved) {
     </form>`;
 
   const form = panel.querySelector("form");
+  panel.querySelector("[data-logout]").onclick = onLogout;
   const submit = form.querySelector(".account-submit");
   const alert = form.querySelector(".account-alert");
   form.firstName.value = profile.first_name ?? "";

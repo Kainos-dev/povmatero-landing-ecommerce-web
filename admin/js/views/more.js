@@ -17,7 +17,7 @@ function item(href, iconName, title, detail) {
 
 export function renderMore(view) {
   const session = getSession();
-  const logout = h("button", { type: "button", class: "btn-ghost btn-block" }, icon("logout"), "Cerrar sesión");
+  const logout = h("button", { type: "button", class: "btn-ghost btn-block logout-ghost" }, icon("logout"), "Cerrar sesión");
   logout.addEventListener("click", async () => {
     logout.disabled = true;
     await signOut();

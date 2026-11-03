@@ -896,6 +896,8 @@ html.y-locked, html.y-locked body { overflow: hidden; }
 
 .y-sent { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; padding: 16px 0 4px; }
 .y-sent p { color: var(--sheet-muted); font-size: 14px; max-width: 34ch; }
+.y-sent .y-sent-number { color: var(--sheet-fg); font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.y-sent-actions { display: flex; flex-direction: column; gap: 10px; width: 100%; margin-top: 6px; }
 .y-sent-mark {
   width: 56px;
   height: 56px;
@@ -932,38 +934,3 @@ html.y-locked, html.y-locked body { overflow: hidden; }
   .y-track { scroll-behavior: auto; }
 }
 
-/* ---------- Menú de cuenta (ícono de persona, con sesión) ----------
-   Misma caja que el modal de cuenta de la tienda, más compacta. */
-.y-account-menu .account-box {
-  max-width: 320px;
-  padding: 30px 24px 16px;
-  text-align: center;
-}
-.y-menu-title { margin-bottom: 2px; }
-.y-menu-email {
-  font-size: var(--font-size-sm);
-  color: var(--text-secondary);
-  margin: 6px 0 18px;
-  overflow-wrap: anywhere;
-}
-.y-menu-email:empty { display: none; }
-.y-menu-account { text-decoration: none; }
-.y-menu-logout {
-  display: block;
-  width: 100%;
-  margin-top: 10px;
-  padding: 12px 8px;
-  background: none;
-  border: 1px solid transparent;
-  border-radius: 10px;        /* el mismo radio que «Mi cuenta» */
-  color: #ff5a4e;
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: border-color var(--t), color var(--t);
-}
-/* al pasar el cursor: solo un borde rojo sutil (sin fondo) */
-.y-menu-logout:hover,
-.y-menu-logout:focus-visible { border-color: rgba(255, 90, 78, 0.45); background: none; outline: none; }

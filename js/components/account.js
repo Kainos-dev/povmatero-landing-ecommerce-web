@@ -1,12 +1,13 @@
 // Ícono de cuenta + modal de acceso: ingreso, registro y recuperación de
-// contraseña. Con la sesión iniciada, el ícono lleva a la página «Mi cuenta»
-// (/cuenta, ver accountPage.js), donde están los datos, las preferencias de
-// novedades y los pedidos.
+// contraseña. Con la sesión iniciada, el ícono abre el menú de cuenta
+// (accountMenu.js: nombre, «Mi cuenta» → /cuenta y «Cerrar sesión»), en todas
+// las páginas; nunca va directo a /cuenta.
 // La lógica de Supabase vive en ../lib/customerAuth.js y se carga recién
 // cuando hace falta (la tienda no espera a supabase-js para mostrarse).
 import { escapeHtml } from "../lib/html.js";
 import { SESSION_KEY, hasStoredSession } from "../lib/session.js";
 import { showToast } from "./ui.js";
+import { createAccountMenu } from "./accountMenu.js";
 
 // Casilla de novedades: marcada por defecto (pedido del negocio). Se guarda
 // además CÓMO quedó marcada (premarcada sin tocar / marcada por la persona /
@@ -44,18 +45,17 @@ export function initAccount() {
   function setSignedIn(value) {
     button.classList.toggle("is-signed-in", value);
     button.setAttribute("aria-label", value ? "Mi cuenta (sesión iniciada)" : "Ingresar o crear cuenta");
-    if (value) button.removeAttribute("aria-haspopup");
-    else button.setAttribute("aria-haspopup", "dialog");
+    button.setAttribute("aria-haspopup", "dialog");
+    button.setAttribute("aria-controls", value ? "accountMenu" : "accountModal");
   }
   setSignedIn(hasStoredSession());
 
-  // Ir a «Mi cuenta» (lo resuelve js/router.js sin recargar la página).
-  function goToAccount(notice = null, section = null) {
+  // Menú de cuenta (con sesión).
+  const menu = createAccountMenu({ loadApi });
+  function openMenu() {
     close();
     setSignedIn(true);
-    document.dispatchEvent(new CustomEvent("povmatero:navigate", {
-      detail: { path: section ? `/cuenta?seccion=${section}` : "/cuenta", notice },
-    }));
+    menu.open();
   }
 
   // Después de ingresar o registrarse, la persona sigue en la página donde
@@ -71,9 +71,8 @@ export function initAccount() {
   // Se adelanta la descarga al acercar el mouse o el dedo.
   button.addEventListener("pointerenter", () => loadApi().catch(() => {}), { once: true });
   button.addEventListener("touchstart", () => loadApi().catch(() => {}), { once: true, passive: true });
-  // Con sesión: a «Mi cuenta». Sin sesión: el modal para ingresar.
-  // (Si la sesión guardada ya no vale, la página ofrece ingresar de nuevo.)
-  button.addEventListener("click", () => (hasStoredSession() ? goToAccount() : open()));
+  // Con sesión: el menú de cuenta. Sin sesión: el modal para ingresar.
+  button.addEventListener("click", () => (hasStoredSession() ? openMenu() : open()));
 
   // Pedidos de otras partes de la tienda (página «Mi cuenta», carrito).
   document.addEventListener("povmatero:account-login", (e) => {
@@ -148,7 +147,7 @@ export function initAccount() {
       const session = await api.getSession();
       if (!stillCurrent(token)) return;
       setSignedIn(Boolean(session));
-      if (session) goToAccount();
+      if (session) openMenu();
       else showAuth("login");
     } catch (err) {
       console.error(err);

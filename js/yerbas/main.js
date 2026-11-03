@@ -7,7 +7,7 @@ import { loadYerbas, productAvailable, isAvailable, availabilityText, shelfImage
 import { createBasket } from "./basket.js";
 import { optimizedSrc, withFallback } from "../lib/images.js";
 import { escapeHtml } from "../lib/html.js";
-import { hasStoredSession, SESSION_KEY } from "../lib/session.js";
+import { hasStoredSession } from "../lib/session.js";
 import { track } from "../lib/track.js";
 import { initAccount } from "../components/account.js";
 import { showToast } from "../components/ui.js";
@@ -406,7 +406,7 @@ function hideSheet(sheet = openSheet, { restoreFocus = true } = {}) {
 
 ui.scrim.addEventListener("click", () => hideSheet());
 document.addEventListener("keydown", (e) => {
-  if (!openSheet || document.getElementById("accountModal")?.classList.contains("open") || menuIsOpen()) return;
+  if (!openSheet || document.querySelector(".account-modal.open")) return;
   if (e.key === "Escape") { e.preventDefault(); hideSheet(); }
   if (e.key === "Tab") {
     const f = [...openSheet.querySelectorAll("button:not([disabled]), a[href], input")].filter((el) => el.offsetParent);
@@ -725,8 +725,8 @@ function renderCartSheet() {
           <small>Lo guardamos en tu cuenta para próximos pedidos.</small>
         </label>` : ""}
       <p class="y-msg${cartMessage?.ok ? " ok" : ""}" role="alert" ${cartMessage ? "" : "hidden"}>${escapeHtml(cartMessage?.text ?? "")}</p>
-      <button type="button" class="y-btn-primary y-send" data-send ${sending ? "disabled" : ""} data-autofocus>
-        ${sending ? "Enviando…" : signedIn ? `${WA_ICON} Enviar pedido por WhatsApp` : "Ingresá para enviar el pedido"}
+      <button type="button" class="y-btn-primary y-send" data-send ${sending ? 'disabled aria-busy="true"' : ""} data-autofocus>
+        ${sending ? "Realizando pedido…" : !signedIn ? "Ingresá para enviar el pedido" : sendFailed ? "Reintentar el pedido" : "Realizar pedido"}
       </button>
       <p class="y-fineprint">${signedIn
         ? "Es una solicitud: te confirmamos disponibilidad, entrega y pago por WhatsApp. Reservamos tus paquetes por 24 horas."
@@ -740,20 +740,23 @@ function renderCartSheet() {
   wirePackImages(ui.cartSheet);
 }
 
-const WA_ICON = `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3a.5.5 0 0 0 0-.4l-.8-1.9c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.1.6a2.7 2.7 0 0 0 1.8-1.2 2.2 2.2 0 0 0 .1-1.2c0-.2-.2-.3-.5-.4z"/></svg>`;
-
+// Pantalla de éxito: solo después de que la base confirmó el pedido.
 function renderOrderSent() {
   const o = lastOrder;
   ui.cartSheet.innerHTML = `
     <div class="y-sheet-grip" aria-hidden="true"></div>
     ${closeBtn}
-    <div class="y-sent">
+    <div class="y-sent" role="status">
       <span class="y-sent-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 5 5L20 7"/></svg></span>
-      <h2 id="cartSheetTitle">¡Pedido #${escapeHtml(String(o.id))} enviado!</h2>
-      <p>Lo reservamos por 24 horas. Te confirmamos disponibilidad, entrega y pago por WhatsApp.</p>
-      <a class="y-btn-primary" href="${escapeHtml(o.url)}" target="_blank" rel="noopener">${WA_ICON} Abrir WhatsApp</a>
-      <a class="y-btn-ghost" href="/cuenta?seccion=pedidos">Ver mis pedidos</a>
-      <button type="button" class="y-link" data-close data-autofocus>Seguir mirando</button>
+      <h2 id="cartSheetTitle">Pedido realizado correctamente</h2>
+      ${o.id ? `<p class="y-sent-number">Pedido #${escapeHtml(String(o.id))}</p>` : ""}
+      <p>Reservamos tus paquetes por 24 horas. Te confirmamos disponibilidad, entrega y pago por WhatsApp.</p>
+      <div class="y-sent-actions">
+        <a class="y-btn-primary" href="/cuenta?seccion=pedidos" data-autofocus>Ver mis pedidos</a>
+        <button type="button" class="y-btn-ghost" data-close>Volver a la góndola de yerbas</button>
+        <a class="y-btn-ghost" href="/">Volver a la web</a>
+      </div>
+      ${o.url ? `<a class="y-link" href="${escapeHtml(o.url)}" target="_blank" rel="noopener">También podés avisarnos por WhatsApp</a>` : ""}
     </div>`;
 }
 
@@ -801,6 +804,30 @@ function whatsappText(order) {
   ].join("\n");
 }
 
+// Envío en curso guardado en esta pestaña: si se recarga la página a mitad
+// del envío, al volver se busca el pedido antes de dejar enviarlo de nuevo.
+const SENDING_KEY = "povmatero-yerbas-sending";
+const SKEW_MS = 2 * 60 * 1000;   // margen por si el reloj del teléfono no coincide con el de la base
+let sendFailed = false;
+
+function rememberSending(value) {
+  try {
+    if (value) sessionStorage.setItem(SENDING_KEY, JSON.stringify(value));
+    else sessionStorage.removeItem(SENDING_KEY);
+  } catch { /* sin almacenamiento: solo se pierde la recuperación tras recargar */ }
+}
+
+function orderSucceeded(order) {
+  rememberSending(null);
+  sendFailed = false;
+  basket.clear();
+  lastOrder = { id: order.id, url: order.items ? `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(whatsappText(order))}` : null };
+  sending = false;
+  cartMessage = null;
+  renderCartSheet();
+  refreshCatalog();
+}
+
 async function sendOrder() {
   if (sending) return;
   // La sesión cambió (otra pestaña, el panel): primero se muestra el carrito correcto.
@@ -830,37 +857,41 @@ async function sendOrder() {
   }
 
   track("begin_checkout", { path: "/yerbas" });
-  // La pestaña de WhatsApp se abre ya (si se abre después de esperar, el
-  // navegador la bloquea) y se completa al tener el número de pedido.
-  const win = window.open("", "_blank");
-  try { win?.document.write("<title>WhatsApp</title><p style=\"font-family:sans-serif;padding:24px\">Registrando tu pedido…</p>"); } catch { /* nada */ }
-
   sending = true;
   cartMessage = null;
   renderCartSheet();
   const owner = basket.owner;
+  const startedAt = Date.now();
   let api;
+  let signature = null;
   try {
     api = await import("./api.js");
+    signature = api.itemsSignature(lines);
     const session = await api.getSession();
     if (!session || session.user.id !== owner) throw Object.assign(new Error("La sesión cambió."), { hint: "owner_changed" });
-    const order = await withTimeout(api.createYerbaOrder(lines, profile?.phone ? null : phone), 12000);
+    rememberSending({ owner, signature, at: startedAt });
+    const order = await withTimeout(api.createYerbaOrder(lines, profile?.phone ? null : phone), 15000);
     if (profile && !profile.phone) profile.phone = phone;
-    const url = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(whatsappText(order))}`;
-    if (win && !win.closed) {
-      try { win.opener = null; } catch { /* nada */ }
-      win.location.href = url;
-    }
-    basket.clear();
-    lastOrder = { id: order.id, url };
-    sending = false;
-    renderCartSheet();
-    if (!win || win.closed) window.open(url, "_blank");
-    refreshCatalog();
+    // El carrito se vacía recién con el pedido confirmado por la base.
+    orderSucceeded(order);
   } catch (err) {
     console.warn("Pedido de yerbas:", err);
-    try { win?.close(); } catch { /* nada */ }
+    // Sin respuesta (corte, demora): puede haberse guardado igual. Antes de
+    // ofrecer reintentar se busca; si está, es un éxito y no se duplica.
+    if (api && signature && !err?.hint && !err?.code) {
+      try {
+        const found = await api.findRecentOrder(owner, startedAt - SKEW_MS, signature);
+        if (found) return orderSucceeded(found);
+      } catch (checkErr) {
+        console.warn("Pedido de yerbas: no se pudo comprobar si se guardó.", checkErr);
+        sending = false;
+        sendFailed = true;
+        return setMessage("No pudimos confirmar si tu pedido se registró. Revisá «Mis pedidos» en tu cuenta antes de volver a enviarlo.");
+      }
+    }
+    rememberSending(null);
     sending = false;
+    sendFailed = true;
     if (err?.hint === "owner_changed") {
       basket.syncOwner();
       return setMessage("La sesión cambió en este navegador. Revisá el carrito antes de enviar.");
@@ -873,6 +904,28 @@ async function sendOrder() {
       await refreshCatalog();
       setMessage(message + " Ajustamos tu carrito a lo disponible.");
     }
+  }
+}
+
+// Se recargó la página a mitad de un envío: si el pedido se guardó, se muestra
+// el éxito (y se vacía el carrito) en vez de dejar enviarlo otra vez.
+async function resumeInterruptedSend() {
+  let pending = null;
+  try { pending = JSON.parse(sessionStorage.getItem(SENDING_KEY) ?? "null"); } catch { /* nada */ }
+  if (!pending) return;
+  if (!pending.signature || !hasStoredSession() || Date.now() - pending.at > 30 * 60 * 1000 || pending.owner !== basket.owner) {
+    return rememberSending(null);
+  }
+  try {
+    const api = await import("./api.js");
+    const found = await api.findRecentOrder(pending.owner, pending.at - SKEW_MS, pending.signature);
+    if (found) {
+      orderSucceeded(found);
+      showSheet(ui.cartSheet);
+    }
+    rememberSending(null);
+  } catch (err) {
+    console.warn("Pedido de yerbas: no se pudo comprobar el envío anterior.", err);
   }
 }
 
@@ -901,79 +954,6 @@ async function refreshCatalog() {
   }
 }
 
-// ---------------------------------------------------------------------
-// Menú de cuenta (ícono de persona con sesión iniciada)
-// En /yerbas, con sesión, el ícono abre un menú chico: «Mi cuenta» (va a
-// /cuenta) o «Cerrar sesión». Sin sesión sigue abriendo el ingreso de siempre
-// (js/components/account.js). El cierre de sesión es el mismo que en «Mi cuenta».
-// ---------------------------------------------------------------------
-const menu = $("accountMenu");
-let menuReturnFocus = null;
-
-function menuIsOpen() { return menu?.classList.contains("open"); }
-
-function sessionEmail() {
-  try { return JSON.parse(localStorage.getItem(SESSION_KEY) ?? "null")?.user?.email ?? ""; } catch { return ""; }
-}
-
-function openMenu() {
-  if (!menu) return;
-  menuReturnFocus = document.activeElement;
-  $("accountMenuEmail").textContent = sessionEmail();
-  menu.classList.add("open");
-  menu.setAttribute("aria-hidden", "false");
-  requestAnimationFrame(() => menu.querySelector("[data-menu-account]")?.focus({ preventScroll: true }));
-}
-
-function closeMenu({ restoreFocus = true } = {}) {
-  if (!menuIsOpen()) return;
-  menu.classList.remove("open");
-  menu.setAttribute("aria-hidden", "true");
-  if (restoreFocus && menuReturnFocus?.focus) menuReturnFocus.focus({ preventScroll: true });
-  menuReturnFocus = null;
-}
-
-// Se escucha antes que account.js (fase de captura): con sesión, el toque abre
-// este menú en vez de ir directo a «Mi cuenta».
-document.addEventListener("click", (e) => {
-  if (!e.target.closest?.("#accountBtn") || !hasStoredSession()) return;
-  e.preventDefault();
-  e.stopPropagation();
-  openMenu();
-}, true);
-
-menu?.addEventListener("click", async (e) => {
-  if (e.target.closest("[data-menu-close]")) return closeMenu();
-  if (e.target.closest("[data-menu-account]")) {
-    closeMenu({ restoreFocus: false });   // el enlace sigue a /cuenta
-    return;
-  }
-  const logout = e.target.closest("[data-menu-logout]");
-  if (!logout) return;
-  closeMenu();
-  try {
-    const api = await import("../lib/customerAuth.js");
-    await api.signOut();
-    document.dispatchEvent(new CustomEvent("povmatero:signed-out"));
-    showToast("Cerraste sesión.");
-  } catch (err) {
-    console.warn(err);
-    showToast("No pudimos cerrar la sesión. Intentá de nuevo.");
-  }
-});
-
-document.addEventListener("keydown", (e) => {
-  if (!menuIsOpen()) return;
-  if (e.key === "Escape") { e.preventDefault(); closeMenu(); return; }
-  if (e.key === "Tab") {
-    const f = [...menu.querySelectorAll("a[href], button")].filter((el) => el.offsetParent);
-    if (!f.length) return;
-    if (e.shiftKey && document.activeElement === f[0]) { e.preventDefault(); f.at(-1).focus(); }
-    else if (!e.shiftKey && document.activeElement === f.at(-1)) { e.preventDefault(); f[0].focus(); }
-  }
-});
-// Si la sesión se cierra por otro lado (otra pestaña, el panel), el menú se cierra.
-window.addEventListener("storage", (e) => { if (e.key === SESSION_KEY && !e.newValue) closeMenu({ restoreFocus: false }); });
 
 async function start() {
   initAccount();
@@ -1000,6 +980,7 @@ async function start() {
   const changes = basket.reconcile(catalog);
   renderDock();
   if (changes.length) showToast("Actualizamos tu carrito según el stock disponible.");
+  resumeInterruptedSend();
 
   // Al volver a la pestaña después de un rato, el stock se actualiza.
   let hiddenAt = 0;

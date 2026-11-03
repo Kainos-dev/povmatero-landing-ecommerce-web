@@ -28,6 +28,28 @@ export async function createYerbaOrder(lines, phone = null) {
   return data;   // { id, status, expires_at, total, item_count, items: [...] }
 }
 
+// «12:2,15:1»: qué presentaciones y cuántas (para reconocer un mismo pedido).
+export function itemsSignature(items) {
+  return items.map((i) => `${Number(i.variant_id)}:${Number(i.quantity ?? i.qty)}`).sort().join(",");
+}
+
+// ¿Ya quedó guardado este pedido? Se usa cuando la respuesta no llegó (corte de
+// conexión, demora, recarga de la página a mitad del envío): busca un pedido de
+// yerbas de esta cuenta, creado desde «since», con las mismas presentaciones y
+// cantidades. Así nunca se envía dos veces. La RLS solo devuelve pedidos propios.
+export async function findRecentOrder(userId, since, signature) {
+  const { data, error } = await supabase
+    .from("orders")
+    .select("id, total, created_at, order_items (variant_id, quantity)")
+    .eq("customer_id", userId)
+    .eq("kind", "yerbas")
+    .gte("created_at", new Date(since).toISOString())
+    .order("created_at", { ascending: false })
+    .limit(5);
+  if (error) throw error;
+  return (data ?? []).find((o) => itemsSignature(o.order_items ?? []) === signature) ?? null;
+}
+
 // Mensaje claro para cada rechazo de la base (hint) o de la red.
 export function orderErrorMessage(err) {
   switch (err?.hint) {
@@ -46,7 +68,7 @@ export function orderErrorMessage(err) {
   }
   if (err?.code === "PGRST202") return "Los pedidos de yerbas todavía no están habilitados. Probá más tarde.";
   if (/jwt|token/i.test(err?.message ?? "")) return "Tu sesión expiró. Volvé a ingresar.";
-  if (err instanceof TypeError || err?.message === "timeout") return "No pudimos conectarnos. Revisá tu internet e intentá de nuevo.";
+  if (err instanceof TypeError || err?.message === "timeout" || /failed to fetch|load failed|network/i.test(err?.message ?? "")) return "No pudimos conectarnos. Revisá tu internet e intentá de nuevo.";
   return "No pudimos enviar el pedido. Intentá de nuevo en unos minutos.";
 }
 

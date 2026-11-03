@@ -336,3 +336,46 @@
   outline-offset: 2px;
   box-shadow: var(--focus-ring);
 }
+
+/* ---------- Menú de cuenta (ícono de persona con sesión) ----------
+   El mismo en toda la web (js/components/accountMenu.js). Misma caja que el
+   modal de ingreso, más compacta. Arriba, el nombre del cliente. */
+.account-menu .account-box {
+  max-width: 320px;
+  padding: 30px 24px 16px;
+  text-align: center;
+}
+.account-menu-title { margin-bottom: 2px; }
+/* Con el nombre: tal como se escribe («Agustin Acevedo»), sin mayúsculas forzadas */
+.account-menu-title.is-name { letter-spacing: 0.02em; font-size: 1em; text-transform: none; overflow-wrap: anywhere; }
+.account-menu-email {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  margin: 6px 0 18px;
+  overflow-wrap: anywhere;
+}
+.account-menu-email:empty { display: none; }
+.account-menu-account { text-decoration: none; }
+
+/* «Cerrar sesión» (menú de cuenta y «Mi cuenta»): ghost rojo, sin fondo ni
+   borde; al pasar el cursor, solo un borde rojo sutil. */
+.account-logout {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 12px 8px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: #ff5a4e;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color var(--t), color var(--t);
+}
+.account-logout:hover,
+.account-logout:focus-visible { border-color: rgba(255, 90, 78, 0.45); background: none; outline: none; box-shadow: none; }
+.account-logout:disabled { opacity: 0.6; cursor: progress; }

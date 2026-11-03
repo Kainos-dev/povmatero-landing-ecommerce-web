@@ -94,6 +94,9 @@ html:not(.route-account) .acc-page { display: none; }
   gap: 16px;
 }
 .acc-card-head { display: flex; flex-direction: column; gap: 4px; }
+/* Encabezado de «Mis datos» con «Cerrar sesión» a la derecha (estilo en account.css) */
+.acc-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.acc-logout { width: auto; margin: -6px -8px 0 0; padding: 9px 14px; flex-shrink: 0; }
 .acc-card h2 {
   font-size: 0.9em;
   letter-spacing: 0.14em;
@@ -237,6 +240,14 @@ html:not(.route-account) .acc-page { display: none; }
 .acc-btn:disabled { opacity: 0.6; cursor: progress; }
 .acc-btn:focus-visible { outline: var(--focus-outline); outline-offset: 2px; }
 .acc-empty { display: flex; flex-direction: column; gap: 14px; align-items: flex-start; padding: 48px 0; }
+
+/* ---------- Escritorio ----------
+   La página ocupa al menos toda la pantalla (debajo del header fijo): el
+   footer queda siempre fuera de la vista inicial y aparece solo al bajar,
+   sea cual sea la sección y aunque tenga poco contenido. */
+@media (min-width: 769px) {
+  .acc-page { min-height: 100vh; min-height: 100svh; }
+}
 
 /* ---------- Celular ---------- */
 @media (max-width: 768px) {

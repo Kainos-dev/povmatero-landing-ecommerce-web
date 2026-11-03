@@ -1427,3 +1427,14 @@ a.move:hover { background: var(--a-sunken); }
   .shelf-card > .shelf-frame { width: 150px; align-self: center; }
   .shelf-variant-body .shelf-actions > .btn-ghost { flex: 0 1 auto; }
 }
+
+/* «Cerrar sesión»: ghost rojo como en la tienda (sin fondo ni borde; al pasar
+   el cursor, solo un borde rojo sutil). Rojo más oscuro: el panel es blanco. */
+.logout-ghost,
+.btn-ghost.logout-ghost {
+  background: none;
+  color: #b42318;
+  border: 1px solid transparent;
+}
+.logout-ghost:hover,
+.btn-ghost.logout-ghost:hover { background: none; color: #b42318; border-color: rgba(180, 35, 24, 0.4); }
