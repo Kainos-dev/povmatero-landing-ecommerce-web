@@ -165,28 +165,39 @@ function bottomTrim(img) {
 // yerba van juntas, superpuestas, sin esa separación).
 function shelfLayout() {
   const w = ui.track.clientWidth || window.innerWidth;
-  if (w >= 1500) return { key: "xxl", W: 120, gap: 40, pad: 144 };
-  if (w >= 1100) return { key: "xl", W: 108, gap: 32, pad: 144 };
-  if (w >= 820) return { key: "lg", W: 108, gap: 34, pad: 144 };
-  if (w >= 560) return { key: "md", W: 100, gap: 28, pad: 48 };
-  return { key: "sm", W: 92, gap: 22, pad: 44 };
+  if (w >= 1500) return { key: "xxl", W: 120, gap: 40 };
+  if (w >= 1100) return { key: "xl", W: 108, gap: 32 };
+  if (w >= 820) return { key: "lg", W: 108, gap: 34 };
+  if (w >= 560) return { key: "md", W: 100, gap: 28 };
+  return { key: "sm", W: 92, gap: 22 };
 }
 
 // Composición de un grupo de dos: el de menos gramos adelante (más chico) y el
 // otro detrás, apenas elevado y corrido en diagonal. La superposición es leve
 // (≈ un cuarto del paquete de atrás), así se ven los dos enteros.
-const SHELVES_MAX = 1280;     // igual que .y-shelves { max-width } en yerbas.css
 const FRONT_SCALE = 0.82;      // 500 g frente a 1 kg
 const FRONT_LEFT = 0.74;       // dónde empieza el de adelante, en anchos de W
 const groupUnits = (n) => (n === 1 ? 1 : n === 2 ? FRONT_LEFT + FRONT_SCALE : 1 + (n - 1) * 0.66);
 const shown = (p) => Math.min(p.variants.length, 4);
+// Una presentación de menos de 1 kg (500 g) va siempre a su escala, aunque
+// esté sola en el estante: nunca se ve del tamaño de un paquete de 1 kg.
+const soloScale = (v) => (v?.grams && v.grams < 1000 ? FRONT_SCALE : 1);
+const itemUnits = (p) => (shown(p) === 1 ? soloScale(p.variants[0]) : groupUnits(shown(p)));
+
+// Margen interno del contenedor de la góndola (--wrap-pad en yerbas.css).
+function wrapPad() {
+  if (window.matchMedia("(min-width: 1024px)").matches) return 40;
+  if (window.matchMedia("(min-width: 640px)").matches) return 24;
+  return 0;
+}
 
 // Reparte las yerbas en estantes por ancho real, sin separar las
 // presentaciones de una yerba, con estantes parejos.
 function shelfRows(products, layout) {
-  // Ancho útil: el de la góndola sin márgenes, con el tope de .y-shelves (1280 px).
-  const avail = Math.max(layout.W * 2, Math.min(SHELVES_MAX, (ui.track.clientWidth || window.innerWidth) - layout.pad) - 12);
-  const width = (p) => groupUnits(shown(p)) * layout.W;
+  // Ancho útil: el del contenedor (.y-shelves: 90 % menos su margen interno)
+  // menos el margen de cada estante (6 px por lado).
+  const avail = Math.max(layout.W * 2, (ui.track.clientWidth || window.innerWidth) * 0.9 - wrapPad() * 2 - 12);
+  const width = (p) => itemUnits(p) * layout.W;
   const total = products.reduce((s, p) => s + width(p), 0) + layout.gap * (products.length - 1);
   const target = total / Math.max(1, Math.ceil(total / avail));
   const rows = [[]];
@@ -218,12 +229,13 @@ function itemHtml(brand, p) {
   const n = order.length;
   const big = order[0];
   return `
-    <div class="y-item y-item--n${Math.min(n, 3)}${out ? " is-out" : ""}" data-product="${p.id}" style="--units:${groupUnits(n)}">
+    <div class="y-item y-item--n${Math.min(n, 3)}${out ? " is-out" : ""}" data-product="${p.id}" style="--units:${itemUnits(p)}">
       <div class="y-group">
         ${order.map((v, i) => {
           const vOut = !isAvailable(v);
           // En un grupo de dos, el más chico (adelante) se dibuja a escala.
-          const scale = n === 2 && i === 1 && (v.grams ?? 0) < (big.grams ?? 0) ? FRONT_SCALE : n === 2 && i === 1 ? 0.92 : 1;
+          // Sola, una de 500 g también va a escala (más chica que una de 1 kg sola).
+          const scale = n === 1 ? soloScale(v) : n === 2 && i === 1 && (v.grams ?? 0) < (big.grams ?? 0) ? FRONT_SCALE : n === 2 && i === 1 ? 0.92 : 1;
           const role = n === 1 ? "solo" : i === 0 ? "back" : i === n - 1 ? "front" : "mid";
           return `
             <button type="button" class="y-variant y-variant--${role}${vOut ? " is-out" : ""}" data-variant="${v.id}"
@@ -508,7 +520,9 @@ function openProduct(product, { focusVariant = null } = {}) {
 // Altura relativa en miniaturas (ficha y carrito): el de menos gramos, más bajo.
 function packScale(product, variant) {
   const max = Math.max(...product.variants.map((v) => v.grams ?? 0));
-  if (!variant.grams || !max || variant.grams >= max) return 1;
+  if (!variant.grams || !max) return 1;
+  // 500 g va a escala aunque sea la única presentación de la yerba.
+  if (variant.grams >= max && variant.grams >= 1000) return 1;
   return FRONT_SCALE;
 }
 
@@ -531,7 +545,7 @@ function renderDock() {
   const total = lines.reduce((s, l) => s + l.qty * l.variant.price, 0);
   ui.count.textContent = units;
   ui.dock.classList.toggle("has-items", units > 0);
-  ui.total.textContent = units ? money(total) : "Tu carrito";
+  ui.total.textContent = units ? money(total) : "";
   ui.dock.setAttribute("aria-label", units ? `Carrito: ${units} ${units === 1 ? "paquete" : "paquetes"}, ${money(total)}` : "Carrito vacío");
   const minis = [];
   for (const l of lines) for (let i = 0; i < l.qty && minis.length < MAX_IN_CART; i++) minis.push(l);

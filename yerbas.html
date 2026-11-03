@@ -31,24 +31,36 @@
   <link rel="modulepreload" href="/js/lib/supabaseConfig.js">
   <link rel="modulepreload" href="/js/lib/session.js">
   <link rel="modulepreload" href="/js/lib/images.js">
+
+  <!-- Mismo ícono de pestaña que el resto de la tienda, y la misma Inter de
+       Google Fonts (en /yerbas solo la usan los títulos). -->
+  <link rel="icon" href="/images/iconoPestaña.ico" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'" />
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" /></noscript>
 </head>
 <body class="y-page">
 
+  <!-- Misma estructura que el header de la tienda (.header-inner): mismo ancho,
+       alto y lugar del logo; a la derecha, solo el ícono de cuenta. -->
   <header class="y-top">
-    <a href="/" class="y-back" aria-label="Volver a la tienda">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="18" height="18" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
-      <img src="/images/Logo-header.webp" alt="povmatero" width="55" height="48">
-    </a>
-    <div class="y-heading">
-      <p class="y-eyebrow">Góndola de</p>
-      <h1>Yerbas</h1>
+    <div class="y-top-inner">
+      <a href="/" class="y-back" aria-label="Volver a la tienda">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="18" height="18" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+        <img src="/images/Logo-header.webp" alt="povmatero" width="110" height="96">
+      </a>
+      <div class="y-heading">
+        <p class="y-eyebrow">Góndola de</p>
+        <h1>Yerbas</h1>
+      </div>
+      <button type="button" class="account-btn y-icon-btn" id="accountBtn" aria-label="Ingresar o crear cuenta" aria-haspopup="dialog" aria-controls="accountModal">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="20" height="20" aria-hidden="true">
+          <circle cx="12" cy="8" r="4"/>
+          <path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/>
+        </svg>
+      </button>
     </div>
-    <button type="button" class="account-btn y-icon-btn" id="accountBtn" aria-label="Ingresar o crear cuenta" aria-haspopup="dialog" aria-controls="accountModal">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="20" height="20" aria-hidden="true">
-        <circle cx="12" cy="8" r="4"/>
-        <path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/>
-      </svg>
-    </button>
   </header>
 
   <nav class="y-brands" id="brandTabs" aria-label="Marcas"></nav>
@@ -86,7 +98,7 @@
       </svg>
       <span class="y-cart-count" id="cartCount">0</span>
     </span>
-    <span class="y-cart-total" id="cartTotal">Tu carrito</span>
+    <span class="y-cart-total" id="cartTotal"></span>
   </button>
 
   <div class="y-scrim" id="scrim" hidden></div>
