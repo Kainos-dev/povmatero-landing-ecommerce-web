@@ -41,6 +41,7 @@ export function renderMore(view) {
       h("ul", { class: "task-list" },
         item("#/importar-precios", "upload", "Importar precios", "Lista mayorista (costos) o minorista (precios), en Excel o CSV"),
         item("#/gondola", "image", "Imágenes de góndola", "El envase de cada yerba en /yerbas (PNG 2:3)"),
+        item("#/optimizar-imagenes", "image", "Optimizar imágenes", "Pasar a WebP las imágenes pesadas, sin borrar los originales"),
         item("#/imagenes", "image", "Verificar imágenes", "Estado de todas las fotos y migración a Storage"),
         item("#/revision", "check", "Revisión del catálogo", "Qué falta antes de publicar"))),
     h("section", { class: "panel" },

@@ -40,3 +40,48 @@ export async function convertToWebp(file) {
 
   return { blob, width, height };
 }
+
+// ---------------------------------------------------------------------
+// Imágenes con transparencia (envases de la góndola, PNG): WebP conservando
+// el canal alfa. El lienzo empieza transparente y no se pinta fondo, así que
+// los bordes y el margen de abajo (que usa /yerbas para apoyar el paquete en
+// la tabla) quedan igual. Lado mayor 1200 px: en la góndola se dibujan a
+// ~100–260 px; sobra para pantallas de alta densidad y para ampliar.
+// ---------------------------------------------------------------------
+export const SHELF_MAX_SIDE = 1200;
+export const SHELF_QUALITY = 0.9;
+
+// Devuelve { blob, width, height, changed }. changed = false si convertir no
+// ahorra (por ejemplo, un WebP que ya es liviano): entonces blob es el original.
+export async function convertKeepingAlpha(file, { maxSide = SHELF_MAX_SIDE, quality = SHELF_QUALITY } = {}) {
+  if (!file?.type?.startsWith("image/")) throw new Error("No es una imagen.");
+  if (file.size > MAX_INPUT_BYTES) throw new Error("La imagen pesa más de 30 MB.");
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file, { premultiplyAlpha: "none", colorSpaceConversion: "none" });
+  } catch {
+    throw new Error("No se pudo leer la imagen. Probá exportarla de nuevo como PNG.");
+  }
+  const { width, height } = fitSize(bitmap.width, bitmap.height, maxSide);
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d", { alpha: true });
+  ctx.clearRect(0, 0, width, height);
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(bitmap, 0, 0, width, height);
+  const resized = bitmap.width !== width || bitmap.height !== height;
+  bitmap.close?.();
+
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/webp", quality));
+  if (!blob || blob.type !== "image/webp") {
+    throw new Error("Este navegador no puede generar WebP. Usá Chrome, Edge o Firefox actualizados.");
+  }
+  // Si no achica ni ahorra al menos un 10 %, se deja el original.
+  if (!resized && file.type === "image/webp" && blob.size > file.size * 0.9) {
+    return { blob: file, width, height, changed: false };
+  }
+  if (blob.size >= file.size && !resized) return { blob: file, width, height, changed: false };
+  if (blob.size > MAX_OUTPUT_BYTES) throw new Error("La imagen convertida sigue pesando más de 5 MB.");
+  return { blob, width, height, changed: true };
+}

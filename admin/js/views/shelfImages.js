@@ -6,6 +6,9 @@
 import { h, mount, errorMessage, normalizeText, toast } from "../ui.js";
 import { icon } from "../icons.js";
 import { presentationLabel } from "/js/yerbas/catalog.js";
+import { thumbnail } from "../thumbs.js";
+
+const kb = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1).replace(".", ",")} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 import {
   listYerbasWithShelfImage, uploadShelfImage, removeShelfImage, inspectImage, TYPES,
   productTarget, variantTarget,
@@ -66,7 +69,7 @@ export async function renderShelfImages(view, query = {}) {
     const shown = target.current ?? fallback ?? null;
     const frame = h("div", { class: `shelf-frame${kind === "variant" ? " shelf-frame--sm" : ""}${!target.current && fallback ? " is-fallback" : ""}` },
       shown
-        ? h("img", { src: shown, alt: `Envase: ${label}`, loading: "lazy" })
+        ? thumbnail(shown, { alt: `Envase: ${label}`, width: 384 })
         : h("span", { class: "shelf-empty" }, "Sin imagen", kind === "general" ? h("small", {}, "En /yerbas se ve el paquete genérico") : null));
     const note = kind === "variant"
       ? h("span", { class: "shelf-source" }, target.current ? "Imagen propia" : fallback ? "Usa la general" : "Paquete genérico")
@@ -94,9 +97,10 @@ export async function renderShelfImages(view, query = {}) {
       if (remove) remove.disabled = true;
       status.textContent = "Subiendo…";
       try {
-        const { url, oldFileKept } = await uploadShelfImage(target, file);
+        const { url, oldFileKept, bytes, originalBytes } = await uploadShelfImage(target, file);
         onSaved(url, info.warnings);
-        toast(`Imagen de góndola guardada: ${label}.${oldFileKept ? " (La anterior quedó en Storage sin uso.)" : ""}`);
+        const saved = bytes < originalBytes ? ` Optimizada: ${kb(originalBytes)} → ${kb(bytes)}.` : "";
+        toast(`Imagen de góndola guardada: ${label}.${saved}${oldFileKept ? " (La anterior quedó en Storage sin uso.)" : ""}`);
       } catch (err) {
         console.error(err);
         status.textContent = err?.message && !err.code ? err.message : errorMessage(err);

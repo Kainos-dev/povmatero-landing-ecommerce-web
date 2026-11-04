@@ -3,6 +3,7 @@
 // Las rutas viejas del repo (images/...) se pasan a Storage desde la pantalla "Imágenes".
 import * as img from "../api/images.js";
 import { convertToWebp } from "../imageConvert.js";
+import { thumbnail } from "../thumbs.js";
 import { h, mount, field, showError, toast, errorMessage } from "../ui.js";
 
 const SOURCE_LABELS = { storage: "Storage", repo: "Repo", other: "Externa" };
@@ -190,7 +191,7 @@ export function renderImagesPanel(section, { product, variants }) {
 
     return h("article", { class: "image-card" },
       h("div", { class: "image-thumb" },
-        h("img", { src: img.previewUrl(image.src), alt: image.alt || product.name, loading: "lazy" })
+        thumbnail(img.previewUrl(image.src), { alt: image.alt || product.name, width: 384 })
       ),
       h("div", { class: "image-badges" },
         image.is_cover ? h("span", { class: "badge badge-ok" }, "Portada") : null,

@@ -1,0 +1,2 @@
+tests/.image-cache/
+tests/**/pgdata-*/

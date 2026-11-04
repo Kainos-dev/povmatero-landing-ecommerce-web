@@ -10,6 +10,7 @@
 // No son registros de product_images: el catálogo tradicional no las ve.
 import { supabase } from "/js/lib/supabaseClient.js";
 import { storagePathFromSrc } from "./images.js";
+import { convertKeepingAlpha, MAX_INPUT_BYTES } from "../imageConvert.js";
 
 const BUCKET = "product-images";
 export const MAX_BYTES = 5 * 1024 * 1024;        // límite del bucket
@@ -80,15 +81,20 @@ async function removeFile(target, src) {
   if (error) throw error;
 }
 
-// Sube (o reemplaza) la imagen. Devuelve { url, oldFileKept }.
+// Sube (o reemplaza) la imagen. Antes la optimiza en el navegador: WebP con
+// la misma transparencia, lado mayor 1200 px (un PNG de 2 MB queda en ~0,1 MB;
+// ver imageConvert.js). Si convertir no ahorra, sube el archivo tal cual.
+// Devuelve { url, oldFileKept, bytes, originalBytes }.
 export async function uploadShelfImage(target, file) {
-  const ext = TYPES[file.type];
-  if (!ext) throw new Error("Tiene que ser un PNG (o WebP), idealmente con fondo transparente.");
-  if (file.size > MAX_BYTES) throw new Error("La imagen pesa más de 5 MB. Exportala más liviana (600 × 900 px alcanza).");
+  if (!TYPES[file.type]) throw new Error("Tiene que ser un PNG (o WebP), idealmente con fondo transparente.");
+  if (file.size > MAX_INPUT_BYTES) throw new Error("La imagen pesa más de 30 MB. Exportala más liviana (800 × 1200 px alcanza).");
+  const { blob } = await convertKeepingAlpha(file);
+  if (blob.size > MAX_BYTES) throw new Error("La imagen pesa más de 5 MB aun optimizada. Exportala más liviana (800 × 1200 px alcanza).");
+  const ext = TYPES[blob.type];
 
   const path = target.pathFor(ext);
-  check(await supabase.storage.from(BUCKET).upload(path, file, {
-    contentType: file.type,
+  check(await supabase.storage.from(BUCKET).upload(path, blob, {
+    contentType: blob.type,
     cacheControl: "31536000",
     upsert: false,
   }));
@@ -111,7 +117,7 @@ export async function uploadShelfImage(target, file) {
   if (target.current && target.current !== url) {
     try { await removeFile(target, target.current); } catch (err) { console.warn(err); oldFileKept = true; }
   }
-  return { url, oldFileKept };
+  return { url, oldFileKept, bytes: blob.size, originalBytes: file.size };
 }
 
 // Quita la imagen (la presentación vuelve a usar la general; la general, el paquete genérico).
