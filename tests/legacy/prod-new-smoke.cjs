@@ -61,6 +61,7 @@ async function open(browser, vp, path, { as = null, soldOut = false } = {}) {
     if (p === "/rest/v1/rpc/request_restock_alert") return json({ id: 1, status: "activa" });
     if (p === "/rest/v1/rpc/create_yerba_order") { const b = JSON.parse(req.postData()); return json({ id: 9999, status: "pendiente", total: 1, item_count: 1, items: b.items.map((i) => ({ product_name: "Prueba", variant_name: "1 kg", quantity: i.quantity, line_total: 1 })) }); }
     if (p === "/rest/v1/rpc/deliver_due_yerba_orders") return json([]);
+    if (p === "/rest/v1/rpc/run_order_maintenance") return json({ cancelados: [], entregados: [] });
     if (p === "/rest/v1/rpc/variant_commitments") return json([{ variant_id: 11, quantity: 2 }]);
     if (p === "/rest/v1/rpc/admin_stock_preview") { const a = JSON.parse(req.postData()); return json({ variant_id: 11, product_name: "Canarias Tradicional", variant_name: "1kg", track_stock: true, stock: 3, reserved: 2, available: 1, requested: a.quantity, exceeds: a.quantity > 1, orders: [{ order_id: 101, customer_name: "Ana", status: "pendiente", quantity: 2 }] }); }
     if (p === "/rest/v1/rpc/admin_restock_alerts") return json([{ id: 1, product_id: 1, variant_id: 11, product_name: "Canarias Tradicional", variant_name: "1kg", customer_name: "Ana", email: "a@t.com", phone: "11 4444 1234", created_at: iso(-86400e3), available: 3, due: true }]);
@@ -156,7 +157,7 @@ const text = (page, sel) => page.evaluate((s) => document.querySelector(s)?.inne
       await page.waitForSelector(".order-card", { timeout: 45000 }).catch(() => {});
       const chips = await page.evaluate(() => [...document.querySelectorAll(".order-filter-main")].map((b) => b.innerText.replace(/\s+/g, " ")));
       check(`${label}: panel, Pedidos con Pendientes / Listos / Entregados`, chips.length === 3 && /Pendientes/.test(chips[0]), chips.join(","));
-      check(`${label}: panel, la entrega automática se consultó (simulada)`, calls.includes("POST /rest/v1/rpc/deliver_due_yerba_orders"));
+      check(`${label}: panel, la entrega automática se consultó (simulada)`, calls.includes("POST /rest/v1/rpc/run_order_maintenance") || calls.includes("POST /rest/v1/rpc/deliver_due_yerba_orders"));
       await page.evaluate(() => { location.hash = "#/pedidos/102"; }); await page.waitForSelector(".order-steps", { timeout: 45000 }).catch(() => {});
       check(`${label}: detalle con pasos Pendiente → Listo → Entregado y entrega automática informada`, (await page.evaluate(() => [...document.querySelectorAll(".order-step-label")].map((x) => x.textContent).join())) === "Pendiente,Listo,Entregado" && /pasa a «Entregado» solo/.test(await text(page, "#adminContent")));
       await page.evaluate(() => { location.hash = "#/stock-rapido"; }); await page.waitForSelector(".pick-item", { timeout: 45000 }).catch(() => {});
