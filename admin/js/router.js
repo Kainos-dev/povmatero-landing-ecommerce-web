@@ -17,6 +17,7 @@ import { countPending } from "./api/orders.js";
 import { renderShelfImages } from "./views/shelfImages.js";
 import { renderStockTools } from "./views/stockTools.js";
 import { renderRestockAlerts } from "./views/restockAlerts.js";
+import { renderYerbaCreate } from "./views/yerbaCreate.js";
 
 const DEFAULT_ROUTE = "#/inicio";
 
@@ -25,6 +26,7 @@ const routes = [
   [/^#\/inicio\/?$/,           (view, m, q) => renderHome(view, q),                 "#/inicio"],
   [/^#\/productos\/?$/,        (view, m, q) => renderProductList(view, q),          "#/productos"],
   [/^#\/productos\/nuevo\/?$/, (view) => renderProductEdit(view, null),             "#/productos"],
+  [/^#\/productos\/nueva-yerba\/?$/, (view, m, q) => renderYerbaCreate(view, q),  "#/productos"],
   [/^#\/productos\/(\d+)\/?$/, (view, m, q) => renderProductEdit(view, Number(m[1]), q), "#/productos"],
   [/^#\/pedidos\/?$/,          (view, m, q) => renderOrders(view, q),               "#/pedidos"],
   [/^#\/pedidos\/(\d+)\/?$/,   (view, m) => renderOrderDetail(view, Number(m[1])),  "#/pedidos"],
@@ -34,7 +36,7 @@ const routes = [
   [/^#\/importar-(costos|precios)\/?$/, (view) => renderCostImport(view),             "#/importar-precios"],
   [/^#\/revision\/?$/,         (view) => renderCatalogReview(view),                 "#/revision"],
   [/^#\/estadisticas\/?$/,     (view) => renderStats(view),                         "#/estadisticas"],
-  [/^#\/gondola\/?$/,          (view) => renderShelfImages(view),                   "#/gondola"],
+  [/^#\/gondola\/?$/,          (view, m, q) => renderShelfImages(view, q),                   "#/gondola"],
   [/^#\/stock-rapido\/?$/,     (view, m, q) => renderStockTools(view, q),           "#/stock-rapido"],
   [/^#\/avisos\/?$/,           (view) => renderRestockAlerts(view),                 "#/avisos"],
   [/^#\/mas\/?$/,              (view) => renderMore(view),                          "#/mas"],

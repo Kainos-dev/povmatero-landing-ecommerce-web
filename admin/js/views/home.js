@@ -184,6 +184,7 @@ export async function renderHome(view) {
           h("div", { class: "quick" },
             h("a", { href: "#/inventario?tab=stock" }, icon("stock"), "Cargar stock"),
             h("a", { href: "#/productos/nuevo" }, icon("plus"), "Nuevo producto"),
+            h("a", { href: "#/productos/nueva-yerba" }, icon("plus"), "Yerba o presentación"),
             h("a", { href: "#/inventario?tab=precios" }, icon("tag"), "Actualizar precios"),
             h("a", { href: "#/importar-precios" }, icon("upload"), "Importar precios"))),
 

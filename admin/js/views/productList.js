@@ -230,7 +230,9 @@ export async function renderProductList(view, query = {}) {
   mount(view,
     h("div", { class: "page-header" },
       h("h2", {}, "Productos"),
-      h("a", { href: "#/productos/nuevo", class: "btn-primary btn-inline" }, "Nuevo producto")
+      h("div", { class: "actions header-actions" },
+        h("a", { href: "#/productos/nueva-yerba", class: "btn-ghost btn-inline" }, "Yerba o presentación"),
+        h("a", { href: "#/productos/nuevo", class: "btn-primary btn-inline" }, "Nuevo producto"))
     ),
     h("div", { class: "toolbar" }, search, categoryFilter, statusFilter),
     count,

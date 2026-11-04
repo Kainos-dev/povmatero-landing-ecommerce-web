@@ -3,7 +3,7 @@
 import { supabase } from "/js/lib/supabaseClient.js";
 
 const CATEGORY_COLUMNS = "id, slug, name, sort_order, is_active";
-const PRODUCT_COLUMNS  = "id, category_id, slug, name, description, is_active, sort_order, base_price";
+const PRODUCT_COLUMNS  = "id, category_id, slug, name, description, is_active, sort_order, base_price, brand";
 const VARIANT_COLUMNS  = "id, product_id, name, price, stock, track_stock, is_active, sort_order, price_inherited, cost_inherited";
 
 function check({ data, error }) {

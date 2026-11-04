@@ -10,6 +10,8 @@ import { renderImagesPanel } from "./imagesPanel.js";
 import { imageSource, removeProductFiles } from "../api/images.js";
 import { removeShelfFiles } from "../api/shelfImages.js";
 import { icon } from "../icons.js";
+import { listBrands, matchBrand } from "../api/yerbas.js";
+import { renderYerbaPresentations, presentationsSummary } from "./yerbaPresentations.js";
 
 const TABS = [
   ["datos", "Datos"],
@@ -17,6 +19,8 @@ const TABS = [
   ["imagenes", "Imágenes"],
   ["stock", "Stock"],
 ];
+// En las yerbas, «Precios» es «Presentaciones» (500 g, 1 kg…, cada una con su SKU, precio y stock).
+const YERBA_TAB_LABEL = { precios: "Presentaciones" };
 
 function backLink() {
   return h("a", { href: "#/productos", class: "back-link" }, "← Volver a productos");
@@ -84,6 +88,8 @@ export async function renderProductEdit(view, productId, query = {}) {
   const reload = (tab = activeTab) => renderProductEdit(view, product.id, { tab });
   // Por ahora solo las yerbas controlan stock: es el valor inicial de la casilla.
   const tracksStockByDefault = () => categories.find((c) => c.id === product?.category_id)?.slug === "yerbas";
+  const isYerba = !isNew && tracksStockByDefault();
+  const yerbasCategoryId = categories.find((c) => c.slug === "yerbas")?.id ?? null;
 
   // ------------------------------------------------------------------
   // Datos del producto
@@ -100,6 +106,18 @@ export async function renderProductEdit(view, productId, query = {}) {
     const description = h("textarea", { class: "input", rows: "4" });
     description.value = product?.description ?? "";
     const sortOrder = h("input", { class: "input input-num", type: "number", step: "1", value: String(product?.sort_order ?? 0) });
+    // Marca (solo yerbas): arma las góndolas de /yerbas.
+    const brandList = h("datalist", { id: "product-brands" });
+    let brands = [];
+    const brand = isYerba ? h("input", { class: "input", maxlength: "60", list: "product-brands", autocomplete: "off", value: product?.brand ?? "", placeholder: "Ej. Canarias" }) : null;
+    if (brand) listBrands().then((list) => { brands = list; mount(brandList, list.map((b) => h("option", { value: b }))); }).catch((err) => console.warn(err));
+    // Al elegir «Yerbas» en un producto nuevo se abre el alta de yerbas
+    // (yerba nueva o presentación de una existente, sin duplicarla).
+    if (isNew) {
+      category.addEventListener("change", () => {
+        if (Number(category.value) === yerbasCategoryId) location.hash = "#/productos/nueva-yerba";
+      });
+    }
     const error = h("p", { class: "form-error", role: "alert", hidden: true });
     const submit = h("button", { type: "submit", class: "btn-primary btn-inline" }, isNew ? "Crear producto" : "Guardar cambios");
 
@@ -114,8 +132,10 @@ export async function renderProductEdit(view, productId, query = {}) {
         field("Nombre", name),
         field("Categoría", category),
         field("Slug", slug, "Identificador para la URL: minúsculas, números y guiones. Se genera a partir del nombre."),
-        field("Orden", sortOrder, "Menor número = aparece antes.")
+        field("Orden", sortOrder, "Menor número = aparece antes."),
+        brand ? field("Marca", brand, "Arma las góndolas de /yerbas. Vacío = «Otras marcas».") : null
       ),
+      brand ? brandList : null,
       field("Descripción", description),
       error,
       h("div", { class: "actions" }, submit)
@@ -130,8 +150,13 @@ export async function renderProductEdit(view, productId, query = {}) {
         description: description.value.trim(),
         sort_order: Number(sortOrder.value || 0),
       };
+      if (brand) {
+        const b = matchBrand(brands, brand.value);
+        if (b !== (product.brand ?? null)) data.brand = b;
+      }
 
       const problem =
+        data.brand && data.brand.length > 60 ? "La marca puede tener hasta 60 caracteres." :
         !data.name ? "El nombre es obligatorio." :
         !data.category_id ? "Elegí una categoría." :
         !SLUG_RE.test(data.slug) ? "El slug solo puede tener minúsculas, números y guiones (ej. mate-imperial)." :
@@ -496,7 +521,23 @@ export async function renderProductEdit(view, productId, query = {}) {
       ? h("p", { class: "notice-warn" }, "El producto está publicado pero no tiene ninguna variante activa con precio: no se puede comprar.")
       : null;
 
-    if (mode === "simple") {
+    if (isYerba) {
+      // Yerbas: una tarjeta por presentación (SKU, precio, costo, stock propios).
+      // El SKU/precio/costo general de la yerba queda como opción avanzada.
+      const yerbaPane = h("div", { class: "pane-stack" });
+      mount(pricesPane,
+        warning,
+        yerbaPane,
+        h("details", { class: "card pres-advanced" },
+          h("summary", {}, "SKU, precio y costo generales de la yerba (avanzado)"),
+          h("p", { class: "muted" }, "Solo si todas las presentaciones comparten un valor. Normalmente cada presentación tiene el suyo."),
+          generalCard()));
+      await renderYerbaPresentations(yerbaPane, {
+        product, internal, variants: currentVariants,
+        onChanged: () => loadVariants(),
+        openStock: (id) => { selectTab("stock"); openStock(id); },
+      });
+    } else if (mode === "simple") {
       mount(pricesPane,
         warning,
         generalCard(),
@@ -687,7 +728,11 @@ export async function renderProductEdit(view, productId, query = {}) {
     const parts = [];
     parts.push(internal.sku ? `SKU ${internal.sku}` : "Sin SKU");
     if (product.base_price != null) parts.push(formatPrice(product.base_price));
-    if (currentVariants && mode === "variants") parts.push(`${currentVariants.length} ${currentVariants.length === 1 ? "variante" : "variantes"}`);
+    if (isYerba) {
+      parts.length = 0;
+      parts.push(product.brand || "Otras marcas");
+      if (currentVariants?.length) parts.push(presentationsSummary(currentVariants));
+    } else if (currentVariants && mode === "variants") parts.push(`${currentVariants.length} ${currentVariants.length === 1 ? "variante" : "variantes"}`);
     mount(headerMeta, parts.join(" · "));
   }
 
@@ -695,6 +740,8 @@ export async function renderProductEdit(view, productId, query = {}) {
     mount(view,
       backLink(),
       h("div", { class: "page-header" }, h("h2", {}, "Nuevo producto")),
+      h("p", { class: "notice-info" }, "¿Es una yerba o una presentación nueva de una yerba (ej. 500 g)? ",
+        h("a", { href: "#/productos/nueva-yerba" }, "Usá el alta de yerbas"), "."),
       productForm(),
       h("p", { class: "muted" }, "Después de crear el producto vas a poder cargar su SKU, su precio y sus variantes."));
     return;
@@ -710,7 +757,7 @@ export async function renderProductEdit(view, productId, query = {}) {
   const tabButtons = {};
   const tabBar = h("div", { class: "tabs tabs-product", role: "tablist" },
     TABS.map(([key, label]) => {
-      const b = h("button", { type: "button", class: "tab", role: "tab", onClick: () => selectTab(key) }, label);
+      const b = h("button", { type: "button", class: "tab", role: "tab", onClick: () => selectTab(key) }, (isYerba && YERBA_TAB_LABEL[key]) || label);
       tabButtons[key] = b;
       return b;
     }));

@@ -1,14 +1,17 @@
 // Importar precios desde una lista en Excel (.xlsx, .xls o .csv).
 //
-// Busca cada SKU del archivo entre los SKU de PRODUCTO y actualiza un solo valor
-// general del producto, según el tipo de lista:
+// Busca cada SKU del archivo entre los SKU de PRESENTACIÓN (variant_internal.sku,
+// ej. Canarias Suave 500 g) y los de PRODUCTO. Si es de una presentación,
+// actualiza solo esa presentación; si es de un producto, un solo valor general
+// del producto, según el tipo de lista:
 //   * Lista mayorista (ej. Darc Cuir & Yatay) → costo general.
 //   * Lista minorista                         → precio de venta general.
 // La base copia ese valor a las variantes que usan el general; las que tienen un
 // valor particular no cambian. No se tocan nombres, imágenes, descripciones,
 // categorías, stock ni ningún otro dato. No se calculan márgenes.
 // El archivo se lee en el navegador: no se sube a ningún lado.
-import { listProducts, listAllVariantsWithCosts, listProductInternals, saveProductPricing, normalizeSku } from "../api/catalog.js";
+import { listProducts, listAllVariantsWithCosts, listProductInternals, saveProductPricing, normalizeSku, updateVariant, saveVariantCost } from "../api/catalog.js";
+import { listAllVariantSkus, presentationLabel } from "../api/yerbas.js";
 import { h, mount, formatPrice, errorMessage, toast } from "../ui.js";
 
 const SHEETJS_URL = "https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs";
@@ -100,12 +103,19 @@ const round2 = (n) => Math.round(n * 100) / 100;
 // Cruza las filas del archivo con los productos. Exportada para pruebas.
 //   products: [{ id, name, base_price }]; internals: Map id → { sku, base_cost }
 //   variants: [{ product_id, price_inherited, cost_inherited }]
-export function analyzeRows({ rows, skuCol, priceCol, mode, products, internals, variants }) {
+//   variantSkus: Map variantId → sku (SKU propio de cada presentación; tiene prioridad)
+export function analyzeRows({ rows, skuCol, priceCol, mode, products, internals, variants, variantSkus = new Map() }) {
   const m = MODES[mode];
   const productBySku = new Map();
   for (const p of products) {
     const sku = internals.get(p.id)?.sku;
     if (sku != null) productBySku.set(sku, p);
+  }
+  const productById = new Map(products.map((p) => [p.id, p]));
+  const variantBySku = new Map();
+  for (const v of variants) {
+    const sku = variantSkus.get(v.id);
+    if (sku != null && productById.has(v.product_id)) variantBySku.set(sku, v);
   }
   const current = (p) => (m.field === "base_cost" ? internals.get(p.id)?.base_cost ?? null : p.base_price ?? null);
   const inheriting = (p) => variants.filter((v) => v.product_id === p.id && (mode === "cost" ? v.cost_inherited : v.price_inherited)).length;
@@ -123,7 +133,8 @@ export function analyzeRows({ rows, skuCol, priceCol, mode, products, internals,
 
   const update = [], same = [], ignored = [], errors = [];
   for (const [sku, list] of entries) {
-    const product = productBySku.get(sku);
+    const variant = variantBySku.get(sku) ?? null;
+    const product = variant ? productById.get(variant.product_id) : productBySku.get(sku);
     const rowsText = list.map((e) => e.row).join(", ");
     if (!product) {
       // Títulos de sección ("1 CAMPERAS") y artículos que no vendés.
@@ -135,21 +146,28 @@ export function analyzeRows({ rows, skuCol, priceCol, mode, products, internals,
     if (invalid) { errors.push({ sku, rows: rowsText, product, reason: `${m.what} no válido (“${invalid.raw || "vacío"}”)` }); continue; }
     const values = [...new Set(list.map((e) => round2(e.value)))];
     if (values.length > 1) { errors.push({ sku, rows: rowsText, product, reason: `SKU repetido con valores distintos (${values.map(formatPrice).join(", ")})` }); continue; }
-    const item = { sku, rows: rowsText, product, value: values[0], before: current(product), inheriting: inheriting(product), total: total(product), repeated: list.length > 1 };
+    const item = variant
+      ? { sku, rows: rowsText, product, variant, value: values[0], before: (mode === "cost" ? variant.cost : variant.price) ?? null, inheriting: 1, total: 1, repeated: list.length > 1 }
+      : { sku, rows: rowsText, product, variant: null, value: values[0], before: current(product), inheriting: inheriting(product), total: total(product), repeated: list.length > 1 };
     if (item.before != null && round2(item.before) === item.value) same.push(item);
     else update.push(item);
   }
   const inFile = new Set(entries.keys());
-  const notInFile = products.filter((p) => internals.get(p.id)?.sku != null && !inFile.has(internals.get(p.id).sku));
+  const notInFile = [
+    ...products.filter((p) => internals.get(p.id)?.sku != null && !inFile.has(internals.get(p.id).sku))
+      .map((p) => ({ sku: internals.get(p.id).sku, name: p.name })),
+    ...[...variantBySku].filter(([sku]) => !inFile.has(sku))
+      .map(([sku, v]) => ({ sku, name: `${productById.get(v.product_id).name} · ${presentationLabel(v.name)}` })),
+  ];
   return { update, same, ignored, errors, notInFile, emptyRows, totalSkus: entries.size };
 }
 
 export async function renderCostImport(view) {
   mount(view, h("p", { class: "muted" }, "Cargando productos…"));
 
-  let products, internals, variants;
+  let products, internals, variants, variantSkus;
   async function loadCatalog() {
-    [products, internals, variants] = await Promise.all([listProducts(), listProductInternals(), listAllVariantsWithCosts()]);
+    [products, internals, variants, variantSkus] = await Promise.all([listProducts(), listProductInternals(), listAllVariantsWithCosts(), listAllVariantSkus()]);
     for (const p of products) p.base_price = p.base_price == null ? null : Number(p.base_price);
   }
   try {
@@ -173,7 +191,7 @@ export async function renderCostImport(view) {
   const columnsCard = h("section", { class: "card", hidden: true });
   const previewCard = h("section", { class: "card", hidden: true });
 
-  const withSku = () => products.filter((p) => internals.get(p.id)?.sku != null).length;
+  const withSku = () => products.filter((p) => internals.get(p.id)?.sku != null || variants.some((v) => v.product_id === p.id && variantSkus.has(v.id))).length;
 
   function renderModes() {
     mount(modeBox, Object.entries(MODES).map(([key, m]) => {
@@ -270,7 +288,7 @@ export async function renderCostImport(view) {
     return analyzeRows({
       rows: rows.slice(start).map((cells, i) => ({ cells, row: start + 1 + i })),
       skuCol: Number(skuSelect.value), priceCol: Number(priceSelect.value),
-      mode, products, internals, variants,
+      mode, products, internals, variants, variantSkus,
     });
   }
 
@@ -292,17 +310,17 @@ export async function renderCostImport(view) {
       const big = change != null && Math.abs(change) > BIG_CHANGE;
       return h("tr", { class: big ? "row-dirty" : "" },
         h("td", {}, u.sku),
-        h("td", {}, h("a", { href: `#/productos/${u.product.id}?tab=precios` }, u.product.name)),
+        h("td", {}, h("a", { href: `#/productos/${u.product.id}?tab=precios` }, u.product.name), u.variant ? h("small", { class: "muted" }, ` · ${presentationLabel(u.variant.name)}`) : null),
         h("td", { class: "num" }, u.before == null ? h("span", { class: "muted" }, "sin valor") : formatPrice(u.before)),
         h("td", { class: "num" }, h("strong", {}, formatPrice(u.value))),
         h("td", { class: "num" }, change == null ? "—" : `${change > 0 ? "+" : ""}${Math.round(change * 100)} %${big ? " ⚠" : ""}`),
-        h("td", {}, u.total === 0 ? h("span", { class: "muted" }, "sin variantes")
+        h("td", {}, u.variant ? "Solo esta presentación" : u.total === 0 ? h("span", { class: "muted" }, "sin variantes")
           : u.inheriting === u.total ? `${u.total} de ${u.total}`
           : h("span", {}, `${u.inheriting} de ${u.total}`, h("span", { class: "muted" }, ` · ${u.total - u.inheriting} particular${u.total - u.inheriting === 1 ? "" : "es"} no cambian`))),
         h("td", { class: "muted" }, `fila ${u.rows}${u.repeated ? " (repetido, mismo valor)" : ""}`)
       );
     });
-    const noneInherit = a.update.filter((u) => u.total > 0 && u.inheriting === 0);
+    const noneInherit = a.update.filter((u) => !u.variant && u.total > 0 && u.inheriting === 0);
 
     const applyButton = h("button", { type: "button", class: "btn-primary btn-inline", disabled: applying || !a.update.length },
       a.update.length ? `Actualizar ${a.update.length} ${a.update.length === 1 ? "producto" : "productos"}` : "No hay nada para actualizar");
@@ -352,7 +370,7 @@ export async function renderCostImport(view) {
         : null,
       a.notInFile.length
         ? h("details", {}, h("summary", {}, `${a.notInFile.length} productos con SKU que no aparecen en el archivo`),
-            h("ul", { class: "change-list" }, a.notInFile.map((p) => h("li", {}, `${internals.get(p.id).sku} · ${p.name}`))))
+            h("ul", { class: "change-list" }, a.notInFile.map((p) => h("li", {}, `${p.sku} · ${p.name}`))))
         : null,
       h("div", { class: "actions" }, confirming ? null : applyButton),
       confirmBox
@@ -381,7 +399,13 @@ export async function renderCostImport(view) {
     let ok = 0;
     for (const [i, u] of a.update.entries()) {
       try {
-        await saveProductPricing(u.product.id, { [field]: u.value });
+        if (u.variant) {
+          // SKU de una presentación: se actualiza solo esa (queda con valor particular).
+          if (mode === "cost") await saveVariantCost(u.variant.id, u.value);
+          else await updateVariant(u.variant.id, { price: u.value });
+        } else {
+          await saveProductPricing(u.product.id, { [field]: u.value });
+        }
         ok++;
       } catch (err) {
         console.error(err);

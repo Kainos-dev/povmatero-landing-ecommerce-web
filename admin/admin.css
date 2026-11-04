@@ -1593,3 +1593,28 @@ a.move:hover { background: var(--a-sunken); }
   .sp-recv-ctrl { width: 100%; justify-content: space-between; }
 }
 @media (prefers-reduced-motion: reduce) { .sp-summary { transition: none; } }
+
+/* ---------- Yerbas: presentaciones (alta y ficha) ---------- */
+.pres-presets { display: flex; flex-wrap: wrap; gap: 8px; }
+.pres-chip {
+  display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  min-width: 76px; min-height: 44px; padding: 6px 14px; border: 1px solid var(--a-line); border-radius: 10px;
+  background: var(--a-bg); color: var(--a-fg); font: inherit; cursor: pointer;
+}
+.pres-chip strong { font-size: 14px; }
+.pres-chip small { font-size: 11px; color: var(--a-fg-2); }
+.pres-chip:hover:not(:disabled) { border-color: var(--a-fg); }
+.pres-chip.active { border-color: var(--a-fg); box-shadow: inset 0 0 0 1px var(--a-fg); background: var(--a-surface); }
+.pres-chip:disabled { cursor: not-allowed; opacity: 0.55; background: var(--a-sunken); }
+.pres-chip:focus-visible { outline: 2px solid var(--a-fg); outline-offset: 2px; }
+.pres-existing { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.pres-existing li { display: flex; flex-direction: column; padding: 8px 12px; border: 1px solid var(--a-line); border-radius: 10px; font-size: var(--a-text-sm); }
+.pres-label { flex: 1; font-size: 16px; }
+.pres-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.pres-advanced summary { cursor: pointer; font-weight: 600; }
+.pres-advanced[open] summary { margin-bottom: 10px; }
+.pres-advanced > .card { border: 0; padding: 0; box-shadow: none; }
+@media (max-width: 700px) {
+  .pres-chip { flex: 1 1 calc(33% - 8px); }
+}
+.pres-file { padding: 8px; cursor: pointer; }

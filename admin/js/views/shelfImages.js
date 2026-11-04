@@ -11,7 +11,7 @@ import {
   productTarget, variantTarget,
 } from "../api/shelfImages.js";
 
-export async function renderShelfImages(view) {
+export async function renderShelfImages(view, query = {}) {
   mount(view, h("p", { class: "muted" }, "Cargando yerbas…"));
 
   let products, variantsReady;
@@ -28,7 +28,7 @@ export async function renderShelfImages(view) {
     return;
   }
 
-  const search = h("input", { type: "search", class: "input", placeholder: "Buscar yerba o marca…", "aria-label": "Buscar" });
+  const search = h("input", { type: "search", class: "input", placeholder: "Buscar yerba o marca…", "aria-label": "Buscar", value: query.q ?? "" });
   const filter = h("select", { class: "input", "aria-label": "Filtrar" },
     h("option", { value: "" }, "Todas las yerbas"),
     h("option", { value: "missing" }, "Sin imagen general"),
