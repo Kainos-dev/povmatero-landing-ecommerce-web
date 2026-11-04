@@ -1491,3 +1491,19 @@ a.move:hover { background: var(--a-sunken); }
   .line-edit { flex-wrap: wrap; }
   .line-edit-name { flex-basis: 100%; }
 }
+
+/* =====================================================================
+   Salida que supera lo disponible: advertencia, conteo y vista previa
+   ===================================================================== */
+.concile-box { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; padding: 16px; border: 1px solid #f2d49b; border-radius: 12px; background: #fffaf0; }
+.concile-warn { display: flex; flex-direction: column; gap: 8px; }
+.concile-facts { display: grid; grid-template-columns: auto auto; justify-content: start; gap: 2px 16px; margin: 0; }
+.concile-facts dt { color: var(--a-fg-2); }
+.concile-facts dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.concile-preview { padding: 10px 12px; border-radius: 10px; background: var(--a-bg); border: 1px solid var(--a-line); }
+.concile-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; }
+.concile-danger { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--a-red-line); background: var(--a-red-bg); color: var(--a-fg); }
+.concile-danger strong { color: var(--a-red); }
+.concile-orders { margin: 0; padding-left: 18px; }
+.concile-ack { font-weight: 600; color: var(--a-fg); white-space: normal; }
+.panel-alert { border-color: var(--a-red-line); }

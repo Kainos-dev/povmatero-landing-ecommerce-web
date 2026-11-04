@@ -7,6 +7,7 @@
 // Todo lo valida la base (stock, permisos, duplicados). Ver api/stockTools.js.
 import { h, mount, toast, errorMessage, formatPrice, normalizeText } from "../ui.js";
 import * as api from "../api/stockTools.js";
+import { exitConciliation } from "./stockExit.js";
 
 const TABS = [
   ["movimiento", "Movimiento rápido"],
@@ -111,7 +112,10 @@ function renderMovement(body, ctx) {
   const datalist = h("datalist", { id: listId });
   const errorBox = h("p", { class: "form-error", role: "alert", hidden: true });
   const submit = h("button", { type: "button", class: "btn-primary" }, "Confirmar entrada");
+  const actions = h("div", { class: "actions" }, submit);
+  const concileSlot = h("div");
   const recent = h("ul", { class: "move-list" });
+  const shortages = h("div");
 
   function drawType() {
     mount(typeBox, ["entrada", "salida"].map((t) => {
@@ -130,7 +134,61 @@ function renderMovement(body, ctx) {
       h("span", { class: "muted" }, stockText(selected)),
       h("button", { type: "button", class: "btn-ghost btn-sm", onclick: () => { selected = null; drawChosen(); picker.focus(); } }, "Cambiar"));
   }
-  [qty, reason].forEach((el) => el.addEventListener("input", () => { key = api.newKey(); errorBox.hidden = true; }));
+  [qty, reason].forEach((el) => el.addEventListener("input", () => { key = api.newKey(); errorBox.hidden = true; closeConcile(); }));
+
+  function closeConcile() { mount(concileSlot); actions.hidden = false; }
+
+  // Registra en la base (que vuelve a validar todo). Si mientras tanto cambió
+  // el stock o las reservas, la base pide el conteo: se muestra la conciliación.
+  async function register(n, extra = {}) {
+    try {
+      const res = await api.registerQuickMovement({
+        variantId: selected.id, type, quantity: n, reason: reason.value.trim(), key, ...extra,
+      });
+      done(res, n);
+    } catch (err) {
+      const plan = api.planFromError(err);
+      if (plan) { openConcile(plan, n); return; }
+      throw err;
+    }
+  }
+
+  function done(res, n) {
+    if (res.stock_after != null) {
+      selected.stock = res.stock_after;
+      if (res.reserved != null) selected.committed = res.reserved;
+      selected.available = selected.trackStock ? Math.max(selected.stock - selected.committed, 0) : null;
+    }
+    const adj = res.adjustment ? ` y corrección de inventario ${res.adjustment > 0 ? "+" : "−"}${Math.abs(res.adjustment)}` : "";
+    toast(res.repeated ? "Ese movimiento ya estaba registrado (no se repitió)."
+      : res.shortage ? `Salida registrada${adj}. ${selected.label} quedó como faltante (${res.shortage}).`
+      : `${type === "entrada" ? "Entrada" : "Salida"} registrada${adj}: ${selected.label} (stock ${selected.stock}).`);
+    key = api.newKey();
+    qty.value = "1";
+    reason.value = "";
+    closeConcile();
+    drawChosen();
+    picker.refresh();
+    loadRecent();
+    loadShortages();
+  }
+
+  function openConcile(plan, n) {
+    actions.hidden = true;
+    const box = exitConciliation(plan, {
+      onCancel: closeConcile,
+      onConfirm: async ({ declared, confirmShortage }) => {
+        try {
+          await register(n, { declared, confirmShortage });
+        } catch (err) {
+          console.warn(err);
+          throw new Error(message(err));
+        }
+      },
+    });
+    mount(concileSlot, box.el);
+    box.focus();
+  }
 
   submit.addEventListener("click", async () => {
     if (busy) return;
@@ -139,27 +197,23 @@ function renderMovement(body, ctx) {
     const fail = (m) => { errorBox.textContent = m; errorBox.hidden = false; };
     if (!selected) return fail("Elegí una yerba y presentación.");
     if (!Number.isInteger(n) || n < 1 || n > 9999) return fail("La cantidad tiene que ser un número entero entre 1 y 9999.");
-    if (type === "salida" && selected.trackStock && n > selected.stock) return fail(`No alcanza: hay ${selected.stock} en stock.`);
     busy = true;
     submit.disabled = true;
-    submit.textContent = "Guardando…";
+    submit.textContent = "Revisando…";
     try {
-      const res = await api.registerQuickMovement({
-        variantId: selected.id, type, quantity: n,
-        reason: reason.value.trim() || (type === "entrada" ? "Entrada" : "Salida"), key,
-      });
-      if (res.stock_after != null) {
-        selected.stock = res.stock_after;
-        selected.available = selected.trackStock ? Math.max(selected.stock - selected.committed, 0) : null;
+      if (type === "salida") {
+        // Stock y reservas al momento (no los de cuando se abrió la pantalla).
+        const plan = await api.previewStock(selected.id, n);
+        if (plan) {
+          selected.stock = plan.stock; selected.committed = plan.reserved; selected.available = plan.track_stock ? plan.available : null;
+          drawChosen();
+          if (plan.exceeds) { openConcile(plan, n); return; }
+        } else if (selected.trackStock && n > selected.stock) {
+          return fail(`No alcanza: hay ${selected.stock} en stock.`);   // base sin migrar: como antes
+        }
       }
-      toast(res.repeated ? "Ese movimiento ya estaba registrado (no se repitió)."
-        : `${type === "entrada" ? "Entrada" : "Salida"} registrada: ${selected.label} ${type === "entrada" ? "+" : "−"}${n} (stock ${selected.stock}).`);
-      key = api.newKey();
-      qty.value = "1";
-      reason.value = "";
-      drawChosen();
-      picker.refresh();
-      loadRecent();
+      submit.textContent = "Guardando…";
+      await register(n);
     } catch (err) {
       console.warn(err);
       fail(message(err));
@@ -169,6 +223,29 @@ function renderMovement(body, ctx) {
       drawType();
     }
   });
+
+  async function loadShortages() {
+    let rows;
+    try { rows = await api.listShortages(); } catch { mount(shortages); return; }   // sin la migración: no hay faltantes
+    mount(shortages, rows.length ? h("section", { class: "panel panel-alert" },
+      h("div", { class: "panel-head" }, h("h2", {}, `Faltantes para resolver (${rows.length})`)),
+      h("p", { class: "hint" }, "Hay menos stock físico que lo reservado por pedidos web. Reponé o hablá con los clientes y marcalo resuelto."),
+      h("ul", { class: "alert-list" }, rows.map((f) => {
+        const v = ctx.byId.get(f.variant_id);
+        const b = h("button", { type: "button", class: "btn-ghost btn-sm" }, "Marcar resuelto");
+        b.addEventListener("click", async () => {
+          b.disabled = true;
+          try { await api.resolveShortage(f.id, null); toast("Faltante marcado como resuelto."); loadShortages(); }
+          catch (err) { toast(message(err), "error"); b.disabled = false; }
+        });
+        return h("li", { class: "alert-row" },
+          h("div", { class: "alert-main" },
+            h("strong", {}, v?.label ?? `Presentación #${f.variant_id}`),
+            h("span", {}, `Faltan ${f.missing}: hay ${f.physical} y hay ${f.reserved} reservadas`),
+            h("small", { class: "muted" }, fmtDate(f.created_at))),
+          h("div", { class: "actions" }, h("a", { class: "btn-ghost btn-sm", href: "#/pedidos?tab=yerbas&f=pendiente" }, "Ver pedidos"), b));
+      }))) : null);
+  }
 
   async function loadRecent() {
     try {
@@ -196,12 +273,15 @@ function renderMovement(body, ctx) {
         h("label", { class: "field" }, h("span", {}, "Cantidad"), qty)),
       h("label", { class: "field" }, h("span", {}, "Observación"), reason, datalist),
       errorBox,
-      h("div", { class: "actions" }, submit)),
+      actions,
+      concileSlot),
+    shortages,
     h("section", { class: "panel" },
       h("div", { class: "panel-head" }, h("h2", {}, "Últimos movimientos rápidos"),
         h("a", { href: "#/inventario?tab=movimientos", class: "btn-ghost btn-sm" }, "Historial completo")),
       recent));
   loadRecent();
+  loadShortages();
 }
 
 // ---------------------------------------------------------------------

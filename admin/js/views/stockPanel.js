@@ -2,6 +2,8 @@
 import * as inv from "../api/inventory.js";
 import { saveVariantCost } from "../api/catalog.js";
 import { h, mount, field, showError, toast, errorMessage, formatPrice } from "../ui.js";
+import { registerQuickMovement, previewStock, planFromError, newKey, toolErrorMessage } from "../api/stockTools.js";
+import { exitConciliation } from "./stockExit.js";
 
 const TYPE_LABELS = { entrada: "Entrada", salida: "Salida", ajuste: "Ajuste" };
 const DONE_LABELS = { entrada: "Entrada registrada", salida: "Salida registrada", ajuste: "Ajuste registrado" };
@@ -150,6 +152,10 @@ export function renderStockPanel(section, { variant, initialTab = "entrada", onC
     const reference = h("input", { class: "input", maxlength: "120", placeholder: "Ej. pedido WhatsApp 12/11" });
     const error = h("p", { class: "form-error", role: "alert", hidden: true });
     const submit = h("button", { type: "submit", class: "btn-primary btn-inline" }, "Registrar salida");
+    const actions = h("div", { class: "actions" }, submit);
+    const concileSlot = h("div");
+    // Una clave por salida: un reintento o doble clic no registra dos veces.
+    let key = newKey();
 
     const form = h("form", { novalidate: true },
       h("div", { class: "form-grid" },
@@ -159,18 +165,66 @@ export function renderStockPanel(section, { variant, initialTab = "entrada", onC
       ),
       datalist,
       error,
-      h("div", { class: "actions" }, submit)
+      actions,
+      concileSlot
     );
+    [qty, reason, reference].forEach((el) => el.addEventListener("input", () => { key = newKey(); mount(concileSlot); actions.hidden = false; }));
+
+    // Misma regla que Stock rápido: si supera lo disponible (stock − reservas
+    // de pedidos web), se pide el stock físico real y se registra la salida con
+    // la corrección del inventario, en una sola operación de la base.
+    async function register(quantity, reasonText, ref, extra = {}) {
+      try {
+        const res = await registerQuickMovement({ variantId: variant.id, type: "salida", quantity, reason: reasonText,
+          reference: ref, key, source: "inventario", ...extra });
+        const adj = res.adjustment ? ` Corrección de inventario: ${res.adjustment > 0 ? "+" : "−"}${Math.abs(res.adjustment)}.` : "";
+        toast(res.repeated ? "Esa salida ya estaba registrada (no se repitió)."
+          : `Salida registrada.${adj} Stock actual: ${res.stock_after}.${res.shortage ? ` Quedó como faltante (${res.shortage}).` : ""}`);
+        key = newKey();
+        await onChanged(tab);
+      } catch (err) {
+        const plan = planFromError(err);
+        if (plan) { openConcile(plan, quantity, reasonText, ref); return; }
+        throw err;
+      }
+    }
+    function openConcile(plan, quantity, reasonText, ref) {
+      actions.hidden = true;
+      const box = exitConciliation(plan, {
+        onCancel: () => { mount(concileSlot); actions.hidden = false; },
+        onConfirm: async ({ declared, confirmShortage }) => {
+          try { await register(quantity, reasonText, ref, { declared, confirmShortage }); }
+          catch (err) { console.warn(err); throw new Error(toolErrorMessage(err, errorMessage)); }
+        },
+      });
+      mount(concileSlot, box.el);
+      box.focus();
+    }
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
+      error.hidden = true;
       const quantity = intValue(qty);
       if (!(quantity > 0)) { showError(error, "La cantidad debe ser un número entero mayor a 0."); return; }
       const { reason: reasonText, reference: ref } = readReason(reason, reference);
       if (!reasonText) { showError(error, "Indicá el motivo."); return; }
 
-      await submitMovement(submit, error,
-        { type: "salida", quantity: -quantity, reason: reasonText, reference: ref });
+      submit.disabled = true;
+      try {
+        const plan = await previewStock(variant.id, quantity);
+        if (plan?.exceeds) { openConcile(plan, quantity, reasonText, ref); return; }
+        if (!plan) {
+          // Base sin la migración 20261109: como antes (un movimiento directo).
+          await submitMovement(submit, error, { type: "salida", quantity: -quantity, reason: reasonText, reference: ref });
+          return;
+        }
+        await register(quantity, reasonText, ref);
+      } catch (err) {
+        console.error(err);
+        showError(error, toolErrorMessage(err, errorMessage));
+      } finally {
+        submit.disabled = false;
+      }
     });
 
     return form;

@@ -6,12 +6,11 @@
 -- trigger existente suma la cantidad con signo al stock físico de forma
 -- atómica y el CHECK stock >= 0 impide quedar en negativo).
 --
--- 1. Movimiento rápido (entrada/salida sin cliente ni pedido)
---    Sigue siendo un INSERT en inventory_movements (como el panel de
---    inventario). Se agrega inventory_movements.client_key: una clave única
---    que el panel genera por cada confirmación. Un doble clic o un reintento
---    con la misma clave no registra un segundo movimiento (choca con el
---    índice único y el panel lo informa como «ya registrado»).
+-- 1. Entradas y salidas manuales (Stock rápido e Inventario) con
+--    conciliación: ver la sección 4. Una salida que supera lo disponible
+--    pide el stock físico real y registra, en una sola operación, el ajuste
+--    de conciliación y la salida real. Nunca stock negativo; si no cubre las
+--    reservas, exige confirmación y deja un faltante para resolver a mano.
 --
 -- 2. Pedidos a proveedor (reposición)
 --    public.supplier_orders / supplier_order_items. Estados:
@@ -37,12 +36,19 @@
 --    por pedidos de yerbas), igual que los pedidos web.
 --
 -- Funciones nuevas (administradores):
+--   public.admin_stock_movement(operation_id, variant_id, movement_type, quantity, …)
+--   public.admin_stock_preview(variant_id, quantity, declared_physical)
+--   public.admin_resolve_shortage(shortage_id, resolution)
 --   public.admin_create_supplier_order(items, supplier, note, client_key)
 --   public.admin_receive_supplier_order(order_id, items)
 --   public.admin_cancel_supplier_order(order_id)
 --   public.admin_create_sale(items, customer_id, customer_name, note, client_key)
 --   public.admin_link_order_customer(order_id, customer_id)
 --   public.admin_cancel_sale(order_id)
+--
+-- Cambia una función existente: private.apply_inventory_movement (el trigger
+-- de movimientos) suma la regla de reservas para salidas directas por la API.
+-- El resto de su comportamiento es idéntico.
 --
 -- Compatibilidad con lo publicado (misma base):
 --   * Pedidos de la tienda y de yerbas: mismas reglas. Solo se amplían los
@@ -55,17 +61,6 @@
 -- =====================================================================
 
 begin;
-
--- ---------------------------------------------------------------------
--- 1. Movimientos: clave contra duplicados
--- ---------------------------------------------------------------------
-alter table public.inventory_movements add column client_key uuid;
-create unique index inventory_movements_client_key_idx
-  on public.inventory_movements (client_key) where client_key is not null;
-grant insert (client_key) on public.inventory_movements to authenticated;
-
-comment on column public.inventory_movements.client_key is
-  'Clave que genera el panel por cada confirmación: el mismo movimiento no se registra dos veces.';
 
 -- ---------------------------------------------------------------------
 -- 2. Pedidos a proveedor
@@ -523,8 +518,408 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------
+-- 4. Entradas y salidas manuales con conciliación (Stock rápido e Inventario)
+--
+-- Una salida manual que supera lo DISPONIBLE (stock físico registrado −
+-- reservas vigentes de pedidos web) no se bloquea para siempre: el stock del
+-- sistema puede estar desactualizado. En ese caso se pide el stock físico
+-- REAL que quedó después de la salida y, en una sola transacción, con la
+-- presentación bloqueada:
+--   1. un AJUSTE que lleva el stock registrado a lo que había de verdad antes
+--      de la salida (declarado + cantidad que sale), si hace falta;
+--   2. la SALIDA real de unidades.
+-- El stock final queda igual al declarado (nunca negativo: el ajuste va
+-- primero y el declarado es >= 0). Los dos movimientos quedan vinculados a la
+-- misma operación (inventory_movements.operation_id → stock_operations), con
+-- fecha, administrador y motivo.
+-- Si el declarado no cubre las reservas, exige una confirmación explícita
+-- (confirm_shortage) y deja la presentación señalada como FALTANTE
+-- (stock_shortages) para resolverla a mano. Los pedidos y sus reservas no se
+-- tocan.
+-- Reintentos: la operación la identifica el id que genera el panel; repetirla
+-- devuelve la misma operación sin registrar nada de nuevo.
+-- Además, el trigger de movimientos rechaza una SALIDA directa por la API
+-- (sin pedido, proveedor ni operación) que deje menos stock que lo reservado:
+-- la regla no depende del panel.
+-- ---------------------------------------------------------------------
+create table public.stock_operations (
+  id                uuid primary key,
+  variant_id        bigint not null references public.product_variants (id) on delete restrict,
+  movement_type     text not null check (movement_type in ('entrada', 'salida')),
+  quantity          integer not null check (quantity between 1 and 9999),
+  reason            text not null default '' check (char_length(reason) <= 200),
+  reference         text check (reference is null or char_length(reference) <= 120),
+  source            text not null default 'stock_rapido' check (source in ('stock_rapido', 'inventario')),
+  stock_before      integer not null,
+  reserved          integer not null default 0,
+  declared_physical integer check (declared_physical >= 0),
+  adjustment        integer not null default 0,
+  stock_after       integer not null check (stock_after >= 0),
+  shortage          integer not null default 0 check (shortage >= 0),
+  created_by        uuid default auth.uid() references auth.users (id) on delete set null,
+  created_at        timestamptz not null default now()
+);
+create index stock_operations_variant_idx on public.stock_operations (variant_id, created_at desc);
+
+comment on table public.stock_operations is
+  'Entradas y salidas manuales del panel. Una salida conciliada genera un ajuste y una salida, vinculados acá.';
+
+create table public.stock_shortages (
+  id           bigint generated always as identity primary key,
+  variant_id   bigint not null references public.product_variants (id) on delete cascade,
+  operation_id uuid references public.stock_operations (id) on delete set null,
+  physical     integer not null check (physical >= 0),
+  reserved     integer not null check (reserved >= 0),
+  missing      integer not null check (missing > 0),
+  status       text not null default 'abierto' check (status in ('abierto', 'resuelto')),
+  created_by   uuid default auth.uid() references auth.users (id) on delete set null,
+  created_at   timestamptz not null default now(),
+  resolved_at  timestamptz,
+  resolved_by  uuid references auth.users (id) on delete set null,
+  resolution   text not null default '' check (char_length(resolution) <= 500),
+  constraint stock_shortages_resolved_check check ((status = 'resuelto') = (resolved_at is not null))
+);
+create index stock_shortages_open_idx on public.stock_shortages (variant_id) where status = 'abierto';
+
+comment on table public.stock_shortages is
+  'Presentaciones con menos stock físico que lo reservado por pedidos web, para resolver a mano.';
+
+alter table public.inventory_movements
+  add column operation_id uuid references public.stock_operations (id) on delete restrict;
+create index inventory_movements_operation_idx
+  on public.inventory_movements (operation_id) where operation_id is not null;
+
+revoke all on public.stock_operations, public.stock_shortages from public, anon, authenticated;
+grant select on public.stock_operations, public.stock_shortages to authenticated;
+alter table public.stock_operations enable row level security;
+alter table public.stock_shortages  enable row level security;
+create policy "stock_operations: admins leen"
+  on public.stock_operations for select to authenticated
+  using ((select private.is_admin()));
+create policy "stock_shortages: admins leen"
+  on public.stock_shortages for select to authenticated
+  using ((select private.is_admin()));
+
+-- Pedidos web que reservan una presentación (los que una falta afectaría).
+create function private.reserving_orders(p_variant bigint)
+returns jsonb
+language sql
+stable
+set search_path = ''
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'order_id', o.id, 'customer_name', o.customer_name, 'status', o.status,
+           'expires_at', o.expires_at, 'quantity', x.qty) order by o.created_at), '[]'::jsonb)
+    from (select i.order_id, sum(i.quantity)::integer as qty
+            from public.order_items i
+           where i.variant_id = p_variant
+           group by i.order_id) x
+    join public.orders o on o.id = x.order_id
+   where o.kind = 'yerbas' and private.order_commits_stock(o.status, o.expires_at)
+$$;
+
+-- Cálculo común (vista previa y validación): stock, reservas y resultado.
+create function private.stock_exit_plan(p_variant bigint, p_qty integer, p_declared integer)
+returns jsonb
+language plpgsql
+stable
+set search_path = ''
+as $$
+declare
+  v        record;
+  v_res    integer;
+  v_avail  integer;
+  v_exceed boolean;
+  v_after  integer;
+begin
+  select pv.id, pv.stock, pv.track_stock, p.name as product_name, nullif(pv.name, 'Único') as variant_name
+    into v
+    from public.product_variants pv join public.products p on p.id = pv.product_id
+   where pv.id = p_variant;
+  if not found then
+    return null;
+  end if;
+  v_res := case when v.track_stock then private.committed_qty(v.id) else 0 end;
+  v_avail := greatest(v.stock - v_res, 0);
+  v_exceed := v.track_stock and coalesce(p_qty, 0) > v_avail;
+  v_after := case when v_exceed then p_declared else v.stock - coalesce(p_qty, 0) end;
+  return jsonb_build_object(
+    'variant_id', v.id, 'product_name', v.product_name, 'variant_name', v.variant_name,
+    'track_stock', v.track_stock,
+    'stock', v.stock, 'reserved', v_res, 'available', v_avail,
+    'requested', p_qty, 'exceeds', v_exceed,
+    'declared_physical', p_declared,
+    'adjustment', case when v_exceed and p_declared is not null then p_declared + p_qty - v.stock else 0 end,
+    'stock_after', v_after,
+    'available_after', case when v_after is null then null else greatest(v_after - v_res, 0) end,
+    'shortage', case when v_after is null then null else greatest(v_res - v_after, 0) end,
+    'orders', case when v_res > 0 then private.reserving_orders(v.id) else '[]'::jsonb end);
+end;
+$$;
+
+-- Vista previa para el panel (solo lectura).
+create function public.admin_stock_preview(variant_id bigint, quantity integer default null,
+                                           declared_physical integer default null)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_plan jsonb;
+begin
+  if not private.is_admin() then
+    raise exception 'Solo los administradores pueden ver el stock.' using errcode = 'insufficient_privilege';
+  end if;
+  v_plan := private.stock_exit_plan(admin_stock_preview.variant_id, admin_stock_preview.quantity,
+                                    admin_stock_preview.declared_physical);
+  if v_plan is null then
+    raise exception 'No existe esa presentación.' using errcode = 'no_data_found', hint = 'not_found';
+  end if;
+  return v_plan;
+end;
+$$;
+
+-- Resumen de una operación (con sus movimientos y el faltante, si hubo).
+create function private.stock_operation_summary(p_op uuid)
+returns jsonb
+language sql
+stable
+set search_path = ''
+as $$
+  select to_jsonb(s) || jsonb_build_object(
+    'movements', coalesce((select jsonb_agg(jsonb_build_object(
+                    'id', m.id, 'movement_type', m.movement_type, 'quantity', m.quantity,
+                    'stock_after', m.stock_after, 'reason', m.reason) order by m.id)
+                  from public.inventory_movements m where m.operation_id = s.id), '[]'::jsonb),
+    'shortage_id', (select f.id from public.stock_shortages f where f.operation_id = s.id limit 1))
+    from public.stock_operations s
+   where s.id = p_op
+$$;
+
+-- Registrar una entrada o salida manual (Stock rápido e Inventario).
+--   operation_id: lo genera el panel; el mismo id = la misma operación (reintentos).
+--   declared_physical: obligatorio si la salida supera lo disponible.
+--   confirm_shortage: obligatorio si además el declarado no cubre las reservas.
+-- Rechazos con hint: count_required, shortage_confirmation, operation_conflict,
+-- invalid_items, not_found (detail = la vista previa en JSON).
+create function public.admin_stock_movement(operation_id uuid, variant_id bigint, movement_type text,
+                                            quantity integer, reason text default null,
+                                            reference text default null, declared_physical integer default null,
+                                            confirm_shortage boolean default false, source text default 'stock_rapido')
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_op       uuid := admin_stock_movement.operation_id;
+  v_variant  bigint := admin_stock_movement.variant_id;
+  v_type     text := admin_stock_movement.movement_type;
+  v_qty      integer := admin_stock_movement.quantity;
+  v_declared integer := admin_stock_movement.declared_physical;
+  v_source   text := coalesce(admin_stock_movement.source, 'stock_rapido');
+  v_reason   text;
+  v_ref      text := private.clean_text(admin_stock_movement.reference, 120);
+  v_label    text;
+  v_prev     public.stock_operations;
+  v_stock    integer;
+  v_plan     jsonb;
+  v_adj      integer := 0;
+  v_after    integer;
+  v_short    integer := 0;
+  v_res      integer := 0;
+begin
+  if not private.is_admin() then
+    raise exception 'Solo los administradores pueden registrar movimientos de inventario.'
+      using errcode = 'insufficient_privilege';
+  end if;
+  if v_op is null or v_variant is null or v_type not in ('entrada', 'salida')
+     or v_qty is null or v_qty not between 1 and 9999
+     or v_source not in ('stock_rapido', 'inventario')
+     or (v_declared is not null and v_declared not between 0 and 999999) then
+    raise exception 'Revisá los datos: cantidad entera de 1 a 9999 y stock declarado mayor o igual a 0.'
+      using errcode = 'invalid_parameter_value', hint = 'invalid_items';
+  end if;
+  v_reason := coalesce(private.clean_text(admin_stock_movement.reason, 200),
+                       case when v_type = 'entrada' then 'Entrada' else 'Salida' end);
+  v_label := case when v_source = 'inventario' then 'Inventario' else 'Movimiento rápido' end;
+
+  -- Misma operación (reintento o doble clic): se devuelve sin registrar nada.
+  perform pg_advisory_xact_lock(hashtextextended('povmatero:stock_op:' || v_op::text, 0));
+  select * into v_prev from public.stock_operations o where o.id = v_op;
+  if found then
+    if v_prev.variant_id <> v_variant or v_prev.movement_type <> v_type or v_prev.quantity <> v_qty then
+      raise exception 'Esa operación ya se registró con otros datos. Actualizá la pantalla.'
+        using errcode = 'check_violation', hint = 'operation_conflict';
+    end if;
+    return private.stock_operation_summary(v_op) || jsonb_build_object('repeated', true);
+  end if;
+
+  -- La presentación queda bloqueada hasta el final: pedidos web, otras
+  -- salidas y cambios de estado que muevan stock esperan.
+  select pv.stock into v_stock from public.product_variants pv where pv.id = v_variant for update;
+  if not found then
+    raise exception 'No existe esa presentación.' using errcode = 'no_data_found', hint = 'not_found';
+  end if;
+
+  v_plan := private.stock_exit_plan(v_variant, case when v_type = 'salida' then v_qty end, v_declared);
+  v_res := (v_plan ->> 'reserved')::integer;
+
+  if v_type = 'entrada' then
+    v_after := v_stock + v_qty;
+    v_declared := null;
+  elsif not (v_plan ->> 'exceeds')::boolean then
+    -- Alcanza lo disponible: salida común.
+    if v_stock - v_qty < 0 then
+      raise exception 'No hay stock suficiente (stock registrado: %).', v_stock
+        using errcode = 'check_violation', hint = 'insufficient_stock';
+    end if;
+    v_after := v_stock - v_qty;
+    v_declared := null;
+  else
+    -- Supera lo disponible: hace falta el stock físico real.
+    if v_declared is null then
+      raise exception 'La salida supera el stock disponible: indicá el stock físico real que quedó.'
+        using errcode = 'check_violation', hint = 'count_required', detail = v_plan::text;
+    end if;
+    v_adj := v_declared + v_qty - v_stock;
+    v_after := v_declared;
+    v_short := greatest(v_res - v_declared, 0);
+    if v_short > 0 and not coalesce(confirm_shortage, false) then
+      raise exception 'El stock físico declarado no cubre las reservas de pedidos web (faltan %).', v_short
+        using errcode = 'check_violation', hint = 'shortage_confirmation', detail = v_plan::text;
+    end if;
+  end if;
+
+  insert into public.stock_operations (id, variant_id, movement_type, quantity, reason, reference, source,
+                                       stock_before, reserved, declared_physical, adjustment, stock_after, shortage)
+  values (v_op, v_variant, v_type, v_qty, v_reason, v_ref, v_source,
+          v_stock, v_res, v_declared, v_adj, v_after, v_short);
+
+  -- 1. Ajuste de conciliación (primero: así el stock nunca pasa por negativo).
+  if v_adj <> 0 then
+    insert into public.inventory_movements (variant_id, movement_type, quantity, reason, reference, operation_id)
+    values (v_variant, 'ajuste', v_adj,
+            format('Conciliación: el sistema tenía %s y había %s antes de la salida (quedaron %s). %s',
+                   v_stock, v_declared + v_qty, v_declared, v_reason),
+            coalesce(v_ref, v_label), v_op);
+  end if;
+
+  -- 2. El movimiento real.
+  insert into public.inventory_movements (variant_id, movement_type, quantity, reason, reference, operation_id)
+  values (v_variant, v_type::public.inventory_movement_type,
+          case when v_type = 'salida' then -v_qty else v_qty end,
+          v_reason, coalesce(v_ref, v_label), v_op);
+
+  -- 3. Faltante para resolver a mano (los pedidos no se tocan).
+  if v_short > 0 then
+    insert into public.stock_shortages (variant_id, operation_id, physical, reserved, missing)
+    values (v_variant, v_op, v_after, v_res, v_short);
+  end if;
+
+  return private.stock_operation_summary(v_op);
+end;
+$$;
+
+-- Marcar un faltante como resuelto (después de reponer o de ajustar los pedidos a mano).
+create function public.admin_resolve_shortage(shortage_id bigint, resolution text default null)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_row public.stock_shortages;
+begin
+  if not private.is_admin() then
+    raise exception 'Solo los administradores pueden resolver faltantes.' using errcode = 'insufficient_privilege';
+  end if;
+  update public.stock_shortages f
+     set status = 'resuelto', resolved_at = now(), resolved_by = (select auth.uid()),
+         resolution = left(coalesce(private.clean_text(admin_resolve_shortage.resolution, 500), ''), 500)
+   where f.id = admin_resolve_shortage.shortage_id and f.status = 'abierto'
+  returning * into v_row;
+  if v_row.id is null then
+    select * into v_row from public.stock_shortages f where f.id = admin_resolve_shortage.shortage_id;
+    if not found then
+      raise exception 'No existe ese faltante.' using errcode = 'no_data_found', hint = 'not_found';
+    end if;
+  end if;
+  return to_jsonb(v_row);
+end;
+$$;
+
+-- Trigger de movimientos: misma función de siempre + la regla de reservas.
+-- Una SALIDA hecha directo por la API (sin pedido, proveedor ni operación
+-- conciliada) no puede dejar menos stock que lo reservado por pedidos web.
+create or replace function private.apply_inventory_movement()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_stock integer;
+  v_track boolean;
+  v_res   integer;
+begin
+  -- Peticiones por la API (anon/authenticated): solo admins.
+  -- (La política RLS de INSERT lo vuelve a exigir; esto evita depender del orden.)
+  if (auth.jwt() ->> 'role') in ('anon', 'authenticated')
+     and not private.is_admin() then
+    raise exception 'Solo los administradores pueden registrar movimientos de inventario.'
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  -- El cliente nunca define el resultado ni el autor.
+  new.stock_after := null;
+  if (auth.jwt() ->> 'role') in ('anon', 'authenticated') then
+    new.created_by := (select auth.uid());
+  end if;
+
+  perform set_config('povmatero.allow_stock_write', 'on', true);
+
+  update public.product_variants
+     set stock = stock + new.quantity
+   where id = new.variant_id
+  returning stock, track_stock into v_stock, v_track;
+
+  perform set_config('povmatero.allow_stock_write', 'off', true);
+
+  if v_stock is null then
+    raise exception 'La variante % no existe.', new.variant_id;
+  end if;
+
+  -- Reservas: con la presentación ya bloqueada por el UPDATE de arriba.
+  if new.movement_type = 'salida' and v_track
+     and new.order_id is null and new.supplier_order_id is null and new.operation_id is null
+     and (auth.jwt() ->> 'role') in ('anon', 'authenticated') then
+    v_res := private.committed_qty(new.variant_id);
+    if v_stock < v_res then
+      raise exception 'La salida deja menos stock que lo reservado por pedidos web (reservado: %, quedaría: %). Registrala desde Inventario o Stock rápido para conciliar el stock. (stock_check)', v_res, v_stock
+        using errcode = 'check_violation', hint = 'reserved_stock';
+    end if;
+  end if;
+
+  new.stock_after := v_stock;
+  return new;
+end;
+$$;
+
+-- ---------------------------------------------------------------------
 -- Permisos
 -- ---------------------------------------------------------------------
+revoke all on function private.reserving_orders(bigint)                                    from public, anon, authenticated;
+revoke all on function private.stock_exit_plan(bigint, integer, integer)                  from public, anon, authenticated;
+revoke all on function private.stock_operation_summary(uuid)                              from public, anon, authenticated;
+revoke all on function public.admin_stock_preview(bigint, integer, integer)                from public, anon, authenticated;
+revoke all on function public.admin_stock_movement(uuid, bigint, text, integer, text, text, integer, boolean, text) from public, anon, authenticated;
+revoke all on function public.admin_resolve_shortage(bigint, text)                        from public, anon, authenticated;
+grant execute on function public.admin_stock_preview(bigint, integer, integer)            to authenticated;
+grant execute on function public.admin_stock_movement(uuid, bigint, text, integer, text, text, integer, boolean, text) to authenticated;
+grant execute on function public.admin_resolve_shortage(bigint, text)                     to authenticated;
 revoke all on function private.supplier_order_summary(bigint)                              from public, anon, authenticated;
 revoke all on function public.admin_create_supplier_order(jsonb, text, text, uuid)         from public, anon, authenticated;
 revoke all on function public.admin_receive_supplier_order(bigint, jsonb)                  from public, anon, authenticated;

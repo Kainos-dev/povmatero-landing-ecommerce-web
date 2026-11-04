@@ -60,28 +60,61 @@ export async function listVariantsForStock() {
 }
 
 // ---------------------------------------------------------------------
-// Movimiento rápido: entrada o salida, con una clave por confirmación.
-// Si la base ya registró esa clave (doble clic, reintento), no se repite:
-// devuelve { repeated: true }. Sin la migración 20261109, se registra igual
-// sin la clave (el botón ya evita el doble clic).
+// Entradas y salidas manuales (Stock rápido e Inventario). Las registra la
+// base (admin_stock_movement) en una transacción con la presentación
+// bloqueada. Una salida que supera lo disponible necesita «declared» (stock
+// físico real que quedó); si además no cubre las reservas, «confirmShortage».
+// El mismo «key» = la misma operación: un reintento no registra nada nuevo.
+// Sin la migración 20261109 se registra como antes (un movimiento directo).
 // ---------------------------------------------------------------------
-export async function registerQuickMovement({ variantId, type, quantity, reason, key }) {
-  const row = {
-    variant_id: variantId,
-    movement_type: type,
+export async function registerQuickMovement({ variantId, type, quantity, reason, reference = null, key,
+                                             declared = null, confirmShortage = false, source = "stock_rapido" }) {
+  const { data, error } = await supabase.rpc("admin_stock_movement", {
+    operation_id: key, variant_id: variantId, movement_type: type, quantity: Math.abs(quantity),
+    reason: reason || null, reference: reference || null,
+    declared_physical: declared, confirm_shortage: confirmShortage, source,
+  });
+  if (!error) {
+    const last = data.movements?.at(-1);
+    return { ...data, stock_after: data.stock_after ?? last?.stock_after };
+  }
+  if (error.code !== "PGRST202") throw error;
+  // Base sin migrar: movimiento directo, como antes.
+  return check(await supabase.from("inventory_movements").insert({
+    variant_id: variantId, movement_type: type,
     quantity: type === "salida" ? -Math.abs(quantity) : Math.abs(quantity),
-    reason,
-    reference: "Movimiento rápido",
-  };
-  let res = await supabase.from("inventory_movements").insert({ ...row, client_key: key }).select("id, stock_after").single();
-  if (res.error && isMissingMigration(res.error)) {
-    res = await supabase.from("inventory_movements").insert(row).select("id, stock_after").single();
+    reason, reference: reference ?? (source === "inventario" ? null : "Movimiento rápido"),
+  }).select("id, stock_after").single());
+}
+
+// Vista previa de una salida (stock, reservas, disponible, pedidos afectados).
+// null si la base todavía no tiene la función.
+export async function previewStock(variantId, quantity, declared = null) {
+  const { data, error } = await supabase.rpc("admin_stock_preview", { variant_id: variantId, quantity, declared_physical: declared });
+  if (error) {
+    if (error.code === "PGRST202") return null;
+    throw error;
   }
-  if (res.error?.code === "23505" && /client_key/.test(res.error.message ?? "")) {
-    const prev = await supabase.from("inventory_movements").select("id, stock_after").eq("client_key", key).maybeSingle();
-    return { ...(prev.data ?? {}), repeated: true };
-  }
-  return check(res);
+  return data;
+}
+
+// La base rechazó porque hace falta el conteo o la confirmación: trae la vista previa.
+export function planFromError(err) {
+  if (!["count_required", "shortage_confirmation"].includes(err?.hint)) return null;
+  try { return JSON.parse(err.details ?? err.detail ?? "null"); } catch { return null; }
+}
+
+// Faltantes abiertos (presentaciones con menos stock físico que lo reservado).
+export async function listShortages() {
+  return check(await supabase
+    .from("stock_shortages")
+    .select("id, variant_id, physical, reserved, missing, created_at, operation_id")
+    .eq("status", "abierto")
+    .order("created_at", { ascending: false }));
+}
+
+export async function resolveShortage(id, resolution) {
+  return check(await supabase.rpc("admin_resolve_shortage", { shortage_id: id, resolution: resolution || null }));
 }
 
 export async function listRecentQuickMovements(limit = 15) {
@@ -173,7 +206,7 @@ export async function markRestockNotified(ids) {
 }
 
 // Rechazos de la base con un mensaje ya pensado para el panel.
-const KNOWN = new Set(["insufficient_stock", "unavailable", "invalid_transition", "not_found", "invalid_items",
+const KNOWN = new Set(["insufficient_stock", "unavailable", "invalid_transition", "not_found", "invalid_items", "operation_conflict", "reserved_stock",
   "customer_required", "customer_not_found", "already_linked", "not_presencial"]);
 export function toolErrorMessage(err, fallback) {
   if (KNOWN.has(err?.hint)) return err.message;
