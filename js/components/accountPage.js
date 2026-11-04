@@ -18,16 +18,21 @@ const TIME = new Intl.DateTimeFormat("es-AR", { hour: "2-digit", minute: "2-digi
 
 const money = (n) => "$" + Number(n).toLocaleString("es-AR", { maximumFractionDigits: 2 });
 
-// Pedidos de yerbas: estado que ve el cliente (los de la tienda no tienen estados).
+// Pedidos de yerbas: los mismos tres estados que el panel (Pendiente, Listo,
+// Entregado). Los de la tienda no tienen estados; las compras en el local
+// (ventas presenciales vinculadas a la cuenta) ya están entregadas.
 const YERBA_STATUS = {
-  pendiente:  ["Pendiente de confirmación", ""],
-  confirmado: ["Confirmado", "ok"],
-  preparando: ["En preparación", "ok"],
+  pendiente:  ["Pendiente", ""],
+  confirmado: ["Pendiente", ""],
+  preparando: ["Pendiente", ""],
   listo:      ["Listo", "ok"],
   entregado:  ["Entregado", "done"],
   cancelado:  ["Cancelado", "off"],
 };
 function orderTag(o) {
+  if (o.kind === "presencial") return o.status === "cancelado"
+    ? `<span class="acc-order-tag acc-order-tag--off">Anulada</span>`
+    : `<span class="acc-order-tag acc-order-tag--done">Compra en el local</span>`;
   if (o.kind !== "yerbas") return `<span class="acc-order-tag">Enviado por WhatsApp</span>`;
   const expired = o.status === "pendiente" && o.expires_at && new Date(o.expires_at) <= new Date();
   const [label, tone] = expired ? ["Reserva vencida", "off"] : (YERBA_STATUS[o.status] ?? [o.status ?? "", ""]);
@@ -357,7 +362,7 @@ async function renderOrders(panel) {
   }
 
   panel.innerHTML = `
-    <p class="acc-orders-note">Estos son los pedidos que enviaste por WhatsApp. El pago y la entrega se coordinan por ese medio.</p>
+    <p class="acc-orders-note">Tus pedidos y compras. El pago y la entrega de los pedidos se coordinan por WhatsApp.</p>
     <ol class="acc-orders">
       ${orders.map((o) => {
         const date = new Date(o.created_at);
@@ -366,7 +371,7 @@ async function renderOrders(panel) {
           <li class="acc-card acc-order">
             <div class="acc-order-head">
               <div>
-                <h2>${o.kind === "yerbas" ? "Yerbas · " : ""}Pedido #${escapeHtml(String(o.id))}</h2>
+                <h2>${o.kind === "yerbas" ? "Yerbas · " : ""}${o.kind === "presencial" ? "Compra" : "Pedido"} #${escapeHtml(String(o.id))}</h2>
                 <p class="acc-muted"><time datetime="${escapeHtml(o.created_at)}">${escapeHtml(DATE.format(date))} · ${escapeHtml(TIME.format(date))}</time></p>
               </div>
               ${orderTag(o)}

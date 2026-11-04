@@ -29,6 +29,8 @@ export function renderMore(view) {
     h("section", { class: "panel" },
       h("div", { class: "panel-head" }, h("h2", {}, "Gestión")),
       h("ul", { class: "task-list" },
+        item("#/stock-rapido", "stock", "Stock rápido", "Entradas y salidas, pedidos a proveedor y ventas en el local"),
+        item("#/avisos", "check", "Avisos de reposición", "Clientes que esperan que vuelva una yerba"),
         item("#/clientes", "users", "Clientes", "Cuentas registradas y preferencias de novedades"))),
     h("section", { class: "panel" },
       h("div", { class: "panel-head" }, h("h2", {}, "Análisis")),

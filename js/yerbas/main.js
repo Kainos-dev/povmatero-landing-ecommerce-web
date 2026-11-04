@@ -36,7 +36,7 @@ let profileFor = null;
 let sending = false;
 
 const basket = createBasket({ onChange: (_lines, { ownerChanged } = {}) => {
-  if (ownerChanged) { profile = null; profileFor = null; }
+  if (ownerChanged) { profile = null; profileFor = null; loadRestockAlerts(); }
   renderDock();
   renderBadges();
   if (openSheet === ui.cartSheet) renderCartSheet();
@@ -428,6 +428,80 @@ function stepperHtml(value, max, label) {
     </div>`;
 }
 
+// ---------- Avisos de reposición («Avisarme cuando vuelva») ----------
+// Un aviso por presentación agotada (si se repone 1 kg, quien pidió 500 g no
+// figura). Requiere cuenta. Si la base todavía no tiene los avisos, no se
+// muestra la opción.
+let restockAlerts = new Set();     // presentaciones con aviso activo de esta cuenta
+let restockEnabled = true;
+let restockBusy = null;            // presentación que se está guardando
+let pendingRestock = null;         // { product, variantId } pedido antes de ingresar
+
+async function loadRestockAlerts() {
+  restockAlerts = new Set();
+  if (!hasStoredSession() || !restockEnabled) return;
+  try {
+    const api = await import("./api.js");
+    restockAlerts = new Set(await api.listMyRestockAlerts());
+  } catch (err) {
+    const api = await import("./api.js").catch(() => null);
+    if (api?.restockMissing(err)) restockEnabled = false;
+    else console.warn("Avisos de reposición:", err);
+  }
+  if (pendingRestock && hasStoredSession()) {
+    const { product, variantId } = pendingRestock;
+    pendingRestock = null;
+    if (!restockAlerts.has(variantId)) toggleRestockAlert(product, variantId, true);
+  }
+}
+
+function restockHtml(v) {
+  if (!restockEnabled) return "";
+  const busy = restockBusy === v.id ? " disabled aria-busy=\"true\"" : "";
+  if (restockAlerts.has(v.id)) {
+    return `<div class="y-notify is-on">
+      <span class="y-notify-state">Te avisamos cuando vuelva</span>
+      <button type="button" class="y-notify-cancel" data-notify-cancel${busy}>Cancelar aviso</button>
+    </div>`;
+  }
+  return `<button type="button" class="y-notify-btn" data-notify${busy} aria-label="Avisarme cuando vuelva ${escapeHtml(v.label)}">Avisarme cuando vuelva</button>`;
+}
+
+async function toggleRestockAlert(product, variantId, on, rerender = null) {
+  const v = catalog?.byVariant.get(variantId)?.variant;
+  if (!v || restockBusy) return;
+  const label = `${product.name} ${v.label}`;
+  if (on && !hasStoredSession()) {
+    pendingRestock = { product, variantId };
+    hideSheet();
+    document.dispatchEvent(new CustomEvent("povmatero:account-login", { detail: { mode: "login" } }));
+    return;
+  }
+  restockBusy = variantId;
+  rerender?.();
+  try {
+    const api = await import("./api.js");
+    if (on) {
+      await api.requestRestockAlert(variantId);
+      restockAlerts.add(variantId);
+      showToast(`Listo: te avisamos cuando vuelva ${label}.`);
+    } else {
+      await api.cancelRestockAlert(variantId);
+      restockAlerts.delete(variantId);
+      showToast("Cancelaste el aviso.");
+    }
+  } catch (err) {
+    console.warn("Aviso de reposición:", err);
+    const api = await import("./api.js").catch(() => null);
+    if (api?.restockMissing(err)) { restockEnabled = false; showToast("Los avisos de reposición todavía no están disponibles."); }
+    else if (err?.hint === "available") { showToast("¡Ya hay stock! Podés pedirla ahora."); refreshCatalog(); }
+    else showToast(err?.hint && err?.message ? err.message : "No pudimos guardar el aviso. Intentá de nuevo.");
+  } finally {
+    restockBusy = null;
+    rerender?.();
+  }
+}
+
 // ---------- Presentaciones de un paquete ----------
 function openProduct(product, { focusVariant = null } = {}) {
   const chosen = new Map();   // variantId → cantidad elegida en esta hoja
@@ -468,7 +542,7 @@ function openProduct(product, { focusVariant = null } = {}) {
                 <span class="y-pres-price">${money(v.price)}</span>
                 <span class="y-pres-stock${vOut ? " is-out" : v.stock !== null && v.stock <= 3 ? " is-low" : ""}">${escapeHtml(availabilityText(v))}${inCart ? ` · ${inCart} en tu carrito` : ""}</span>
               </div>
-              ${vOut ? "" : stepperHtml(n, max, `Cantidad de ${v.label}`)}
+              ${vOut ? restockHtml(v) : stepperHtml(n, max, `Cantidad de ${v.label}`)}
             </li>`;
         }).join("")}
       </ul>
@@ -480,6 +554,12 @@ function openProduct(product, { focusVariant = null } = {}) {
 
   ui.productSheet.onclick = (e) => {
     if (e.target.closest("[data-close]")) return hideSheet();
+    const notify = e.target.closest("[data-notify], [data-notify-cancel]");
+    if (notify) {
+      const id = Number(notify.closest("[data-variant]").dataset.variant);
+      toggleRestockAlert(product, id, notify.hasAttribute("data-notify"), render);
+      return;
+    }
     const step = e.target.closest("[data-step]");
     if (step) {
       const id = Number(step.closest("[data-variant]").dataset.variant);
@@ -981,6 +1061,7 @@ async function start() {
   renderDock();
   if (changes.length) showToast("Actualizamos tu carrito según el stock disponible.");
   resumeInterruptedSend();
+  loadRestockAlerts();
 
   // Al volver a la pestaña después de un rato, el stock se actualiza.
   let hiddenAt = 0;

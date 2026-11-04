@@ -1,22 +1,22 @@
-// Pedidos: pestañas Yerbas (con estados y stock) y Tienda (solicitudes del
-// carrito, sin estados). #/pedidos?tab=yerbas&f=atender
+// Pedidos: pestañas Yerbas (Pendiente → Listo → Entregado), Tienda
+// (solicitudes del carrito, sin estados) y Ventas (presenciales, cargadas en
+// el panel). #/pedidos?tab=yerbas&f=pendiente
 import { h, mount, errorMessage, formatPrice, normalizeText } from "../ui.js";
-import { listOrders, STATUS, isExpired } from "../api/orders.js";
+import { listOrders, STATUS, isExpired, uiStatus, deliverDueOrders } from "../api/orders.js";
 
-const TABS = [["yerbas", "Yerbas"], ["tienda", "Tienda"]];
+const TABS = [["yerbas", "Yerbas"], ["tienda", "Tienda"], ["presencial", "Ventas"]];
 
-// Filtros de yerbas. «Para atender» = todo lo que todavía requiere algo.
+// Filtros de yerbas: los tres estados principales primero; el resto, aparte.
 const FILTERS = [
-  ["atender", "Para atender", (o) => ["confirmado", "preparando", "listo"].includes(o.status) || (o.status === "pendiente" && !isExpired(o))],
-  ["pendiente", "Pendientes", (o) => o.status === "pendiente" && !isExpired(o)],
-  ["vencido", "Vencidos", (o) => isExpired(o)],
-  ["confirmado", "Confirmados", (o) => o.status === "confirmado"],
-  ["preparando", "Preparando", (o) => o.status === "preparando"],
-  ["listo", "Listos", (o) => o.status === "listo"],
-  ["entregado", "Entregados", (o) => o.status === "entregado"],
-  ["cancelado", "Cancelados", (o) => o.status === "cancelado"],
+  ["pendiente", "Pendientes", (o) => uiStatus(o) === "pendiente", true],
+  ["listo", "Listos", (o) => uiStatus(o) === "listo", true],
+  ["entregado", "Entregados", (o) => uiStatus(o) === "entregado", true],
+  ["vencido", "Vencidos", (o) => uiStatus(o) === "vencido"],
+  ["cancelado", "Cancelados", (o) => uiStatus(o) === "cancelado"],
   ["todos", "Todos", () => true],
 ];
+// Direcciones anteriores (?f=atender, confirmados…) → Pendientes.
+const LEGACY_FILTER = { atender: "pendiente", confirmado: "pendiente", preparando: "pendiente" };
 
 const DATE = new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
@@ -29,9 +29,15 @@ export function relativeTime(value, now = Date.now()) {
 }
 
 export function statusBadge(order) {
-  if (order.kind !== "yerbas") return h("span", { class: "badge" }, "Tienda");
-  if (isExpired(order)) return h("span", { class: "badge order-st order-st-vencido" }, "Vencido");
-  return h("span", { class: `badge order-st order-st-${order.status}` }, STATUS[order.status]?.label ?? order.status);
+  if (order.kind === "tienda") return h("span", { class: "badge" }, "Tienda");
+  if (order.kind === "presencial") {
+    return order.status === "cancelado"
+      ? h("span", { class: "badge order-st order-st-cancelado" }, "Venta anulada")
+      : h("span", { class: "badge order-st order-st-entregado" }, "Venta");
+  }
+  const st = uiStatus(order);
+  if (st === "vencido") return h("span", { class: "badge order-st order-st-vencido" }, "Vencido");
+  return h("span", { class: `badge order-st order-st-${st}` }, STATUS[st]?.label ?? st);
 }
 
 function orderCard(o) {
@@ -47,7 +53,8 @@ function orderCard(o) {
         h("strong", { class: "order-num" }, `#${o.id}`),
         statusBadge(o),
         h("span", { class: "order-date muted" }, DATE.format(new Date(o.created_at)))),
-      h("div", { class: "order-card-name" }, o.customer_name || o.customer_email || "Cliente sin nombre"),
+      h("div", { class: "order-card-name" }, o.customer_name || o.customer_email || "Cliente sin nombre",
+        o.kind === "presencial" && !o.customer_id ? h("span", { class: "chip chip-sm" }, "Sin asignar") : null),
       h("div", { class: "order-card-meta" },
         h("span", {}, `${o.item_count} ${o.item_count === 1 ? "unidad" : "unidades"}`),
         h("strong", {}, formatPrice(o.total))),
@@ -56,7 +63,8 @@ function orderCard(o) {
 
 export async function renderOrders(view, query = {}) {
   const tab = TABS.some(([k]) => k === query.tab) ? query.tab : "yerbas";
-  const filterKey = FILTERS.some(([k]) => k === query.f) ? query.f : "atender";
+  const asked = LEGACY_FILTER[query.f] ?? query.f;
+  const filterKey = FILTERS.some(([k]) => k === asked) ? asked : "pendiente";
 
   const tabs = h("nav", { class: "segmented", "aria-label": "Tipo de pedido" },
     TABS.map(([k, label]) => h("a", {
@@ -74,6 +82,8 @@ export async function renderOrders(view, query = {}) {
     refresh.disabled = true;
     let orders;
     try {
+      // Primero, la entrega automática de los «Listo» de hace 24 h (idempotente).
+      if (tab === "yerbas") await deliverDueOrders().catch((err) => console.warn("Entrega automática:", err));
       orders = await listOrders(tab);
     } catch (err) {
       console.error(err);
@@ -100,7 +110,7 @@ export async function renderOrders(view, query = {}) {
       chips = h("div", { class: "order-filters", role: "group", "aria-label": "Estado" },
         FILTERS.map((f) => {
           const n = orders.filter(f[2]).length;
-          const b = h("button", { type: "button", class: `chip order-filter${f === active ? " active" : ""}`, "aria-pressed": f === active ? "true" : "false" },
+          const b = h("button", { type: "button", class: `chip order-filter${f[3] ? " order-filter-main" : " order-filter-sub"}${f === active ? " active" : ""}`, "aria-pressed": f === active ? "true" : "false" },
             f[1], h("span", { class: "order-filter-n" }, String(n)));
           b.addEventListener("click", () => {
             active = f;
@@ -126,13 +136,16 @@ export async function renderOrders(view, query = {}) {
       mount(list, visible.length
         ? visible.map(orderCard)
         : h("li", { class: "empty-box" }, tab === "yerbas"
-          ? (active?.[0] === "atender" ? "No hay pedidos de yerbas para atender." : "No hay pedidos con este estado.")
-          : "Todavía no hay pedidos de la tienda."));
+          ? (active?.[0] === "pendiente" ? "No hay pedidos de yerbas pendientes." : "No hay pedidos con este estado.")
+          : tab === "presencial" ? "Todavía no hay ventas presenciales." : "Todavía no hay pedidos de la tienda."));
     }
     search.addEventListener("input", paint);
 
     mount(body,
       tab === "tienda" ? h("p", { class: "muted" }, "Solicitudes enviadas desde el carrito de la tienda por clientes con cuenta. No tienen estados ni mueven stock: se coordinan por WhatsApp.") : null,
+      tab === "presencial" ? h("div", { class: "toolbar" },
+        h("p", { class: "muted" }, "Ventas en el local cargadas desde el panel: ya descontaron stock. «Sin asignar» = sin cuenta todavía."),
+        h("a", { class: "btn-primary btn-sm", href: "#/stock-rapido?tab=venta" }, "Nueva venta")) : null,
       chips,
       h("div", { class: "toolbar" }, search),
       count,

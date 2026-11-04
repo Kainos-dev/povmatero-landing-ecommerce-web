@@ -28,6 +28,34 @@ export async function createYerbaOrder(lines, phone = null) {
   return data;   // { id, status, expires_at, total, item_count, items: [...] }
 }
 
+// ---------- Avisos de reposición (migración 20261108000000) ----------
+// Presentaciones con un aviso activo de esta cuenta (la RLS devuelve solo las propias).
+export async function listMyRestockAlerts() {
+  const { data, error } = await supabase
+    .from("restock_requests")
+    .select("variant_id")
+    .eq("status", "activa");
+  if (error) throw error;
+  return (data ?? []).map((r) => Number(r.variant_id));
+}
+
+export async function requestRestockAlert(variantId) {
+  const { data, error } = await supabase.rpc("request_restock_alert", { variant_id: Number(variantId) });
+  if (error) throw error;
+  return data;
+}
+
+export async function cancelRestockAlert(variantId) {
+  const { data, error } = await supabase.rpc("cancel_restock_alert", { variant_id: Number(variantId) });
+  if (error) throw error;
+  return data;
+}
+
+// La base todavía no tiene los avisos (migración sin aplicar): se oculta la opción.
+export function restockMissing(err) {
+  return ["PGRST202", "PGRST205", "42P01", "42883"].includes(err?.code);
+}
+
 // «12:2,15:1»: qué presentaciones y cuántas (para reconocer un mismo pedido).
 export function itemsSignature(items) {
   return items.map((i) => `${Number(i.variant_id)}:${Number(i.quantity ?? i.qty)}`).sort().join(",");
