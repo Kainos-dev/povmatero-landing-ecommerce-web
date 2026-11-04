@@ -2,21 +2,21 @@
 // (solicitudes del carrito, sin estados) y Ventas (presenciales, cargadas en
 // el panel). #/pedidos?tab=yerbas&f=pendiente
 import { h, mount, errorMessage, formatPrice, normalizeText } from "../ui.js";
-import { listOrders, STATUS, isExpired, uiStatus, deliverDueOrders } from "../api/orders.js";
+import { listOrders, STATUS, uiStatus, runOrderMaintenance, cancelReason } from "../api/orders.js";
 
 const TABS = [["yerbas", "Yerbas"], ["tienda", "Tienda"], ["presencial", "Ventas"]];
 
 // Filtros de yerbas: los tres estados principales primero; el resto, aparte.
+// No hay «Vencidos»: a las 72 h en «Pendiente» el pedido queda cancelado.
 const FILTERS = [
   ["pendiente", "Pendientes", (o) => uiStatus(o) === "pendiente", true],
   ["listo", "Listos", (o) => uiStatus(o) === "listo", true],
   ["entregado", "Entregados", (o) => uiStatus(o) === "entregado", true],
-  ["vencido", "Vencidos", (o) => uiStatus(o) === "vencido"],
   ["cancelado", "Cancelados", (o) => uiStatus(o) === "cancelado"],
   ["todos", "Todos", () => true],
 ];
-// Direcciones anteriores (?f=atender, confirmados…) → Pendientes.
-const LEGACY_FILTER = { atender: "pendiente", confirmado: "pendiente", preparando: "pendiente" };
+// Direcciones anteriores (?f=atender, confirmados, vencidos…).
+const LEGACY_FILTER = { atender: "pendiente", confirmado: "pendiente", preparando: "pendiente", vencido: "cancelado" };
 
 const DATE = new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
@@ -36,16 +36,18 @@ export function statusBadge(order) {
       : h("span", { class: "badge order-st order-st-entregado" }, "Venta");
   }
   const st = uiStatus(order);
-  if (st === "vencido") return h("span", { class: "badge order-st order-st-vencido" }, "Vencido");
   return h("span", { class: `badge order-st order-st-${st}` }, STATUS[st]?.label ?? st);
 }
 
 function orderCard(o) {
-  const expired = isExpired(o);
+  const st = o.kind === "yerbas" ? uiStatus(o) : null;
   let when = null;
-  if (o.kind === "yerbas" && o.status === "pendiente") {
-    when = h("span", { class: expired ? "order-when text-alert" : "order-when" },
-      expired ? `Venció ${relativeTime(o.expires_at)} · ya no reserva stock` : `Reserva vence ${relativeTime(o.expires_at)}`);
+  if (st === "pendiente" && o.status === "pendiente" && o.expires_at) {
+    const soon = new Date(o.expires_at) - Date.now() < 12 * 3600e3;
+    when = h("span", { class: soon ? "order-when text-alert" : "order-when" },
+      `Si no se atiende, se cancela ${relativeTime(o.expires_at)}`);
+  } else if (st === "cancelado" && cancelReason(o)) {
+    when = h("span", { class: "order-when" }, cancelReason(o));
   }
   return h("li", {},
     h("a", { class: "order-card", href: `#/pedidos/${o.id}` },
@@ -82,8 +84,8 @@ export async function renderOrders(view, query = {}) {
     refresh.disabled = true;
     let orders;
     try {
-      // Primero, la entrega automática de los «Listo» de hace 24 h (idempotente).
-      if (tab === "yerbas") await deliverDueOrders().catch((err) => console.warn("Entrega automática:", err));
+      // Primero, cancelación (72 h en «Pendiente») y entrega automática (24 h en «Listo»). Idempotente.
+      if (tab === "yerbas") await runOrderMaintenance().catch((err) => console.warn("Mantenimiento de pedidos:", err));
       orders = await listOrders(tab);
     } catch (err) {
       console.error(err);

@@ -6,7 +6,7 @@ import { h, mount, errorMessage, formatPrice, toast } from "../ui.js";
 import { icon } from "../icons.js";
 import {
   getOrder, setOrderStatus, updateOrderItems, listYerbaVariants, orderErrorMessage, whatsappNumber,
-  FLOW, FLOW_LABEL, isExpired, commitsStock, isEditable, canCancel, uiStatus, autoDeliveryAt, markReady,
+  FLOW, FLOW_LABEL, isExpired, runOrderMaintenance, commitsStock, isEditable, canCancel, uiStatus, autoDeliveryAt, markReady, cancelReason, PENDING_HOURS,
 } from "../api/orders.js";
 import { statusBadge, relativeTime } from "./orders.js";
 import { linkOrderCustomer, cancelSale, toolErrorMessage } from "../api/stockTools.js";
@@ -25,6 +25,12 @@ export async function renderOrderDetail(view, orderId) {
   let order;
   try {
     order = await getOrder(orderId);
+    // Pendiente de 72 h todavía sin marcar: se registra la cancelación ahora
+    // (idempotente) para que el detalle y el historial queden completos.
+    if (order && isExpired(order)) {
+      await runOrderMaintenance().catch((err) => console.warn("Mantenimiento de pedidos:", err));
+      order = (await getOrder(orderId)) ?? order;
+    }
   } catch (err) {
     console.error(err);
     mount(view, backLink("yerbas"), h("p", { class: "notice-warn" }, errorMessage(err)));
@@ -75,12 +81,11 @@ function draw(view, order) {
 // Estado
 // ---------------------------------------------------------------------
 function statusPanel(order, reload) {
-  const st = uiStatus(order);          // pendiente | vencido | listo | entregado | cancelado
-  const expired = st === "vencido";
+  const st = uiStatus(order);          // pendiente | listo | entregado | cancelado
   const panel = h("section", { class: "panel" });
   const slot = h("div", { class: "order-actions" });
   const errorBox = h("p", { class: "form-error", role: "alert", hidden: true });
-  const stepOf = st === "vencido" ? "pendiente" : st;
+  const stepOf = st;
 
   const steps = h("ol", { class: `order-steps order-steps-3${st === "cancelado" ? " is-cancelled" : ""}` },
     FLOW.map((s, i) => {
@@ -93,9 +98,18 @@ function statusPanel(order, reload) {
   const units = order.order_items.reduce((n, i) => n + i.quantity, 0);
   const auto = autoDeliveryAt(order);
   let note = null;
-  if (st === "cancelado") note = h("p", { class: "notice-info" }, "Pedido cancelado." + (order.events.some((e) => e.from_status === "listo" && e.to_status === "cancelado") ? " El stock que se había descontado se devolvió." : ""));
-  else if (expired) note = h("p", { class: "notice-warn" }, `La reserva venció ${relativeTime(order.expires_at)}: este pedido ya no compromete stock. Si lo marcás listo, se vuelve a controlar la disponibilidad.`);
-  else if (st === "pendiente") note = h("p", { class: "muted" }, (order.status === "pendiente" ? `Reserva el stock hasta ${formatDate(order.expires_at)} (${relativeTime(order.expires_at)}). ` : "Reserva el stock. ")
+  const reason = cancelReason(order);
+  if (st === "cancelado") {
+    const returned = order.events.some((e) => e.from_status === "listo" && e.to_status === "cancelado");
+    note = h("div", { class: "notice-info" },
+      h("strong", {}, reason ? `${reason}.` : "Pedido cancelado."),
+      " ", reason && order.status === "pendiente"
+        ? `Pasaron ${PENDING_HOURS} h en «Pendiente» (desde ${formatDate(order.created_at)}): la reserva de stock ya se liberó.`
+        : reason ? `Estuvo ${PENDING_HOURS} h en «Pendiente» sin confirmarse. No se descontó stock.`
+        : returned ? "El stock que se había descontado se devolvió." : "");
+  } else if (st === "pendiente") note = h("p", { class: "muted" }, (order.status === "pendiente"
+      ? `Reserva el stock hasta ${formatDate(order.expires_at)} (${relativeTime(order.expires_at)}). Si para entonces no está listo, se cancela por falta de respuesta. `
+      : "Reserva el stock. ")
     + `Al marcarlo listo se descuentan ${units} ${units === 1 ? "unidad" : "unidades"} del stock.`);
   else if (st === "listo") note = h("p", { class: "muted" }, "El stock ya está descontado. " + (auto
     ? `Si nadie lo cambia, pasa a «Entregado» solo el ${formatDate(auto)} (${relativeTime(auto)}).`
@@ -113,6 +127,8 @@ function statusPanel(order, reload) {
       await reload(done);
     } catch (err) {
       console.warn(err);   // rechazo esperado de la base: se muestra el motivo
+      // Pasaron las 72 h mientras se miraba el pedido: se muestra ya cancelado.
+      if (err?.hint === "auto_cancelled") { await reload(); toast(err.message, "error"); return; }
       errorBox.textContent = err?.hint === "invalid_transition" && order.status === "entregado"
         ? "Para volver un pedido entregado a «Listo» falta aplicar la migración 20261110000000_simple_order_states.sql."
         : orderErrorMessage(err, errorMessage);
@@ -129,7 +145,7 @@ function statusPanel(order, reload) {
 
   function drawActions() {
     const buttons = [];
-    if (st === "pendiente" || st === "vencido") {
+    if (st === "pendiente") {
       buttons.push(button("Marcar listo", "btn-primary", () => markReady(order), `Pedido #${order.id} listo: se descontó el stock.`));
     } else if (st === "listo") {
       buttons.push(button("Marcar entregado", "btn-primary", () => setOrderStatus(order.id, "entregado"), `Pedido #${order.id} entregado.`));
@@ -389,7 +405,10 @@ function historyPanel(order) {
       order.events.map((e) => {
         let detail = "";
         if (e.event === "estado") {
-          detail = `${HISTORY_LABEL[e.from_status] ?? e.from_status} → ${HISTORY_LABEL[e.to_status] ?? e.to_status}${e.detail?.vencido ? " (estaba vencido)" : ""}${e.detail?.automatico ? " (automático, 24 h)" : ""}`;
+          const auto = e.detail?.automatico
+            ? (e.to_status === "cancelado" ? ` · automático: ${e.detail?.motivo ?? "Cancelado por falta de respuesta"} (${e.detail?.horas ?? PENDING_HOURS} h)` : " (automático, 24 h)")
+            : "";
+          detail = `${HISTORY_LABEL[e.from_status] ?? e.from_status} → ${HISTORY_LABEL[e.to_status] ?? e.to_status}${e.detail?.vencido ? " (la reserva había vencido)" : ""}${auto}`;
         } else if (e.event === "editado") {
           const before = (e.detail?.antes ?? []).reduce((n, l) => n + Number(l.quantity), 0);
           const after = (e.detail?.despues ?? []).reduce((n, l) => n + Number(l.quantity), 0);

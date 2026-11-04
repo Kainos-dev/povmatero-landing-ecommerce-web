@@ -262,3 +262,4 @@ html:not(.route-account) .acc-page { display: none; }
 @media (max-width: 420px) {
   .acc-form .account-row { grid-template-columns: 1fr; }
 }
+.acc-order-reason { margin: -4px 0 10px; font-size: 13px; color: var(--text-muted); }

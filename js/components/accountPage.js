@@ -34,9 +34,16 @@ function orderTag(o) {
     ? `<span class="acc-order-tag acc-order-tag--off">Anulada</span>`
     : `<span class="acc-order-tag acc-order-tag--done">Compra en el local</span>`;
   if (o.kind !== "yerbas") return `<span class="acc-order-tag">Enviado por WhatsApp</span>`;
-  const expired = o.status === "pendiente" && o.expires_at && new Date(o.expires_at) <= new Date();
-  const [label, tone] = expired ? ["Reserva vencida", "off"] : (YERBA_STATUS[o.status] ?? [o.status ?? "", ""]);
+  const [label, tone] = isUnanswered(o) ? YERBA_STATUS.cancelado : (YERBA_STATUS[o.status] ?? [o.status ?? "", ""]);
   return `<span class="acc-order-tag acc-order-tag--${tone || "wait"}">${escapeHtml(label)}</span>`;
+}
+// Pendiente 72 h sin respuesta: ya está cancelado (la base lo marca sola; puede
+// que todavía no haya corrido la tarea, pero la reserva ya se liberó).
+const isUnanswered = (o) => o.kind === "yerbas" && o.status === "pendiente" && o.expires_at && new Date(o.expires_at) <= new Date();
+function cancelNote(o) {
+  if (o.kind !== "yerbas") return "";
+  const reason = o.cancel_reason || (isUnanswered(o) ? "Cancelado por falta de respuesta" : "");
+  return reason && (o.status === "cancelado" || isUnanswered(o)) ? `<p class="acc-order-reason">${escapeHtml(reason)}</p>` : "";
 }
 
 let unsubscribe = null;
@@ -376,6 +383,7 @@ async function renderOrders(panel) {
               </div>
               ${orderTag(o)}
             </div>
+            ${cancelNote(o)}
             <ul class="acc-order-items">
               ${items.map((i) => `
                 <li>

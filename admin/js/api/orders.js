@@ -7,19 +7,26 @@ import { supabase } from "/js/lib/supabaseClient.js";
 const BASE_COLUMNS =
   "id, created_at, updated_at, kind, status, expires_at, status_changed_at, stock_applied, " +
   "customer_id, customer_name, customer_email, customer_phone, item_count, total";
-// Columnas de las migraciones 20261109 (ventas presenciales) y 20261110 (estados).
-const NEW_COLUMNS = ", ready_at, delivered_at, auto_delivered, auto_deliver";
-let hasNewColumns = true;   // si la base todavía no las tiene, se piden las de siempre
+// Columnas de las migraciones 20261110 (estados) y 20261112 (cancelación por
+// falta de respuesta). Si la base todavía no tiene alguna (42703), se pide sin ella.
+const COLUMN_SETS = [
+  BASE_COLUMNS + ", ready_at, delivered_at, auto_delivered, auto_deliver, cancel_reason, cancelled_at, auto_cancelled",
+  BASE_COLUMNS + ", ready_at, delivered_at, auto_delivered, auto_deliver",
+  BASE_COLUMNS,
+];
+let columnSet = 0;
 
-// Lectura con las columnas nuevas; si la base aún no las tiene (42703), sin ellas.
 async function selectOrders(build, extra = "") {
-  if (hasNewColumns) {
-    const res = await build(BASE_COLUMNS + NEW_COLUMNS + extra);
-    if (res.error?.code !== "42703") return res;
-    hasNewColumns = false;
+  for (;;) {
+    const res = await build(COLUMN_SETS[columnSet] + extra);
+    if (res.error?.code !== "42703" || columnSet === COLUMN_SETS.length - 1) return res;
+    columnSet++;
   }
-  return build(BASE_COLUMNS + extra);
 }
+
+// Un pendiente que pasa 72 h sin respuesta se cancela solo (migración 20261112).
+export const UNANSWERED_REASON = "Cancelado por falta de respuesta";
+export const PENDING_HOURS = 72;
 
 // Tres estados para el panel. En la base, «Pendiente» agrupa pendiente,
 // confirmado y preparando (los tres reservan stock igual).
@@ -35,11 +42,20 @@ export const FLOW = ["pendiente", "listo", "entregado"];
 export const FLOW_LABEL = { pendiente: "Pendiente", listo: "Listo", entregado: "Entregado" };
 export const PENDING_STATES = ["pendiente", "confirmado", "preparando"];
 
-// Estado que ve el panel: pendiente | vencido | listo | entregado | cancelado
+// Estado que ve el panel: pendiente | listo | entregado | cancelado.
+// No hay «Vencido»: un pendiente cuya reserva de 72 h ya pasó está cancelado
+// (la base lo marca en la próxima tarea; la reserva ya se liberó).
 export function uiStatus(o) {
   if (o.kind === "presencial") return o.status === "cancelado" ? "cancelado" : "entregado";
-  if (isExpired(o)) return "vencido";
+  if (isExpired(o)) return "cancelado";
   return PENDING_STATES.includes(o.status) ? "pendiente" : o.status;
+}
+
+// Motivo de la cancelación (o null).
+export function cancelReason(o) {
+  if (o.cancel_reason) return o.cancel_reason;
+  if (isExpired(o) || (o.status === "cancelado" && o.auto_cancelled)) return UNANSWERED_REASON;
+  return null;
 }
 
 // Hora de la entrega automática (24 h desde que pasó a «Listo»), o null.
@@ -52,8 +68,8 @@ export const isExpired = (o) => o.kind === "yerbas" && o.status === "pendiente" 
 // ¿Compromete stock ahora? (mismo criterio que la base)
 export const commitsStock = (o) => o.kind === "yerbas" &&
   (o.status === "confirmado" || o.status === "preparando" || (o.status === "pendiente" && !isExpired(o)));
-export const isEditable = (o) => o.kind === "yerbas" && PENDING_STATES.includes(o.status);
-export const canCancel = (o) => o.kind === "yerbas" && ["pendiente", "confirmado", "preparando", "listo"].includes(o.status);
+export const isEditable = (o) => o.kind === "yerbas" && PENDING_STATES.includes(o.status) && !isExpired(o);
+export const canCancel = (o) => o.kind === "yerbas" && ["pendiente", "confirmado", "preparando", "listo"].includes(o.status) && !isExpired(o);
 
 export async function listOrders(kind, limit = 300) {
   const { data, error } = await selectOrders((cols) => supabase
@@ -108,6 +124,17 @@ export async function deliverDueOrders() {
   return data ?? [];
 }
 
+// Mantenimiento al abrir «Pedidos»: cancela los pendientes de 72 h y entrega
+// los listos de 24 h (run_order_maintenance, idempotente). Lo mismo corre solo
+// una vez por día en Vercel (/api/cron-pedidos). Sin la migración 20261112,
+// solo la entrega automática.
+export async function runOrderMaintenance() {
+  const { data, error } = await supabase.rpc("run_order_maintenance");
+  if (!error) return data;
+  if (error.code !== "PGRST202") throw error;
+  return { cancelados: [], entregados: await deliverDueOrders() };
+}
+
 // «Marcar listo» desde Pendiente (cualquiera de sus tres estados de la base).
 // La base nueva lo hace en un paso; la anterior a 20261110 no tiene ese paso
 // directo: entonces se recorre confirmado → preparando → listo (cada paso es
@@ -128,7 +155,17 @@ export async function markReady(order) {
 export async function setOrderStatus(orderId, status) {
   const { data, error } = await supabase.rpc("admin_set_order_status", { order_id: orderId, status });
   if (error) throw error;
+  throwIfAutoCancelled(data, orderId, status);
   return data;
+}
+
+// La base canceló el pedido (72 h sin respuesta) en vez de hacer el cambio pedido.
+function throwIfAutoCancelled(data, orderId, wanted) {
+  if (data?.auto_cancelled && data.status === "cancelado" && wanted !== "cancelado") {
+    const err = new Error(`El pedido #${orderId} se canceló por falta de respuesta (${PENDING_HOURS} h en «Pendiente»).`);
+    err.hint = "auto_cancelled";
+    throw err;
+  }
 }
 
 // items: [{ variant_id, quantity }] = la lista completa nueva.
@@ -136,6 +173,7 @@ export async function updateOrderItems(orderId, items) {
   const payload = items.map((i) => ({ variant_id: Number(i.variant_id), quantity: Number(i.quantity) }));
   const { data, error } = await supabase.rpc("admin_update_order_items", { order_id: orderId, items: payload });
   if (error) throw error;
+  throwIfAutoCancelled(data, orderId, "editar");
   return data;
 }
 
@@ -153,7 +191,7 @@ export async function listYerbaVariants() {
 }
 
 // Rechazos de la base que ya vienen con un mensaje pensado para el panel.
-const KNOWN = new Set(["insufficient_stock", "unavailable", "invalid_transition", "not_editable", "not_yerbas", "not_found", "invalid_items"]);
+const KNOWN = new Set(["insufficient_stock", "unavailable", "invalid_transition", "not_editable", "not_yerbas", "not_found", "invalid_items", "auto_cancelled"]);
 export function orderErrorMessage(err, fallback) {
   if (KNOWN.has(err?.hint)) return err.message;
   if (err?.code === "PGRST202") return "Falta aplicar la migración 20261105000000_yerba_orders.sql.";

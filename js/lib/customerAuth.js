@@ -116,13 +116,17 @@ export async function updateProfile(userId, { firstName, lastName, phone }) {
 }
 
 // «Mis pedidos»: la RLS devuelve solo los pedidos de la cuenta con sesión.
+// cancel_reason (migración 20261112): si la base todavía no la tiene, se pide sin ella.
 export async function listMyOrders() {
-  const { data, error } = await supabase
+  const columns = "id, total, item_count, created_at, kind, status, expires_at, order_items (product_name, variant_name, unit_price, quantity, line_total)";
+  const query = (cols) => supabase
     .from("orders")
-    .select("id, total, item_count, created_at, kind, status, expires_at, order_items (product_name, variant_name, unit_price, quantity, line_total)")
+    .select(cols)
     .order("created_at", { ascending: false })
     .order("id", { referencedTable: "order_items", ascending: true })
     .limit(50);
+  let { data, error } = await query(columns + ", cancel_reason");
+  if (error?.code === "42703") ({ data, error } = await query(columns));
   if (error) throw error;
   return data ?? [];
 }

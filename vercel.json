@@ -1,5 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/cron-pedidos",
+      "schedule": "0 12 * * *"
+    }
+  ],
   "images": {
     "sizes": [
       128,
