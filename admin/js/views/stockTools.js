@@ -8,6 +8,7 @@
 import { h, mount, toast, errorMessage, formatPrice, normalizeText } from "../ui.js";
 import * as api from "../api/stockTools.js";
 import { exitConciliation } from "./stockExit.js";
+import { renderSupplier } from "./supplierOrders.js";
 
 const TABS = [
   ["movimiento", "Movimiento rápido"],
@@ -45,7 +46,7 @@ export async function renderStockTools(view, query = {}) {
   const byId = new Map(variants.map((v) => [v.id, v]));
   const ctx = { variants, byId };
   if (tab === "movimiento") renderMovement(body, ctx);
-  else if (tab === "proveedor") renderSupplier(body, ctx);
+  else if (tab === "proveedor") renderSupplier(body);
   else renderSale(body, ctx);
 }
 
@@ -285,185 +286,8 @@ function renderMovement(body, ctx) {
 }
 
 // ---------------------------------------------------------------------
-// 2. Pedidos a proveedor
+// 2. Pedidos a proveedor: ver supplierOrders.js
 // ---------------------------------------------------------------------
-const SUPPLIER_STATUS = { pedido: "Pedido", recibido: "Recibido", cancelado: "Cancelado" };
-
-export function supplierMessage({ supplier, items, note }) {
-  const lines = items.map((i) => `• ${i.quantity} × ${i.product_name}${i.variant_name ? ` ${i.variant_name}` : ""}`);
-  const units = items.reduce((n, i) => n + Number(i.quantity), 0);
-  return [
-    `Hola${supplier ? ` ${supplier}` : ""}! Te paso el pedido de yerbas de Povmatero:`,
-    "",
-    ...lines,
-    "",
-    `Total: ${units} ${units === 1 ? "unidad" : "unidades"}.`,
-    note ? `\n${note}` : "",
-    "¡Gracias!",
-  ].filter((l, i, a) => !(l === "" && a[i - 1] === "")).join("\n").trim();
-}
-
-async function copyText(text) {
-  try { await navigator.clipboard.writeText(text); return true; } catch { return false; }
-}
-
-function renderSupplier(body, ctx) {
-  const lines = new Map();   // variantId → quantity
-  let key = api.newKey();
-  let busy = false;
-
-  const supplier = h("input", { class: "input", maxlength: "120", placeholder: "Ej.: Distribuidora Sur" });
-  const note = h("input", { class: "input", maxlength: "500", placeholder: "Opcional: entrega, forma de pago…" });
-  const linesBox = h("ul", { class: "line-edit-list" });
-  const summary = h("p", { class: "muted" });
-  const preview = h("textarea", { class: "input msg-preview", rows: "8", readOnly: true, "aria-label": "Mensaje para el proveedor" });
-  const errorBox = h("p", { class: "form-error", role: "alert", hidden: true });
-  const save = h("button", { type: "button", class: "btn-primary" }, "Guardar pedido y copiar mensaje");
-  const copy = h("button", { type: "button", class: "btn-ghost" }, "Copiar mensaje");
-  const history = h("div", { class: "pane-stack" }, h("p", { class: "muted" }, "Cargando pedidos…"));
-  const picker = variantPicker(ctx, { onPick: (v) => { lines.set(v.id, (lines.get(v.id) ?? 0) + 1); key = api.newKey(); draw(); } });
-
-  const draftItems = () => [...lines].map(([id, q]) => {
-    const v = ctx.byId.get(id);
-    return { variant_id: id, quantity: q, product_name: v?.productName ?? "", variant_name: v?.variantName ?? "" };
-  });
-
-  function draw() {
-    mount(linesBox, lines.size ? [...lines].map(([id, q]) => {
-      const v = ctx.byId.get(id);
-      const input = h("input", { type: "number", class: "input input-sm", min: "1", max: "9999", value: String(q), "aria-label": `Cantidad de ${v?.label}` });
-      input.addEventListener("change", () => {
-        const n = intOf(input);
-        if (Number.isInteger(n) && n >= 1 && n <= 9999) lines.set(id, n); else input.value = String(lines.get(id));
-        key = api.newKey(); draw();
-      });
-      return h("li", { class: "line-edit" },
-        h("span", { class: "line-edit-name" }, v?.label ?? `#${id}`, h("small", { class: "muted" }, stockText(v ?? {}))),
-        input,
-        h("button", { type: "button", class: "btn-ghost btn-sm", onclick: () => { lines.delete(id); key = api.newKey(); draw(); } }, "Quitar"));
-    }) : h("li", { class: "muted" }, "Buscá y tocá las yerbas que querés pedir."));
-    const units = [...lines.values()].reduce((a, b) => a + b, 0);
-    summary.textContent = lines.size ? `${lines.size} ${lines.size === 1 ? "presentación" : "presentaciones"} · ${units} ${units === 1 ? "unidad" : "unidades"}` : "";
-    preview.value = lines.size ? supplierMessage({ supplier: supplier.value.trim(), items: draftItems(), note: note.value.trim() }) : "";
-    save.disabled = !lines.size || busy;
-    copy.disabled = !lines.size;
-  }
-  [supplier, note].forEach((el) => el.addEventListener("input", () => { key = api.newKey(); draw(); }));
-
-  copy.addEventListener("click", async () => toast(await copyText(preview.value) ? "Mensaje copiado." : "No se pudo copiar: seleccioná el texto y copialo.", "ok"));
-  save.addEventListener("click", async () => {
-    if (busy || !lines.size) return;
-    busy = true; errorBox.hidden = true; save.disabled = true; save.textContent = "Guardando…";
-    try {
-      const res = await api.createSupplierOrder({ items: draftItems(), supplier: supplier.value.trim(), note: note.value.trim(), key });
-      const copied = await copyText(supplierMessage({ supplier: res.supplier, items: res.items, note: res.note }));
-      toast(`Pedido a proveedor #${res.id} guardado${copied ? " y mensaje copiado" : ""}. El stock se suma al confirmar la recepción.`);
-      lines.clear(); supplier.value = ""; note.value = ""; key = api.newKey();
-      loadHistory();
-    } catch (err) {
-      console.warn(err);
-      errorBox.textContent = message(err); errorBox.hidden = false;
-    } finally {
-      busy = false; save.textContent = "Guardar pedido y copiar mensaje"; draw();
-    }
-  });
-
-  async function loadHistory() {
-    let orders;
-    try {
-      orders = await api.listSupplierOrders();
-    } catch (err) {
-      mount(history, h("p", { class: "notice-warn" }, message(err)));
-      return;
-    }
-    mount(history, orders.length ? orders.map((o) => supplierCard(o, loadHistory)) : h("p", { class: "muted" }, "Todavía no hay pedidos a proveedor."));
-  }
-
-  draw();
-  mount(body,
-    h("section", { class: "panel" },
-      h("div", { class: "panel-head" }, h("h2", {}, "Nuevo pedido a proveedor")),
-      h("p", { class: "hint" }, "Prepararlo no cambia el stock. Cuando llegue la mercadería, confirmá la recepción y se suma."),
-      h("label", { class: "field" }, h("span", {}, "Proveedor"), supplier),
-      picker.el,
-      linesBox, summary,
-      h("label", { class: "field" }, h("span", {}, "Nota"), note),
-      h("label", { class: "field" }, h("span", {}, "Mensaje para WhatsApp"), preview),
-      errorBox,
-      h("div", { class: "actions" }, save, copy)),
-    h("section", { class: "panel" },
-      h("div", { class: "panel-head" }, h("h2", {}, "Pedidos anteriores")),
-      history));
-  loadHistory();
-}
-
-function supplierCard(o, reload) {
-  const items = o.supplier_order_items ?? [];
-  const card = h("article", { class: "supplier-card" });
-  const errorBox = h("p", { class: "form-error", role: "alert", hidden: true });
-  const actions = h("div", { class: "actions" });
-
-  function head() {
-    return h("div", { class: "supplier-head" },
-      h("strong", {}, `#${o.id}${o.supplier ? ` · ${o.supplier}` : ""}`),
-      h("span", { class: `badge supplier-st supplier-st-${o.status}` }, SUPPLIER_STATUS[o.status] ?? o.status),
-      h("span", { class: "muted" }, `Pedido ${fmtDate(o.created_at)}${o.received_at ? ` · recibido ${fmtDate(o.received_at)}` : ""}${o.cancelled_at ? ` · cancelado ${fmtDate(o.cancelled_at)}` : ""}`));
-  }
-  function list(editing = null) {
-    return h("ul", { class: "order-lines" }, items.map((i) => h("li", {},
-      editing ? editing.get(i.id) : h("span", { class: "order-line-qty" }, `${o.status === "recibido" ? i.received_quantity ?? i.quantity : i.quantity}×`),
-      h("span", { class: "order-line-name" }, i.product_name, i.variant_name ? h("small", {}, i.variant_name) : null,
-        o.status === "recibido" && i.received_quantity !== i.quantity ? h("small", { class: "muted" }, `pedido: ${i.quantity}`) : null))));
-  }
-  function view() {
-    const buttons = [];
-    if (o.status === "pedido") {
-      buttons.push(h("button", { type: "button", class: "btn-primary btn-sm", onclick: receiveForm }, "Confirmar recepción"));
-      buttons.push(h("button", { type: "button", class: "btn-ghost btn-sm", onclick: async () => toast(await copyText(supplierMessage({ supplier: o.supplier, items, note: o.note })) ? "Mensaje copiado." : "No se pudo copiar.") }, "Copiar mensaje"));
-      buttons.push(h("button", { type: "button", class: "btn-ghost btn-sm btn-danger", onclick: confirmCancel }, "Cancelar"));
-    }
-    mount(actions, buttons);
-    mount(card, head(), list(), o.note ? h("p", { class: "muted" }, o.note) : null, errorBox, actions);
-  }
-  async function run(button, fn, done) {
-    errorBox.hidden = true;
-    card.querySelectorAll("button, input").forEach((b) => { b.disabled = true; });
-    button.textContent = "Guardando…";
-    try {
-      const res = await fn();
-      toast(res?.already_received ? `El pedido #${o.id} ya estaba recibido: no se sumó de nuevo.` : done);
-      reload();
-    } catch (err) {
-      console.warn(err);
-      errorBox.textContent = message(err); errorBox.hidden = false;
-      view();
-    }
-  }
-  function receiveForm() {
-    const inputs = new Map(items.map((i) => [i.id, h("input", { type: "number", class: "input input-sm", min: "0", max: "9999", value: String(i.quantity), "aria-label": `Recibido de ${i.product_name}` })]));
-    const yes = h("button", { type: "button", class: "btn-primary btn-sm" }, "Sumar al stock");
-    const no = h("button", { type: "button", class: "btn-ghost btn-sm", onclick: view }, "Volver");
-    yes.addEventListener("click", () => {
-      const received = items.filter((i) => i.variant_id).map((i) => ({ variant_id: i.variant_id, quantity: intOf(inputs.get(i.id)) }));
-      if (received.some((r) => !Number.isInteger(r.quantity) || r.quantity < 0 || r.quantity > 9999)) {
-        errorBox.textContent = "Las cantidades recibidas tienen que ser enteros de 0 a 9999."; errorBox.hidden = false; return;
-      }
-      const units = received.reduce((n, r) => n + r.quantity, 0);
-      run(yes, () => api.receiveSupplierOrder(o.id, received), `Recepción confirmada: +${units} ${units === 1 ? "unidad" : "unidades"} al stock.`);
-    });
-    mount(card, head(), h("p", { class: "hint" }, "¿Cuánto llegó de cada una? Se suma al stock una sola vez."), list(new Map([...inputs].map(([id, el]) => [id, el]))), errorBox, h("div", { class: "actions" }, yes, no));
-  }
-  function confirmCancel() {
-    const yes = h("button", { type: "button", class: "btn-primary btn-sm btn-danger-solid" }, "Sí, cancelar");
-    yes.addEventListener("click", () => run(yes, () => api.cancelSupplierOrder(o.id), `Pedido a proveedor #${o.id} cancelado.`));
-    mount(actions, h("div", { class: "confirm-box confirm-danger" },
-      h("strong", {}, `¿Cancelar el pedido a proveedor #${o.id}?`),
-      h("span", {}, "No cambia el stock."),
-      h("div", { class: "actions" }, yes, h("button", { type: "button", class: "btn-ghost btn-sm", onclick: view }, "No"))));
-  }
-  view();
-  return card;
-}
 
 // ---------------------------------------------------------------------
 // 3. Venta presencial

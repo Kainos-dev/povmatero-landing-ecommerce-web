@@ -130,6 +130,37 @@ export async function listRecentQuickMovements(limit = 15) {
 // ---------------------------------------------------------------------
 // Pedidos a proveedor
 // ---------------------------------------------------------------------
+// Yerbas para armar el pedido: presentaciones activas con su stock físico y
+// las mismas fotos que la góndola de /yerbas (presentación → general → portada).
+export async function listYerbasForSupplier() {
+  const withShelf = "id, name, stock, track_stock, is_active, sort_order, shelf_image, product:products!inner(id, name, brand, is_active, sort_order, shelf_image, category:categories!inner(slug))";
+  const plain = "id, name, stock, track_stock, is_active, sort_order, product:products!inner(id, name, brand, is_active, sort_order, category:categories!inner(slug))";
+  const query = (cols) => supabase.from("product_variants").select(cols).eq("is_active", true).eq("product.category.slug", "yerbas");
+  let res = await query(withShelf);
+  if (res.error?.code === "42703") res = await query(plain);   // base sin imágenes de góndola
+  const variants = check(res);
+  const covers = check(await supabase
+    .from("product_images")
+    .select("product_id, src, is_cover, sort_order")
+    .is("variant_id", null)
+    .order("sort_order", { ascending: true })
+    .order("id", { ascending: true }));
+  const coverOf = new Map();
+  for (const c of covers) if (!coverOf.has(c.product_id) || c.is_cover) { if (!coverOf.has(c.product_id) || !coverOf.get(c.product_id).is_cover) coverOf.set(c.product_id, c); }
+  return variants.map((v) => ({
+    id: v.id,
+    name: v.name,
+    stock: v.stock,
+    trackStock: v.track_stock,
+    sort: v.sort_order ?? 0,
+    image: v.shelf_image ?? null,
+    product: {
+      id: v.product.id, name: v.product.name, brand: v.product.brand ?? null, active: v.product.is_active,
+      sort: v.product.sort_order ?? 0, image: v.product.shelf_image ?? null, cover: coverOf.get(v.product.id)?.src ?? null,
+    },
+  }));
+}
+
 export async function listSupplierOrders(limit = 100) {
   return check(await supabase
     .from("supplier_orders")
