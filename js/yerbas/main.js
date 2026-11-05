@@ -256,6 +256,13 @@ function itemHtml(brand, p) {
     </div>`;
 }
 
+// Variedades de una marca: productos distintos (por id), no presentaciones.
+// Serena 500 g y Serena 1 kg son una sola variedad. Incluye las agotadas.
+function varietiesText(brand) {
+  const n = new Set(brand.products.map((p) => p.id)).size;
+  return `${n} ${n === 1 ? "variedad" : "variedades"}`;
+}
+
 function renderAisle() {
   const layout = shelfLayout();
   ui.track.removeAttribute("aria-busy");
@@ -266,12 +273,11 @@ function renderAisle() {
   }
   ui.track.innerHTML = catalog.brands.map((b, i) => {
     const rows = shelfRows(b.products, layout);
-    const available = b.products.filter(productAvailable).length;
     return `
       <section class="y-gondola" id="g-${b.key}" data-index="${i}" aria-label="${escapeHtml(b.name)}" aria-roledescription="góndola">
         <header class="y-gondola-head">
           <h2>${escapeHtml(b.name)}</h2>
-          <p>${b.products.length} ${b.products.length === 1 ? "yerba" : "yerbas"}${available < b.products.length ? ` · ${b.products.length - available} agotada${b.products.length - available === 1 ? "" : "s"}` : ""}</p>
+          <p>${varietiesText(b)}</p>
         </header>
         <div class="y-shelves" style="--pack-w:${layout.W}px;--group-gap:${layout.gap}px"${layout.W < 105 ? ' data-tags="stack"' : ""}>
           ${rows.map((row) => `<div class="y-shelf">${row.map((p) => itemHtml(b, p)).join("")}</div>`).join("")}

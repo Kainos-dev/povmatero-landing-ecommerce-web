@@ -168,6 +168,11 @@ html.y-locked, html.y-locked body { overflow: hidden; }
   text-transform: uppercase;
 }
 .y-gondola-head p { font-size: 12px; color: var(--text-secondary); letter-spacing: 0.04em; }
+/* Mismo margen que el header (.y-top-inner, 24 px): en el celular la marca queda
+   alineada con el logo y el contador con el ícono de cuenta, como en escritorio. */
+.y-gondola-head { padding-left: max(var(--wrap-pad), 24px); padding-right: max(var(--wrap-pad), 24px); }
+.y-gondola-head h2 { min-width: 0; overflow-wrap: anywhere; }
+.y-gondola-head p { flex: none; white-space: nowrap; }
 
 /* Un estante: tabla de madera con las yerbas paradas encima. Cada yerba es un
    grupo con sus presentaciones juntas; entre yerbas distintas hay una
