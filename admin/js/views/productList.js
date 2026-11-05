@@ -59,7 +59,8 @@ export async function renderProductList(view, query = {}) {
 
   const selected = new Set();   // ids seleccionados (solo entre los visibles)
   const expanded = new Set();   // productos con varias variantes abiertos para editar
-  // Ediciones pendientes por variante: { price?, cost?, stock? (texto), suggest?: "accepted" | "rejected", priceFromSuggestion? }
+  // Ediciones pendientes por variante: { price?, cost?, stock? (texto), priceManual? }.
+  // En las yerbas, «price» sin «priceManual» es el precio calculado desde el costo.
   const edits = new Map();
   const stockKeys = new Map();  // "variante:de:a" → { key, tried } (reintentos sin duplicar)
   const shortageAck = new Set(); // variantes cuya baja de stock no cubre reservas y se confirmó
@@ -109,16 +110,17 @@ export async function renderProductList(view, query = {}) {
     };
   }
 
-  // Sugerencia de precio de las yerbas: solo si se editó el costo (y es válido).
-  function suggestion(v) {
-    const p = productById.get(v.product_id);
-    const e = edits.get(v.id);
-    if (!p || !isYerba(p) || !e || !("cost" in e)) return null;
+  // Yerbas: el precio de venta sigue al costo editado (costo × 1,20 redondeado
+  // hacia arriba a $50). Sin costo nuevo válido, vuelve al precio guardado.
+  function autoPrice(p, v, e) {
+    delete e.price;
+    if (!("cost" in e)) return;
     const cost = qe.parseMoney(e.cost);
-    if (cost == null || Number.isNaN(cost) || cost <= 0 || qe.sameMoney(cost, origCost(p, v))) return null;
-    const price = qe.suggestedPrice(cost);
-    return { cost, price, state: e.suggest ?? "pending", manual: "price" in e && !e.priceFromSuggestion };
+    if (cost == null || Number.isNaN(cost) || cost <= 0) return;
+    const price = qe.yerbaPrice(cost);
+    if (!qe.sameMoney(price, origPrice(p, v))) e.price = String(price);
   }
+  const isAutoPrice = (p, e) => isYerba(p) && "price" in e && !e.priceManual;
 
   function setField(v, key, text) {
     const p = productById.get(v.product_id);
@@ -129,36 +131,13 @@ export async function renderProductList(view, query = {}) {
       : key === "stock" ? parsed === orig : !Number.isNaN(parsed) && qe.sameMoney(parsed, orig);
     if (same) delete e[key];
     else e[key] = String(text);
-    if (key === "price") { delete e.priceFromSuggestion; if (e.suggest === "accepted") e.suggest = "pending"; }
-    if (key === "cost") {
-      // Si el precio venía de la sugerencia, la sigue; si no hay costo nuevo, se olvida.
-      if (!("cost" in e)) {
-        delete e.suggest;
-        if (e.priceFromSuggestion) { delete e.price; delete e.priceFromSuggestion; }
-      } else if (e.priceFromSuggestion) {
-        const c = qe.parseMoney(e.cost);
-        if (c != null && !Number.isNaN(c) && c > 0) e.price = String(qe.suggestedPrice(c));
-      }
-    }
+    // Lo que se escribe a mano en el precio se respeta aunque después cambie el costo.
+    if (key === "price") e.priceManual = true;
+    if (key === "cost" && isYerba(p) && !e.priceManual) autoPrice(p, v, e);
     if (key === "stock") shortageAck.delete(v.id);
     const keys = Object.keys(e).filter((k) => ["price", "cost", "stock"].includes(k));
     if (keys.length) edits.set(v.id, e);
     else edits.delete(v.id);
-  }
-
-  function acceptSuggestion(v) {
-    const s = suggestion(v);
-    if (!s) return;
-    const e = { ...edits.get(v.id), suggest: "accepted", priceFromSuggestion: true };
-    const p = productById.get(v.product_id);
-    if (qe.sameMoney(s.price, origPrice(p, v))) delete e.price;
-    else e.price = String(s.price);
-    edits.set(v.id, e);
-  }
-  function rejectSuggestion(v) {
-    const e = { ...edits.get(v.id), suggest: "rejected" };
-    if (e.priceFromSuggestion) { delete e.price; delete e.priceFromSuggestion; }
-    edits.set(v.id, e);
   }
 
   // ---------- Acciones en lote ----------
@@ -281,24 +260,8 @@ export async function renderProductList(view, query = {}) {
     const n = qe.parseMoney(e[key]);
     if (n == null) return h("span", { class: key === "price" ? "qe-hint qe-bad" : "qe-hint" }, key === "price" ? "Obligatorio" : `era ${formatPrice(orig)}`);
     if (Number.isNaN(n)) return h("span", { class: "qe-hint qe-bad" }, "Número inválido");
-    return h("span", { class: "qe-hint" }, `era ${orig == null ? "—" : formatPrice(orig)} → ${formatPrice(n)}`);
-  }
-
-  function suggestionBox(v, refresh) {
-    const s = suggestion(v);
-    if (!s || s.state === "rejected") return null;
-    if (s.state === "accepted" && !s.manual) {
-      return h("div", { class: "qe-suggest is-on", onClick: stop },
-        h("span", {}, `Precio ${formatPrice(s.price)} (costo + 20 %)`),
-        h("button", { type: "button", class: "link-btn", onClick: () => { rejectSuggestion(v); refresh(); } }, "No cambiar precio"));
-    }
-    return h("div", { class: "qe-suggest", onClick: stop },
-      h("span", {}, s.manual
-        ? `Sugerido ${formatPrice(s.price)} (costo + 20 %). Se respeta el precio que escribiste.`
-        : `Precio sugerido: ${formatPrice(s.price)} (costo + 20 %)`),
-      h("span", { class: "qe-suggest-actions" },
-        h("button", { type: "button", class: "btn-ghost btn-xs", onClick: () => { acceptSuggestion(v); refresh(); } }, s.manual ? "Usar sugerido" : "Aplicar"),
-        s.manual ? null : h("button", { type: "button", class: "link-btn", onClick: () => { rejectSuggestion(v); refresh(); } }, "No")));
+    const auto = key === "price" && isAutoPrice(p, e) ? " · costo + 20 %" : "";
+    return h("span", { class: "qe-hint" }, `era ${orig == null ? "—" : formatPrice(orig)} → ${formatPrice(n)}${auto}`);
   }
 
   // Devuelve las tres celdas (precio, costo, stock) de una variante.
@@ -311,9 +274,6 @@ export async function renderProductList(view, query = {}) {
     const priceHint = h("span", { class: "qe-hint-slot" });
     const costHint = h("span", { class: "qe-hint-slot" });
     const stockHint = h("span", { class: "qe-hint-slot" });
-    // La sugerencia va debajo del costo; en el celular, en una fila propia (más ancha).
-    const suggestSlot = h("span", { class: "qe-suggest-slot" });
-    const suggestRow = h("td", { class: "c-sug", hidden: true, onClick: stop });
 
     function sync() {
       const e = edits.get(v.id) ?? {};
@@ -323,10 +283,6 @@ export async function renderProductList(view, query = {}) {
       mount(priceHint, hintFor(v, "price"));
       mount(costHint, hintFor(v, "cost"));
       mount(stockHint, hintFor(v, "stock"));
-      const again = () => { refreshPrice(); sync(); renderSaveBar(); };
-      mount(suggestSlot, suggestionBox(v, again));
-      mount(suggestRow, suggestionBox(v, again));
-      suggestRow.hidden = !suggestRow.childNodes.length;
       tr.classList.toggle("row-dirty", edits.has(v.id));
       refreshRow?.();
     }
@@ -343,10 +299,9 @@ export async function renderProductList(view, query = {}) {
 
     return [
       h("td", { class: "c-qe c-price", "data-label": "Precio", onClick: stop }, h("div", { class: "qe-cell" }, price, priceHint)),
-      h("td", { class: "c-qe c-cost", "data-label": "Costo", onClick: stop }, h("div", { class: "qe-cell" }, cost, costHint, suggestSlot)),
+      h("td", { class: "c-qe c-cost", "data-label": "Costo", onClick: stop }, h("div", { class: "qe-cell" }, cost, costHint)),
       h("td", { class: "c-qe c-stock", "data-label": "Stock", onClick: stop },
         stock ? h("div", { class: "qe-cell" }, stock, stockHint) : h("span", { class: "muted", title: "No controla stock" }, "—")),
-      suggestRow,
     ];
   }
 
@@ -380,7 +335,7 @@ export async function renderProductList(view, query = {}) {
 
     const tr = h("tr", {
       class: ["row-link", multi ? "row-multi" : "", open ? "is-open" : "", !multi && vs.length && edits.has(vs[0].id) ? "row-dirty" : ""].filter(Boolean).join(" "),
-      onClick: (e) => { if (e.target.closest(".qe-cell, .qe-suggest, button, input, a")) return; location.hash = href; },
+      onClick: (e) => { if (e.target.closest(".qe-cell, button, input, a")) return; location.hash = href; },
     });
 
     const toggle = multi
@@ -513,7 +468,7 @@ export async function renderProductList(view, query = {}) {
       if ("price" in e) {
         const n = qe.parseMoney(e.price);
         if (n == null || Number.isNaN(n) || n <= 0) problems.push(`${label}: el precio debe ser un número mayor a 0.`);
-        else if (!qe.sameMoney(n, origPrice(p, v))) c.price = { from: origPrice(p, v), to: n, target: priceTarget(p, v), fromSuggestion: Boolean(e.priceFromSuggestion) };
+        else if (!qe.sameMoney(n, origPrice(p, v))) c.price = { from: origPrice(p, v), to: n, target: priceTarget(p, v), auto: isAutoPrice(p, e) };
       }
       if ("stock" in e) {
         const n = qe.parseCount(e.stock);
@@ -521,9 +476,7 @@ export async function renderProductList(view, query = {}) {
         else if (Math.abs(n - v.stock) > MAX_STOCK_STEP) problems.push(`${label}: el cambio de stock no puede superar ${MAX_STOCK_STEP} unidades de una vez.`);
         else if (n !== v.stock) c.stock = { from: v.stock, to: n, reserved: commitments.get(v.id) ?? 0 };
       }
-      const s = suggestion(v);
-      if (s && s.state === "pending" && !s.manual && !c.price) c.pendingSuggestion = s;
-      if (c.cost || c.price || c.stock || c.pendingSuggestion) changes.push(c);
+      if (c.cost || c.price || c.stock) changes.push(c);
     }
     changes.sort((a, b) => a.p.name.localeCompare(b.p.name, "es") || a.v.sort_order - b.v.sort_order);
     return { changes, problems };
@@ -544,21 +497,14 @@ export async function renderProductList(view, query = {}) {
 
     const { changes, problems } = collect();
     const money = (n) => (n == null ? "sin costo" : formatPrice(n));
-    const acceptBoxes = new Map();   // variante → checkbox de la sugerencia pendiente
     const ackBoxes = new Map();      // variante → checkbox de reservas
 
     const items = changes.map((c) => {
       const bits = [];
       if (c.cost) bits.push(`costo ${money(c.cost.from)} → ${money(c.cost.to)}`);
-      if (c.price) bits.push(`precio ${formatPrice(c.price.from)} → ${formatPrice(c.price.to)}${c.price.fromSuggestion ? " (costo + 20 %)" : ""}`);
+      if (c.price) bits.push(`precio ${formatPrice(c.price.from)} → ${formatPrice(c.price.to)}${c.price.auto ? " (costo + 20 %, redondeado a $50)" : ""}`);
       if (c.stock) bits.push(`stock ${c.stock.from} → ${c.stock.to} (${c.stock.to > c.stock.from ? `entrada +${c.stock.to - c.stock.from}` : `salida ${c.stock.to - c.stock.from}`})`);
       const extra = [];
-      if (c.pendingSuggestion) {
-        const box = h("input", { type: "checkbox" });
-        acceptBoxes.set(c.v.id, box);
-        extra.push(h("label", { class: "qe-review-opt" }, box,
-          ` Actualizar también el precio de venta: ${formatPrice(origPrice(c.p, c.v))} → ${formatPrice(c.pendingSuggestion.price)} (costo × 1,20). Si no lo marcás, se guarda solo el costo.`));
-      }
       if (c.price && c.price.from > 0 && (c.price.to > c.price.from * 3 || c.price.to < c.price.from / 3)) {
         extra.push(h("p", { class: "qe-review-warn" }, "Revisá el precio: cambia mucho respecto del actual."));
       }
@@ -568,7 +514,7 @@ export async function renderProductList(view, query = {}) {
         extra.push(h("label", { class: "qe-review-opt" }, box,
           ` Hay ${c.stock.reserved} reservadas en pedidos web y quedarían ${c.stock.to}: confirmo el stock físico real (se registra un faltante para resolver en Stock).`));
       }
-      return h("li", {}, h("strong", {}, c.label), bits.length ? `: ${bits.join(" · ")}` : ": costo sin cambios", extra.length ? h("div", { class: "qe-review-extra" }, extra) : null);
+      return h("li", {}, h("strong", {}, c.label), `: ${bits.join(" · ")}`, extra.length ? h("div", { class: "qe-review-extra" }, extra) : null);
     });
 
     const confirm = h("button", { type: "button", class: "btn-primary btn-inline", disabled: saving || problems.length > 0 || !changes.length },
@@ -579,13 +525,6 @@ export async function renderProductList(view, query = {}) {
       if (missingAck.length) {
         toast(`Confirmá el stock de ${missingAck.map((c) => c.label).join(", ")} o corregilo.`, "error");
         return;
-      }
-      // Sugerencias marcadas en la revisión: el precio se guarda con el costo.
-      for (const c of changes) {
-        if (c.pendingSuggestion && acceptBoxes.get(c.v.id)?.checked) {
-          c.price = { from: origPrice(c.p, c.v), to: c.pendingSuggestion.price, target: priceTarget(c.p, c.v), fromSuggestion: true };
-          if (qe.sameMoney(c.price.from, c.price.to)) delete c.price;
-        }
       }
       save(changes);
     });
@@ -626,19 +565,24 @@ export async function renderProductList(view, query = {}) {
         if (err?.code === "CHANGED" && key) delete e[key];
         errs.push(`${what}: ${qe.isNetworkError(err) ? "sin conexión, no se guardó" : err?.code === "CHANGED" ? err.message : errorMessage(err)}`);
       };
-      // 1) Costo (si falla, el precio sugerido tampoco se guarda).
+      // 1) Costo (si falla, el precio calculado desde él tampoco se guarda).
       let costOk = true;
       if (c.cost) {
         try {
           await (c.cost.target === "base" ? qe.setBaseCost(c.p.id, c.cost.from, c.cost.to) : qe.setVariantCost(c.v.id, c.cost.from, c.cost.to));
-          delete e.cost; delete e.suggest;
-        } catch (err) { costOk = false; fail("costo", err, "cost"); }
+          delete e.cost;
+        } catch (err) {
+          costOk = false;
+          fail("costo", err, "cost");
+          // Si otro cambió el costo, el precio calculado ya no corresponde.
+          if (c.price?.auto && !("cost" in e)) delete e.price;
+        }
       }
       // 2) Precio.
-      if (c.price && (costOk || !c.price.fromSuggestion)) {
+      if (c.price && (costOk || !c.price.auto)) {
         try {
           await (c.price.target === "base" ? qe.setBasePrice(c.p.id, c.price.from, c.price.to) : qe.setVariantPrice(c.v.id, c.price.from, c.price.to));
-          delete e.price; delete e.priceFromSuggestion;
+          delete e.price; delete e.priceManual;
         } catch (err) { fail("precio", err, "price"); }
       }
       // 3) Stock: un movimiento por la diferencia, con clave para no duplicar.
@@ -669,8 +613,8 @@ export async function renderProductList(view, query = {}) {
         const v = variantById.get(vid);
         const p = v && productById.get(v.product_id);
         if (!p) { edits.delete(vid); continue; }
-        if ("price" in e && qe.sameMoney(qe.parseMoney(e.price), origPrice(p, v))) { delete e.price; delete e.priceFromSuggestion; }
-        if ("cost" in e && qe.sameMoney(qe.parseMoney(e.cost), origCost(p, v))) { delete e.cost; delete e.suggest; }
+        if ("price" in e && qe.sameMoney(qe.parseMoney(e.price), origPrice(p, v))) { delete e.price; delete e.priceManual; }
+        if ("cost" in e && qe.sameMoney(qe.parseMoney(e.cost), origCost(p, v))) delete e.cost;
         if ("stock" in e && qe.parseCount(e.stock) === v.stock) delete e.stock;
         if (!["price", "cost", "stock"].some((key) => key in e)) edits.delete(vid);
       }

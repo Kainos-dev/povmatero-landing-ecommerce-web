@@ -10,12 +10,16 @@ import { registerQuickMovement } from "./stockTools.js";
 
 export const QUICK_REASON = "Corrección desde Productos";
 export const QUICK_REFERENCE = "Edición rápida";
-export const YERBA_MARKUP = 1.2;   // precio sugerido = costo × 1,20
+export const YERBA_PRICE_STEP = 50;   // yerbas: precio = costo × 1,20 redondeado hacia arriba a $50
 
 const cents = (n) => Math.round(Number(n) * 100);
 export const sameMoney = (a, b) => (a == null && b == null) || (a != null && b != null && cents(a) === cents(b));
 export const round2 = (n) => Math.round(n * 100) / 100;
-export const suggestedPrice = (cost) => round2(cost * YERBA_MARKUP);
+// Redondea hacia arriba a múltiplos de $50: 6602 → 6650, 6600 → 6600, 6601 → 6650.
+export const ceilToStep = (amount) => Math.ceil(cents(amount) / (YERBA_PRICE_STEP * 100)) * YERBA_PRICE_STEP;
+// Precio de venta de una yerba = ceil50(costo × 1,20). En centavos enteros
+// (costo × 12 / 10) para que los decimales de JS no corran el redondeo.
+export const yerbaPrice = (cost) => Math.ceil((cents(cost) * 12) / (10 * YERBA_PRICE_STEP * 100)) * YERBA_PRICE_STEP;
 
 function check({ data, error }) {
   if (error) throw error;
