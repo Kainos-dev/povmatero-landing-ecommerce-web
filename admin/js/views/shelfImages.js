@@ -24,7 +24,7 @@ export async function renderShelfImages(view, query = {}) {
     console.error(err);
     const missing = err?.code === "42703" || /shelf_image/.test(err?.message ?? "");
     mount(view,
-      h("div", { class: "page-header" }, h("h1", {}, "Imágenes de góndola")),
+      query.embedded ? null : h("div", { class: "page-header" }, h("h1", {}, "Imágenes de góndola")),
       h("p", { class: "notice-warn" }, missing
         ? "Falta aplicar la migración supabase/migrations/20261106000000_shelf_images.sql en el SQL Editor de Supabase."
         : errorMessage(err)));
@@ -192,7 +192,8 @@ export async function renderShelfImages(view, query = {}) {
   }
 
   mount(view,
-    h("div", { class: "page-header" },
+    // Dentro de «Góndola» (pestaña Imágenes) el título lo pone la sección.
+    query.embedded ? null : h("div", { class: "page-header" },
       h("div", { class: "title-block" },
         h("h1", {}, "Imágenes de góndola"),
         h("p", { class: "page-sub" }, "El envase de cada yerba en /yerbas. Las fotos del catálogo no cambian."))),

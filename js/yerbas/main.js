@@ -3,7 +3,7 @@
 //
 // Datos: js/yerbas/catalog.js (stock = disponible). Carrito: js/yerbas/basket.js
 // (uno por invitado y uno por cuenta). Pedido: js/yerbas/api.js (se carga al enviar).
-import { loadYerbas, productAvailable, isAvailable, availabilityText, shelfImageFor, OTHER_BRANDS } from "./catalog.js";
+import { loadYerbas, productAvailable, isAvailable, availabilityText, shelfImageFor, OTHER_BRANDS } from "./catalog.js?v=20261105-1";
 import { createBasket } from "./basket.js";
 import { optimizedSrc, withFallback } from "../lib/images.js";
 import { escapeHtml } from "../lib/html.js";

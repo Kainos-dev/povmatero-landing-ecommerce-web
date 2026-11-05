@@ -1725,3 +1725,120 @@ a.move:hover { background: var(--a-sunken); }
   .table-cards.table-qe tr.row-variant { background: var(--a-sunken); }
   .table-cards.table-qe tr.row-variant.row-dirty { background: var(--a-surface); }
 }
+
+/* =====================================================================
+   Góndola › Ordenar góndolas / Ordenar yerbas  (views/shelfOrder.js)
+   ===================================================================== */
+.field-slot { display: contents; }
+.so-slot:empty { display: none; }
+.seg-short { display: none; }
+@media (max-width: 600px) {
+  .seg-long { display: none; }
+  .seg-short { display: inline; }
+}
+.so-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+.so-card { gap: 12px; padding: 16px; }
+.so-head { display: flex; flex-direction: column; gap: 2px; }
+.so-inline-icon { width: 14px; height: 14px; vertical-align: -2px; }
+.so-preview { position: sticky; top: 16px; gap: 10px; padding: 16px; }
+
+.so-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.so-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 8px 8px 4px;
+  border: 1px solid var(--a-line); border-radius: var(--a-radius);
+  background: var(--a-bg);
+  min-height: 52px;
+}
+.so-list.is-sorting { user-select: none; -webkit-user-select: none; }
+.so-row.is-dragging { border-color: var(--a-fg); box-shadow: var(--a-pop); position: relative; z-index: 2; background: var(--a-bg); }
+.so-row-fixed { margin-top: 6px; background: var(--a-surface); border-style: dashed; }
+.so-grip {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 40px; flex: none;
+  color: var(--a-muted); cursor: grab; touch-action: none; border-radius: 8px;
+}
+.so-grip:hover { color: var(--a-fg); background: var(--a-surface); }
+.so-row.is-dragging .so-grip { cursor: grabbing; color: var(--a-fg); }
+.so-lock { cursor: default; }
+.so-lock:hover { background: none; color: var(--a-muted); }
+.so-lock .icon { width: 16px; height: 16px; }
+.so-pos { width: 22px; flex: none; text-align: right; font-variant-numeric: tabular-nums; font-size: var(--a-text-sm); font-weight: 700; color: var(--a-fg-2); }
+.so-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.so-text { display: flex; flex-direction: column; min-width: 0; gap: 1px; align-items: flex-start; }
+.so-name { font-size: var(--a-text-sm); overflow-wrap: anywhere; }
+.so-main > .so-name { flex: 0 1 auto; }
+.so-meta { font-size: var(--a-text-xs); color: var(--a-fg-2); }
+.so-meta-off { color: var(--a-muted); }
+.so-text .badge { margin-top: 2px; }
+.so-move { display: flex; gap: 4px; flex: none; }
+.so-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border-radius: 9px;
+  border: 1px solid var(--a-line-2); background: var(--a-bg); color: var(--a-fg); cursor: pointer;
+}
+.so-btn:hover:not(:disabled) { border-color: var(--a-fg); }
+.so-btn:disabled { opacity: 0.3; cursor: default; }
+.so-btn .icon { width: 18px; height: 18px; }
+
+.so-thumb {
+  width: 40px; height: 56px; flex: none; border-radius: 6px;
+  background: var(--a-surface); display: inline-flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.so-thumb img { width: 100%; height: 100%; object-fit: contain; }
+.so-thumb-empty { font-weight: 700; color: var(--a-muted); border: 1px dashed var(--a-line-2); }
+
+.so-tabs-preview { display: flex; flex-wrap: wrap; gap: 6px; }
+.so-chip {
+  padding: 6px 12px; border-radius: 999px; border: 1px solid var(--a-line-2);
+  font-size: var(--a-text-xs); font-weight: 600; color: var(--a-fg-2); white-space: nowrap;
+}
+.so-chip.active { background: var(--a-fg); border-color: var(--a-fg); color: var(--a-bg); }
+
+.so-groups { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
+.so-group {
+  display: inline-flex; align-items: center; gap: 6px; flex: none;
+  padding: 7px 12px; border-radius: 999px; border: 1px solid var(--a-line-2); background: var(--a-bg);
+  font: inherit; font-size: var(--a-text-sm); font-weight: 600; color: var(--a-fg-2); cursor: pointer; white-space: nowrap;
+}
+.so-group small { font-size: 11px; font-weight: 700; padding: 0 6px; border-radius: 999px; background: var(--a-surface); color: var(--a-fg-2); }
+.so-group:hover { border-color: var(--a-fg); color: var(--a-fg); }
+.so-group.active { background: var(--a-fg); border-color: var(--a-fg); color: var(--a-bg); }
+.so-group.active small { background: rgba(255, 255, 255, 0.2); color: var(--a-bg); }
+
+.so-shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 10px 8px; }
+.so-pack { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+.so-pack .so-thumb { width: 100%; height: auto; aspect-ratio: 2 / 3; }
+.so-pack figcaption { font-size: 11px; line-height: 1.25; text-align: center; color: var(--a-fg-2); overflow-wrap: anywhere; }
+
+.so-savebar {
+  position: sticky; bottom: 16px; z-index: 15;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+  padding: 10px 12px 10px 16px; border-radius: var(--a-radius-lg);
+  background: var(--a-fg); color: var(--a-bg); box-shadow: var(--a-pop);
+}
+.so-savebar-text { font-size: var(--a-text-sm); font-weight: 600; }
+.so-savebar .btn-ghost { background: transparent; color: var(--a-bg); border-color: rgba(255, 255, 255, 0.35); }
+.so-savebar .btn-primary { background: var(--a-bg); color: var(--a-fg); border-color: var(--a-bg); }
+.so-error { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+
+@media (max-width: 900px) {
+  .so-layout { grid-template-columns: 1fr; }
+  .so-preview { position: static; }
+  .so-shelf { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 64px; overflow-x: auto; padding-bottom: 4px; }
+}
+@media (max-width: 860px) {
+  .so-savebar { bottom: calc(var(--a-tab-h) + 10px + env(safe-area-inset-bottom, 0px)); }
+}
+@media (max-width: 600px) {
+  .so-card, .so-preview { padding: 12px; }
+  .so-row { gap: 6px; padding: 6px 6px 6px 2px; }
+  .so-pos { width: 16px; }
+  .so-grip { width: 28px; }
+  .so-btn { width: 40px; height: 40px; }
+  .so-savebar .row-actions { flex: 1; }
+  .so-savebar .row-actions > * { flex: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .so-row.is-dragging { box-shadow: none; }
+}

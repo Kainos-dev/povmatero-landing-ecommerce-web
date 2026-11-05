@@ -12,6 +12,8 @@ import { removeShelfFiles } from "../api/shelfImages.js";
 import { icon } from "../icons.js";
 import { listBrands, matchBrand } from "../api/yerbas.js";
 import { renderYerbaPresentations, presentationsSummary } from "./yerbaPresentations.js";
+import { otherBrandsField } from "./yerbaCreate.js";
+import { getShelfOther } from "../api/shelfOrder.js";
 
 const TABS = [
   ["datos", "Datos"],
@@ -111,6 +113,17 @@ export async function renderProductEdit(view, productId, query = {}) {
     let brands = [];
     const brand = isYerba ? h("input", { class: "input", maxlength: "60", list: "product-brands", autocomplete: "off", value: product?.brand ?? "", placeholder: "Ej. Canarias" }) : null;
     if (brand) listBrands().then((list) => { brands = list; mount(brandList, list.map((b) => h("option", { value: b }))); }).catch((err) => console.warn(err));
+    // Casilla «Otras marcas» (solo si la base ya la tiene: migración 20261113000000).
+    const otherSlot = isYerba ? h("div", { class: "field-slot" }) : null;
+    let other = null, otherInitial = null;
+    if (isYerba) {
+      getShelfOther(product.id).then((value) => {
+        if (value === null) return;
+        otherInitial = value;
+        other = otherBrandsField({ checked: value, brandInput: brand });
+        mount(otherSlot, other.el);
+      }).catch((err) => console.warn(err));
+    }
     // Al elegir «Yerbas» en un producto nuevo se abre el alta de yerbas
     // (yerba nueva o presentación de una existente, sin duplicarla).
     if (isNew) {
@@ -133,7 +146,8 @@ export async function renderProductEdit(view, productId, query = {}) {
         field("Categoría", category),
         field("Slug", slug, "Identificador para la URL: minúsculas, números y guiones. Se genera a partir del nombre."),
         field("Orden", sortOrder, "Menor número = aparece antes."),
-        brand ? field("Marca", brand, "Arma las góndolas de /yerbas. Vacío = «Otras marcas».") : null
+        brand ? field("Marca", brand, "Arma las góndolas de /yerbas. Vacío = «Otras marcas».") : null,
+        otherSlot
       ),
       brand ? brandList : null,
       field("Descripción", description),
@@ -154,6 +168,7 @@ export async function renderProductEdit(view, productId, query = {}) {
         const b = matchBrand(brands, brand.value);
         if (b !== (product.brand ?? null)) data.brand = b;
       }
+      if (other && other.input.checked !== otherInitial) data.shelf_other = other.input.checked;
 
       const problem =
         data.brand && data.brand.length > 60 ? "La marca puede tener hasta 60 caracteres." :

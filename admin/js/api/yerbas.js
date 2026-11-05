@@ -9,6 +9,7 @@
 import { supabase } from "/js/lib/supabaseClient.js";
 import { createProduct, createVariant, updateProduct, saveVariantCost, normalizeSku } from "./catalog.js";
 import { registerQuickMovement, newKey } from "./stockTools.js";
+import { brandKey } from "./shelfOrder.js";
 
 function check({ data, error }) {
   if (error) throw error;
@@ -87,19 +88,23 @@ export async function listYerbas() {
 // Marcas cargadas (para sugerir y no escribir «Canarias» de dos formas).
 export async function listBrands() {
   const rows = check(await supabase.from("products").select("brand").not("brand", "is", null));
+  // Una sola por marca aunque esté escrita distinto (mayúsculas, espacios, tildes).
   const seen = new Map();
   for (const r of rows) {
-    const b = String(r.brand ?? "").trim();
-    if (b && !seen.has(b.toLowerCase())) seen.set(b.toLowerCase(), b);
+    const b = String(r.brand ?? "").trim().replace(/\s+/g, " ");
+    const k = brandKey(b);
+    if (k && !seen.has(k)) seen.set(k, b);
   }
   return [...seen.values()].sort((a, b) => a.localeCompare(b, "es"));
 }
 
-// Misma marca escrita distinto («canarias» → «Canarias»).
+// Misma marca escrita distinto («canarias», «CANARIAS », «Canárias» → «Canarias»).
+// La base aplica la misma regla al guardar (migración 20261113000000).
 export function matchBrand(brands, text) {
   const t = String(text ?? "").trim().replace(/\s+/g, " ");
   if (!t) return null;
-  return brands.find((b) => b.toLowerCase() === t.toLowerCase()) ?? t;
+  const k = brandKey(t);
+  return (k && brands.find((b) => brandKey(b) === k)) || t;
 }
 
 // SKU propio de cada presentación: Map variantId → sku.
@@ -220,6 +225,8 @@ export async function createYerba(categoryId, yerba, presentation, options) {
     description: yerba.description ?? "",
     brand: yerba.brand || null,
     sort_order: yerba.sortOrder ?? 0,
+    // Casilla «Otras marcas» (solo si la base ya la tiene: migración 20261113000000).
+    ...(typeof yerba.shelfOther === "boolean" ? { shelf_other: yerba.shelfOther } : {}),
   });
   const result = await createPresentation({ id: product.id, name: yerba.name, variants: [] }, presentation, options)
     .catch((err) => { err.productId = product.id; throw err; });

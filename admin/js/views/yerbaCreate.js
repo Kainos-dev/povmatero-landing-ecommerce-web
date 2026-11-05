@@ -10,6 +10,34 @@ import * as yerbasApi from "../api/yerbas.js";
 import { updateProduct } from "../api/catalog.js";
 import { newKey } from "../api/stockTools.js";
 import { uploadShelfImage, inspectImage, productTarget, variantTarget, TYPES as SHELF_TYPES } from "../api/shelfImages.js";
+import { shelfOrderReady } from "../api/shelfOrder.js";
+
+// ---------------------------------------------------------------------
+// Casilla «Otras marcas» (alta y ficha de yerbas). Es de la yerba: todas sus
+// presentaciones van a la misma góndola. La marca real no se borra.
+//   brandInput: el campo Marca (para explicar a qué góndola va)
+// Devuelve { el, input }.
+// ---------------------------------------------------------------------
+export function otherBrandsField({ checked = false, brandInput }) {
+  const input = h("input", { type: "checkbox", checked, "data-field": "shelf-other" });
+  const note = h("small", { class: "hint", "aria-live": "polite" });
+  const refresh = () => {
+    const brand = String(brandInput?.value ?? "").trim().replace(/\s+/g, " ");
+    note.textContent = !brand
+      ? "Sin marca: va a «Otras marcas»."
+      : input.checked
+        ? `Se muestra en «Otras marcas». La marca ${brand} se conserva.`
+        : `Se muestra en la góndola ${brand}.`;
+  };
+  input.addEventListener("change", refresh);
+  brandInput?.addEventListener("input", refresh);
+  brandInput?.addEventListener("change", refresh);
+  refresh();
+  const el = h("div", { class: "field" }, h("span", {}, "Góndola"),
+    h("label", { class: "check check-inline" }, input, h("span", {}, "Otras marcas")),
+    note);
+  return { el, input };
+}
 
 const round2 = (n) => Math.round(n * 100) / 100;
 // "6800", "6.800", "6800,50", "$ 6.800" → número; "" → null; inválido → NaN.
@@ -164,9 +192,9 @@ function yerbaPicker(yerbas, { onPick }) {
 // ---------------------------------------------------------------------
 export async function renderYerbaCreate(view, query = {}) {
   mount(view, h("p", { class: "muted" }, "Cargando yerbas…"));
-  let category, yerbas, brands;
+  let category, yerbas, brands, shelfReady;
   try {
-    [category, yerbas, brands] = await Promise.all([yerbasApi.yerbasCategory(), yerbasApi.listYerbas(), yerbasApi.listBrands()]);
+    [category, yerbas, brands, shelfReady] = await Promise.all([yerbasApi.yerbasCategory(), yerbasApi.listYerbas(), yerbasApi.listBrands(), shelfOrderReady()]);
   } catch (err) {
     console.error(err);
     mount(view, backLink(), h("p", { class: "form-error" }, errorMessage(err)));
@@ -267,6 +295,7 @@ export async function renderYerbaCreate(view, query = {}) {
     const slug = h("input", { class: "input", maxlength: "140", "aria-label": "Slug" });
     const description = h("textarea", { class: "input", rows: "3", "aria-label": "Descripción" });
     const publish = h("input", { type: "checkbox" });
+    const other = shelfReady ? otherBrandsField({ brandInput: brand }) : null;
     const dupe = h("p", { class: "notice-warn", hidden: true });
     const fields = presentationFields({
       imageLabel: "Imagen de góndola (PNG, opcional)",
@@ -304,7 +333,8 @@ export async function renderYerbaCreate(view, query = {}) {
         field("Slug", slug, "Para la URL. Se genera a partir del nombre."),
         h("div", { class: "field" }, h("span", {}, "Publicación"),
           h("label", { class: "check check-inline" }, publish, h("span", {}, "Publicar al crear")),
-          h("small", { class: "hint" }, "Sin marcar queda en borrador: no se ve en la tienda hasta que la publiques."))),
+          h("small", { class: "hint" }, "Sin marcar queda en borrador: no se ve en la tienda hasta que la publiques.")),
+        other?.el),
       dupe,
       field("Descripción", description),
       brandList,
@@ -322,6 +352,7 @@ export async function renderYerbaCreate(view, query = {}) {
         slug: slug.value.trim(),
         description: description.value.trim(),
         publish: publish.checked,
+        shelfOther: other ? other.input.checked : undefined,
       };
       const problem =
         createdId ? null :

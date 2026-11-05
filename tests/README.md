@@ -23,12 +23,15 @@ node cancel-db-test.cjs ..          # 20261112: cancelación por falta de respue
 node cancel-concurrency-test.cjs .. # lo mismo con conexiones simultáneas (Postgres 17)
 node checks-sql-test.cjs ..         # el SQL de controles corre sin errores
 node cron-test.cjs ..               # /api/cron-pedidos sin red
+node shelf-order-db-test.cjs ..     # 20261113: orden de góndolas, Otras marcas, permisos, reversión
+node shelf-order-concurrency-test.cjs .. # 20261113 con dos administradores a la vez (Postgres 17)
 node legacy/concurrency-test.cjs .. # proveedor, ventas, conciliación a la vez
 ```
 
 ## Navegador (Supabase simulado + guard)
 
 ```sh
+node -r ./guard.cjs shelf-order-test.cjs .. shots           # Góndola: ordenar góndolas/yerbas, casilla Otras marcas, /yerbas
 node -r ./guard.cjs products-quick-edit-test.cjs .. shots   # Productos: edición rápida, Publicados/Borradores
 node -r ./guard.cjs contact-modal-test.cjs .. shots       # modal de contacto (TikTok), todas las entradas
 node -r ./guard.cjs yerbas-header-test.cjs .. shots        # /yerbas: encabezado alineado, contador de variedades

@@ -6,16 +6,20 @@
 //
 // Formato:
 //   { brands: [{ key, name, products }], products, byVariant: Map<variantId, { product, variant }> }
-//   product: { id, slug, name, brand, image, shelfImage, variants }
+//   product: { id, slug, name, brand, shelfOther, image, shelfImage, variants }
+//     brand:      marca real (products.brand)
+//     shelfOther: true = se muestra en «Otras marcas» aunque tenga marca
 //     image:      foto del catálogo (se usa como frente del paquete genérico)
 //     shelfImage: PNG del envase para la góndola (products.shelf_image), o null
 //   variant: { id, name, label, grams, price, stock, image, shelfImage }   stock null = no se controla
 //     shelfImage: PNG propio de esa presentación (product_variants.shelf_image), o null
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from "../lib/supabaseConfig.js";
 
-// Góndolas en este orden; las yerbas sin marca van a «Otras marcas», al final.
-// Si en el panel se carga otra marca, aparece su góndola antes de «Otras marcas».
-const BRAND_ORDER = ["Canarias", "Rei Verde", "Sara", "Armiño"];
+// Orden de las góndolas y de las yerbas: lo define el panel (Góndola › Orden) y
+// llega en la vista (brand_position, shelf_position, shelf_other; migración
+// 20261113000000_shelf_order.sql). «Otras marcas» va siempre al final.
+// Solo mientras esa migración no esté aplicada se usa el orden de antes:
+const LEGACY_BRAND_ORDER = ["Canarias", "Rei Verde", "Sara", "Armiño"];
 export const OTHER_BRANDS = "Otras marcas";
 
 const BASE_COLUMNS = [
@@ -30,8 +34,10 @@ const urlFor = (columns) =>
 // 20261107000000) y la general del producto (shelf_image, 20261106000000).
 // Si la base todavía no tiene alguna de esas columnas (400), se pide sin ella:
 // la góndola funciona igual, con lo que haya.
-export const YERBAS_URL = urlFor([...BASE_COLUMNS, "shelf_image", "variant_shelf_image"]);
+const ORDER_COLUMNS = ["shelf_other", "shelf_position", "brand_position"];
+export const YERBAS_URL = urlFor([...BASE_COLUMNS, "shelf_image", "variant_shelf_image", ...ORDER_COLUMNS]);
 const FALLBACK_URLS = [
+  urlFor([...BASE_COLUMNS, "shelf_image", "variant_shelf_image"]),
   urlFor([...BASE_COLUMNS, "shelf_image"]),
   urlFor(BASE_COLUMNS),
 ];
@@ -99,6 +105,9 @@ export function buildCatalog(rows) {
         slug: r.product_slug,
         name: r.product_name,
         brand: r.brand ?? null,
+        shelfOther: r.shelf_other === true,
+        _pos: r.shelf_position ?? null,
+        _brandPos: r.brand_position ?? null,
         cover: r.cover_image ?? null,
         shelfImage: r.shelf_image ?? null,
         variants: [],
@@ -122,23 +131,37 @@ export function buildCatalog(rows) {
     image: cover ?? p.variants.find((v) => v.image)?.image ?? null,
   }));
 
+  // ¿La base ya manda el orden del panel? (migración 20261113 aplicada)
+  const ordered = (rows ?? []).some((r) => "shelf_position" in r);
+
+  // Góndola de cada yerba: su marca, o «Otras marcas» (sin marca, o con la
+  // casilla marcada). Todas las presentaciones de una yerba van juntas.
   const groups = new Map();
   for (const p of products) {
-    const key = p.brand?.trim() || OTHER_BRANDS;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(p);
+    const key = (!p.shelfOther && p.brand?.trim()) || OTHER_BRANDS;
+    if (!groups.has(key)) groups.set(key, { position: null, list: [] });
+    const g = groups.get(key);
+    g.list.push(p);
+    if (key !== OTHER_BRANDS && p._brandPos != null) g.position = p._brandPos;
   }
-  const rank = (name) => {
-    if (name === OTHER_BRANDS) return [2, ""];
-    const i = BRAND_ORDER.findIndex((b) => b.toLowerCase() === name.toLowerCase());
-    return i >= 0 ? [0, String(i).padStart(3, "0")] : [1, name.toLowerCase()];
+  // Dentro de la góndola, el lugar del panel (sin la migración, las filas ya
+  // llegan como antes: sort_order e id).
+  if (ordered) {
+    for (const g of groups.values()) g.list.sort((a, b) => (a._pos ?? Infinity) - (b._pos ?? Infinity) || a.id - b.id);
+  }
+  // [grupo, posición, nombre]: primero las del orden del panel, después las que
+  // todavía no tienen lugar (alfabético) y «Otras marcas» siempre al final.
+  const rank = (name, position) => {
+    if (name === OTHER_BRANDS) return [2, 0, ""];
+    if (ordered) return position != null ? [0, position, ""] : [1, 0, name.toLowerCase()];
+    const i = LEGACY_BRAND_ORDER.findIndex((b) => b.toLowerCase() === name.toLowerCase());
+    return i >= 0 ? [0, i, ""] : [1, 0, name.toLowerCase()];
   };
   const brands = [...groups.entries()]
-    .map(([name, list]) => ({ key: slugKey(name), name, products: list }))
-    .sort((a, b) => {
-      const [ga, ka] = rank(a.name), [gb, kb] = rank(b.name);
-      return ga - gb || ka.localeCompare(kb);
-    });
+    .map(([name, g]) => ({ name, list: g.list, rank: rank(name, g.position) }))
+    .sort((a, b) => a.rank[0] - b.rank[0] || a.rank[1] - b.rank[1] || a.rank[2].localeCompare(b.rank[2]))
+    .map(({ name, list }) => ({ key: slugKey(name), name, products: list }));
+  for (const p of products) { delete p._pos; delete p._brandPos; }
 
   const byVariant = new Map();
   for (const p of products) for (const v of p.variants) byVariant.set(v.id, { product: p, variant: v });
