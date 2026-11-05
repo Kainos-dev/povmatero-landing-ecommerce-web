@@ -29,6 +29,8 @@ node legacy/concurrency-test.cjs .. # proveedor, ventas, conciliación a la vez
 ## Navegador (Supabase simulado + guard)
 
 ```sh
+node -r ./guard.cjs products-quick-edit-test.cjs .. shots   # Productos: edición rápida, Publicados/Borradores
+node -r ./guard.cjs yerbas-cart-test.cjs .. shots          # /yerbas: carrito flotante, título, aviso de stock
 node -r ./guard.cjs yerba-admin-test.cjs .. shots
 node -r ./guard.cjs orders-cancel-test.cjs .. shots
 node -r ./guard.cjs store-presentation-test.cjs .. shots

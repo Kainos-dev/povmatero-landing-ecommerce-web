@@ -21,7 +21,7 @@
   --bad:         #b42318;
   --top-h:       60px;        /* mismo alto que el header de la tienda */
   --tabs-h:      48px;
-  --dock-h:      118px;
+  --dock-h:      100px;       /* alto del carrito flotante */
   --wrap-pad:    0px;         /* margen interno del contenedor (como .catalog-section) */
 
   background: radial-gradient(120% 70% at 50% 0%, var(--wall-2) 0%, var(--wall) 60%) fixed, var(--wall);
@@ -583,9 +583,10 @@ html.y-locked, html.y-locked body { overflow: hidden; }
 .y-cart {
   position: fixed;
   left: 50%;
-  bottom: calc(10px + env(safe-area-inset-bottom));
+  /* En el celular, casi pegado al borde (sobre el área segura del iPhone) */
+  bottom: calc(2px + env(safe-area-inset-bottom));
   transform: translateX(-50%);
-  width: 170px;
+  width: 146px;
   height: var(--dock-h);
   display: flex;
   flex-direction: column;
@@ -595,7 +596,7 @@ html.y-locked, html.y-locked body { overflow: hidden; }
   z-index: 40;
   filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.75));
 }
-.y-cart-art { position: relative; width: 152px; height: 106px; }
+.y-cart-art { position: relative; width: 130px; height: 91px; }
 .y-cart-back, .y-cart-front { position: absolute; inset: 0; width: 100%; height: 100%; }
 .y-cart-back path, .y-cart-back circle {
   fill: none;
@@ -613,7 +614,7 @@ html.y-locked, html.y-locked body { overflow: hidden; }
    la malla y asoman por arriba. 1 kg más grande que 500 g; si hay muchos,
    se acomodan más juntos. */
 .y-cart-load {
-  --mini-w: 29px;
+  --mini-w: 25px;
   --ov: -3px;
   position: absolute;
   left: 21%;
@@ -625,10 +626,10 @@ html.y-locked, html.y-locked body { overflow: hidden; }
   justify-content: center;
   pointer-events: none;
 }
-.y-cart-load[data-count="4"] { --ov: -7px; }
-.y-cart-load[data-count="5"] { --ov: -12px; }
-.y-cart-load[data-count="6"] { --ov: -15px; }
-.y-cart-load[data-count="7"], .y-cart-load[data-count="8"] { --ov: -18px; }
+.y-cart-load[data-count="4"] { --ov: -6px; }
+.y-cart-load[data-count="5"] { --ov: -10px; }
+.y-cart-load[data-count="6"] { --ov: -13px; }
+.y-cart-load[data-count="7"], .y-cart-load[data-count="8"] { --ov: -15px; }
 .y-mini {
   position: relative;
   flex: 0 0 auto;
@@ -663,19 +664,19 @@ html.y-locked, html.y-locked body { overflow: hidden; }
 
 .y-cart-count {
   position: absolute;
-  top: 14px;
+  top: 11px;
   right: 2px;
   z-index: 3;
-  min-width: 24px;
-  height: 24px;
-  padding: 0 6px;
-  border-radius: 12px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  border-radius: 11px;
   background: var(--details);
   border: 2px solid #fff;
   color: #fff;
   font-size: 12px;
   font-weight: 700;
-  line-height: 20px;
+  line-height: 18px;
   text-align: center;
   transform: scale(0);
   transition: transform 0.2s ease;
@@ -683,11 +684,11 @@ html.y-locked, html.y-locked body { overflow: hidden; }
 .y-cart.has-items .y-cart-count { transform: scale(1); }
 .y-cart-total {
   margin-top: -2px;
-  padding: 2px 12px;
+  padding: 1px 10px;
   border-radius: var(--radius-pill);
   background: #fff;
   color: #000;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -857,7 +858,16 @@ html.y-locked, html.y-locked body { overflow: hidden; }
 .y-link { display: block; margin: 6px auto 0; font-size: 14px; color: var(--sheet-muted); text-decoration: underline; padding: 8px; }
 
 /* carrito (hoja) */
-.y-cart-title { padding-right: 36px; }
+/* Título: la letra de títulos de la góndola («GÓNDOLA DE YERBAS»): Inter en mayúsculas, espaciada */
+.y-sheet h2.y-cart-title {
+  padding-right: 36px;
+  font-family: var(--font);
+  font-weight: 600;
+  font-size: 17px;
+  line-height: 1.3;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
 .y-lines { list-style: none; margin: 14px 0 0; padding: 0; border-top: 1px solid var(--sheet-line); }
 .y-line {
   display: grid;
@@ -942,6 +952,7 @@ html.y-locked, html.y-locked body { overflow: hidden; }
 }
 @media (min-width: 760px) {
   .y-page { --tabs-h: 56px; }
+  .y-cart { bottom: 10px; }
   .y-brands { justify-content: center; }
   .y-heading h1 { font-size: 19px; }
   .y-gondola-head h2 { font-size: 28px; }

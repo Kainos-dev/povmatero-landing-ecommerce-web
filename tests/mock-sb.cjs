@@ -105,11 +105,15 @@ async function installMock(ctx, st, { extra } = {}) {
     // ---------- RPC ----------
     if (p.startsWith("/rest/v1/rpc/")) {
       const fn = p.slice(13), a = body() ?? {};
-      if (fn === "variant_commitments") return json([]);
+      if (fn === "variant_commitments") return json(st.commitments ?? []);
       if (fn === "admin_stock_movement") {
         if (st.operations.has(a.operation_id)) return json({ operation_id: a.operation_id, repeated: true, movements: [] });
-        st.operations.add(a.operation_id);
         const v = st.variants.find((x) => x.id === a.variant_id);
+        const reserved = (st.commitments ?? []).find((c) => c.variant_id === a.variant_id)?.quantity ?? 0;
+        if (a.movement_type === "salida" && v.stock - a.quantity < reserved && !a.confirm_shortage) {
+          return route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ code: "23514", message: "El stock físico declarado no cubre las reservas de pedidos web (faltan 1).", hint: "shortage_confirmation", details: JSON.stringify({ reserved }) }) });
+        }
+        st.operations.add(a.operation_id);
         const q = a.movement_type === "salida" ? -a.quantity : a.quantity;
         v.stock += q;
         const mv = { id: st.inventory_movements.length + 1, variant_id: v.id, movement_type: a.movement_type, quantity: q, stock_after: v.stock, reason: a.reason, reference: a.reference, created_at: new Date().toISOString() };
@@ -200,11 +204,16 @@ async function installMock(ctx, st, { extra } = {}) {
         if (prev) Object.assign(prev, b); else st.product_internal.push({ sku: null, base_cost: null, ...b });
         return rows([{ product_id: b.product_id }], 201);
       }
+      if (m === "PATCH") {
+        const list = st.product_internal.filter((r) => match(r, filters));
+        list.forEach((r) => Object.assign(r, body()));
+        return rows(list.map((r) => ({ product_id: r.product_id })));
+      }
     }
     if (table === "variant_costs") {
       if (m === "GET") return rows(st.variant_costs.filter((r) => match(r, filters)));
       if (m === "PATCH") { const list = st.variant_costs.filter((r) => match(r, filters)); list.forEach((r) => Object.assign(r, body())); return rows(list.map((r) => ({ variant_id: r.variant_id }))); }
-      if (m === "POST") { const b = body(); st.variant_costs.push(b); const v = st.variants.find((x) => x.id === b.variant_id); return rows([b], 201); }
+      if (m === "POST") { const b = body(); if (st.variant_costs.some((x) => x.variant_id === b.variant_id)) return err(409, "23505", 'duplicate key value violates unique constraint "variant_costs_pkey"'); st.variant_costs.push(b); const v = st.variants.find((x) => x.id === b.variant_id); return rows([b], 201); }
       if (m === "DELETE") { st.variant_costs = st.variant_costs.filter((r) => !match(r, filters)); return rows([]); }
     }
     if (table === "product_images") {
@@ -215,6 +224,10 @@ async function installMock(ctx, st, { extra } = {}) {
     if (table === "inventory_movements") {
       if (m === "HEAD") return route.fulfill({ status: 200, headers: { "content-range": "*/0" }, body: "" });
       return rows(st.inventory_movements.filter((r) => match(r, filters)));
+    }
+    if (table === "stock_operations") {
+      const id = (url.searchParams.get("id") ?? "").replace("eq.", "");
+      return rows(st.operations.has(id) ? [{ id }] : []);
     }
     if (table === "storefront_catalog") return rows([]);
     return rows([]);

@@ -147,7 +147,7 @@ const near = (a, b, t = 2) => Math.abs(a - b) <= t;
       return { h: d.getBoundingClientRect().height, w: d.getBoundingClientRect().width, text: d.innerText.trim(), totalVis: getComputedStyle(t).visibility,
         afterPos: a.position, afterBottom: a.bottom, aisleBottom: aisle.getBoundingClientRect().bottom, vh: innerHeight, dockBottom: d.getBoundingClientRect().bottom };
     });
-    check(`${label}: carrito más chico (${dock.w}×${dock.h}; antes 200×138)`, dock.h === 118 && dock.w === 170);
+    check(`${label}: carrito más chico (${dock.w}×${dock.h}; antes 170×118)`, dock.h === 100 && dock.w === 146);
     check(`${label}: sin el texto «Tu carrito»`, !/Tu carrito/.test(dock.text) && dock.totalVis === "hidden", JSON.stringify(dock.text));
     check(`${label}: pie oscuro pegado al borde de abajo del pasillo, que llega al borde de la pantalla`, dock.afterPos === "absolute" && dock.afterBottom === "0px" && near(dock.aisleBottom, dock.vh, 1));
     check(`${label}: el carrito sigue abajo al centro, dentro de la pantalla`, dock.dockBottom <= dock.vh && dock.dockBottom > dock.vh - 20);

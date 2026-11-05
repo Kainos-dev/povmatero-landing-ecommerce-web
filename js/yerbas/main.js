@@ -419,6 +419,19 @@ document.addEventListener("keydown", (e) => {
 const closeBtn = `<button type="button" class="y-sheet-close" data-close aria-label="Cerrar">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="18" height="18" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>`;
 
+// Aviso cuando el carrito ya tiene todo lo que se puede pedir de una
+// presentación. Solo si se llegó al límite agregando (qty > 0): una
+// presentación que ya estaba agotada muestra «Agotado», no esto.
+const ALL_STOCK_TEXT = "Ya agregaste todo el stock disponible.";
+function limitNote(qty, variant) {
+  if (qty <= 0) return "";
+  if (variant.stock !== null && variant.stock > 0 && qty >= variant.stock && variant.stock <= MAX_PER_PRESENTATION) {
+    return `<small class="y-line-max">${ALL_STOCK_TEXT}</small>`;
+  }
+  if (qty >= MAX_PER_PRESENTATION) return `<small class="y-line-max">Máximo ${MAX_PER_PRESENTATION} por presentación en cada pedido.</small>`;
+  return "";
+}
+
 function stepperHtml(value, max, label) {
   return `
     <div class="y-stepper" role="group" aria-label="${escapeHtml(label)}">
@@ -541,6 +554,7 @@ function openProduct(product, { focusVariant = null } = {}) {
                 <strong>${escapeHtml(v.label)}</strong>
                 <span class="y-pres-price">${money(v.price)}</span>
                 <span class="y-pres-stock${vOut ? " is-out" : v.stock !== null && v.stock <= 3 ? " is-low" : ""}">${escapeHtml(availabilityText(v))}${inCart ? ` · ${inCart} en tu carrito` : ""}</span>
+                ${vOut ? "" : limitNote(inCart, v)}
               </div>
               ${vOut ? restockHtml(v) : stepperHtml(n, max, `Cantidad de ${v.label}`)}
             </li>`;
@@ -787,7 +801,7 @@ function renderCartSheet() {
               <div class="y-line-info">
                 <strong>${escapeHtml(l.product.name)}</strong>
                 <span>${escapeHtml(l.variant.label)} · ${money(l.variant.price)}</span>
-                ${l.qty >= max && l.variant.stock !== null ? `<small class="y-line-max">No hay más disponibles</small>` : ""}
+                ${limitNote(l.qty, l.variant)}
               </div>
               <div class="y-line-side">
                 ${stepperHtml(l.qty, max, `Cantidad de ${l.product.name} ${l.variant.label}`)}
@@ -809,7 +823,7 @@ function renderCartSheet() {
         ${sending ? "Realizando pedido…" : !signedIn ? "Ingresá para enviar el pedido" : sendFailed ? "Reintentar el pedido" : "Realizar pedido"}
       </button>
       <p class="y-fineprint">${signedIn
-        ? "Es una solicitud: te confirmamos disponibilidad, entrega y pago por WhatsApp. Reservamos tus paquetes por 24 horas."
+        ? "Es una solicitud: te confirmamos disponibilidad, entrega y pago por WhatsApp. Reservamos tus paquetes por 72 horas."
         : "Para pedir yerbas necesitás una cuenta (así reservamos tus paquetes y te avisamos). Tu carrito se guarda."}</p>`
     : `
       <div class="y-cart-empty">
@@ -830,7 +844,7 @@ function renderOrderSent() {
       <span class="y-sent-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 5 5L20 7"/></svg></span>
       <h2 id="cartSheetTitle">Pedido realizado correctamente</h2>
       ${o.id ? `<p class="y-sent-number">Pedido #${escapeHtml(String(o.id))}</p>` : ""}
-      <p>Reservamos tus paquetes por 24 horas. Te confirmamos disponibilidad, entrega y pago por WhatsApp.</p>
+      <p>Reservamos tus paquetes por 72 horas. Te confirmamos disponibilidad, entrega y pago por WhatsApp.</p>
       <div class="y-sent-actions">
         <a class="y-btn-primary" href="/cuenta?seccion=pedidos" data-autofocus>Ver mis pedidos</a>
         <button type="button" class="y-btn-ghost" data-close>Volver a la góndola de yerbas</button>

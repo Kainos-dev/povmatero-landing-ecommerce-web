@@ -1630,3 +1630,119 @@ a.move:hover { background: var(--a-sunken); }
 .opt-size { font-variant-numeric: tabular-nums; font-weight: 600; }
 .opt-state { grid-column: 3 / -1; font-size: var(--a-text-sm); }
 .opt-state:empty { display: none; }
+
+
+/* =====================================================================
+   Productos: Publicados / Borradores y edición rápida
+   ===================================================================== */
+.product-groups { align-self: flex-start; }
+.product-groups .seg-count {
+  display: inline-block;
+  min-width: 22px;
+  margin-left: 8px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--a-line);
+  color: var(--a-fg-2);
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.product-groups button.active .seg-count { background: var(--a-fg); color: var(--a-bg); }
+.product-count .link-btn { font-size: inherit; }
+
+.table-qe td.c-qe { padding-top: 8px; padding-bottom: 8px; vertical-align: top; }
+.table-qe td.c-summary { vertical-align: middle; white-space: nowrap; }
+.qe-cell { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.qe-input {
+  width: 104px;
+  min-width: 0;
+  height: 34px;
+  padding: 4px 8px;
+  font-size: 14px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.qe-input.qe-stock { width: 72px; }
+.qe-input.is-dirty { border-color: var(--a-fg); box-shadow: inset 0 0 0 1px var(--a-fg); font-weight: 700; background: var(--a-bg); }
+.qe-hint { font-size: 11px; line-height: 1.3; color: var(--a-fg-2); white-space: nowrap; }
+.qe-hint.qe-bad { color: var(--a-red); font-weight: 600; }
+.qe-hint-slot:empty, .qe-suggest-slot:empty { display: none; }
+.qe-suggest {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 190px;
+  margin-top: 2px;
+  padding: 6px 8px;
+  border: 1px dashed var(--a-fg-2);
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.3;
+  background: var(--a-bg);
+}
+.qe-suggest.is-on { border-style: solid; border-color: var(--a-fg); }
+.qe-suggest-actions { display: flex; align-items: center; gap: 10px; }
+.btn-xs { min-height: 0; padding: 3px 10px; font-size: 12px; border-radius: 7px; }
+.qe-toggle { white-space: nowrap; }
+.table-qe tr.is-open > td { border-bottom-color: transparent; }
+.table-qe .row-variant td { background: var(--a-sunken); }
+.table-qe .row-variant.row-dirty td { background: var(--a-surface); }
+.table-qe .c-vname { padding-left: 28px; font-weight: 600; }
+.table-qe td.c-sug { display: none; }
+.qe-review-extra { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.qe-review-opt { display: flex; gap: 8px; align-items: flex-start; font-weight: 500; cursor: pointer; }
+.qe-review-opt input { margin-top: 2px; flex: none; }
+.qe-review-warn { margin: 0; font-weight: 600; }
+
+@media (max-width: 860px) {
+  .btn-xs { min-height: 32px; }
+}
+
+@media (max-width: 600px) {
+  .product-groups { align-self: stretch; width: 100%; }
+  .product-groups button { flex: 1; padding: 9px 6px; }
+
+  /* Tarjeta: casilla · nombre / datos / precio · costo · stock */
+  .table-qe tr {
+    grid-template-columns: auto repeat(3, minmax(0, 1fr));
+    grid-template-areas:
+      "check name name name"
+      "check meta meta meta"
+      "check price cost stock"
+      "check sug sug sug";
+    align-items: start;
+  }
+  .table-qe tr.row-variant { grid-template-areas: "check name name name" "check price cost stock" "check sug sug sug"; padding: 10px 14px 12px; }
+  .table-qe .c-name { align-self: center; }
+  .table-qe .c-check { align-self: start; padding-top: 2px; }
+  .table-qe td.c-sug:not([hidden]) { display: block; grid-area: sug; padding-top: 6px; }
+  .table-qe .qe-cell .qe-suggest-slot { display: none; }
+  .table-qe .c-sug .qe-suggest { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; font-size: 13px; }
+  .table-qe .c-qe { display: block; min-width: 0; }
+  .table-qe .c-price { grid-area: price; }
+  .table-qe .c-cost { grid-area: cost; }
+  .table-qe .c-stock { grid-area: stock; }
+  .table-qe td.c-qe { padding: 4px 0 0; }
+  .table-qe .c-qe::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--a-muted);
+  }
+  .table-qe td.c-summary { text-align: left; white-space: normal; font-size: var(--a-text-sm); }
+  .table-qe .qe-input { width: 100%; height: 40px; font-size: 16px; }
+  .table-qe .qe-input.qe-stock { width: 100%; }
+  .table-qe .qe-hint { white-space: normal; }
+  .table-qe .qe-suggest { max-width: none; }
+  .table-qe .c-vname { grid-area: name; padding-left: 0; }
+  .table-qe .row-variant .c-check { grid-area: check; }
+  .table-qe .row-variant td { background: transparent; }
+  .table-cards.table-qe tr.row-variant { background: var(--a-sunken); }
+  .table-cards.table-qe tr.row-variant.row-dirty { background: var(--a-surface); }
+}
