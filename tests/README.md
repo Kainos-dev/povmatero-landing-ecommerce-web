@@ -31,6 +31,7 @@ node legacy/concurrency-test.cjs .. # proveedor, ventas, conciliación a la vez
 ## Navegador (Supabase simulado + guard)
 
 ```sh
+node -r ./guard.cjs session-test.cjs .. shots              # sesión de clientes (cerrar/abrir navegador, vencida, pedido), saludo, WhatsApp, menú
 node -r ./guard.cjs shelf-order-test.cjs .. shots           # Góndola: ordenar góndolas/yerbas, casilla Otras marcas, /yerbas
 node -r ./guard.cjs products-quick-edit-test.cjs .. shots   # Productos: edición rápida, Publicados/Borradores
 node -r ./guard.cjs contact-modal-test.cjs .. shots       # modal de contacto (TikTok), todas las entradas

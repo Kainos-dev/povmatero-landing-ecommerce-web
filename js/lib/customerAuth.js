@@ -27,10 +27,19 @@ export async function signIn(email, password) {
   return data.session;
 }
 
+// «Cerrar sesión» pedido por la persona (para no mostrarlo como «sesión vencida»).
+let localSignOut = false;
+export function consumeLocalSignOut() {
+  const value = localSignOut;
+  localSignOut = false;
+  return value;
+}
+
 export async function signOut() {
   // scope "local": cierra la sesión en este navegador.
+  localSignOut = true;
   const { error } = await supabase.auth.signOut({ scope: "local" });
-  if (error) throw error;
+  if (error) { localSignOut = false; throw error; }
 }
 
 // Los datos del perfil viajan como metadata del registro: un trigger de la base

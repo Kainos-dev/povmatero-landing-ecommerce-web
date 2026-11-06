@@ -196,17 +196,36 @@
 
 .mobile-menu-panel {
   background: var(--surface);
-  padding: 30px;
+  padding: 22px 30px 18px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 0;
+  width: min(320px, calc(100vw - 48px));
 }
 
+/* Opciones separadas por una línea fina (sin línea después de la última).
+   Cada opción ocupa toda la fila: área táctil de 52 px. */
 .mobile-menu-panel a {
+  display: flex;
+  align-items: center;
+  min-height: 52px;
+  padding: 4px 2px;
   font-size: 15px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  transition: color var(--t), padding-left var(--t);
+}
+.mobile-menu-panel a:last-of-type { border-bottom: none; }
+.mobile-menu-panel a:hover { color: var(--text-secondary); padding-left: 6px; }
+.mobile-menu-panel a:active { color: var(--text-secondary); }
+.mobile-menu-panel a:focus-visible { outline: var(--focus-outline); outline-offset: 2px; box-shadow: var(--focus-ring); }
+.mobile-menu-close { margin-bottom: 6px !important; }
+@media (prefers-reduced-motion: reduce) {
+  .mobile-menu-panel a { transition: none; }
+  .mobile-menu-panel a:hover { padding-left: 2px; }
 }
 
 .mobile-menu-close {

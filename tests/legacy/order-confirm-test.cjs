@@ -92,8 +92,9 @@ const SESSION = { access_token: `${b64({ alg: "HS256" })}.${b64({ sub: UID, role
         actions: [...document.querySelectorAll(".y-sent-actions > *")].map((a) => [a.textContent.trim(), a.getAttribute("href"), a.className]),
       }));
       check(`${label}: «Pedido realizado correctamente» con el número`, done.title === "Pedido realizado correctamente" && done.num === "Pedido #501", JSON.stringify(done));
-      check(`${label}: tres acciones; «Ver mis pedidos» principal → /cuenta?seccion=pedidos`, done.actions.length === 3 && done.actions[0][0] === "Ver mis pedidos" && done.actions[0][1] === "/cuenta?seccion=pedidos" && /y-btn-primary/.test(done.actions[0][2])
-        && done.actions[1][0] === "Volver a la góndola de yerbas" && done.actions[2][0] === "Volver a la web" && done.actions[2][1] === "/", JSON.stringify(done.actions));
+      check(`${label}: cuatro acciones; «Ver mis pedidos» principal, «Avisar por WhatsApp» segunda`, done.actions.length === 4 && done.actions[0][0] === "Ver mis pedidos" && done.actions[0][1] === "/cuenta?seccion=pedidos" && /y-btn-primary/.test(done.actions[0][2])
+        && done.actions[1][0] === "Avisar por WhatsApp" && /^https:\/\/wa\.me\/5491160554815\?text=.*%23501/.test(done.actions[1][1])
+        && done.actions[2][0] === "Volver a la góndola de yerbas" && done.actions[3][0] === "Volver a la web" && done.actions[3][1] === "/", JSON.stringify(done.actions));
       check(`${label}: un solo pedido aunque se toque dos veces`, st.rpc === 1, String(st.rpc));
       check(`${label}: el carrito se vació recién con el éxito`, (await cartCount(page)) === 0);
       check(`${label}: no se abre ninguna pestaña «Registrando…»`, popups.length === 0, String(popups.length));

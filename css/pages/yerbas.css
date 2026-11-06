@@ -934,6 +934,25 @@ html.y-locked, html.y-locked body { overflow: hidden; }
 .y-sent p { color: var(--sheet-muted); font-size: 14px; max-width: 34ch; }
 .y-sent .y-sent-number { color: var(--sheet-fg); font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .y-sent-actions { display: flex; flex-direction: column; gap: 10px; width: 100%; margin-top: 6px; }
+/* «Pedido realizado correctamente»: la otra letra de títulos de Povmatero
+   (Inter en mayúsculas, espaciada, como «GÓNDOLA DE YERBAS» y el carrito) */
+.y-sheet h2.y-sent-title {
+  font-family: var(--font);
+  font-weight: 600;
+  font-size: 17px;
+  line-height: 1.35;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-right: -0.14em;      /* compensa el espaciado de la última letra: queda centrado */
+  max-width: 22ch;
+}
+/* «Avisar por WhatsApp»: mismo botón que los demás, con el verde de WhatsApp
+   (el texto, un verde más oscuro de la misma familia para que se lea bien). */
+.y-btn-ghost.y-btn-wa { background: transparent; border-color: #25d366; color: #11833b; }
+.y-btn-ghost.y-btn-wa:hover { background: #effbf3; border-color: #1ebe5b; color: #0b6e30; }
+.y-btn-ghost.y-btn-wa:focus-visible { outline: 2px solid #25d366; outline-offset: 2px; }
+.y-btn-wa .y-wa-icon { flex: none; }
+.y-sent .y-sent-note { font-size: 12px; margin-top: 2px; }
 .y-sent-mark {
   width: 56px;
   height: 56px;

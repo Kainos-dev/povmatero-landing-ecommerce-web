@@ -840,6 +840,8 @@ function renderCartSheet() {
   wirePackImages(ui.cartSheet);
 }
 
+const WA_ICON = `<svg class="y-wa-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12.04 2a9.9 9.9 0 0 0-8.5 15l-1.4 5.1 5.2-1.37A9.9 9.9 0 1 0 12.04 2Zm0 18.1a8.2 8.2 0 0 1-4.2-1.15l-.3-.18-3.08.81.82-3-.2-.31a8.2 8.2 0 1 1 6.96 3.83Zm4.5-6.14c-.25-.12-1.46-.72-1.69-.8-.23-.08-.39-.12-.55.12-.16.25-.63.8-.78.97-.14.16-.29.18-.53.06a6.7 6.7 0 0 1-3.34-2.92c-.25-.43.25-.4.72-1.34.08-.16.04-.3-.02-.43-.06-.12-.55-1.33-.76-1.82-.2-.48-.4-.41-.55-.42h-.47a.9.9 0 0 0-.65.3 2.74 2.74 0 0 0-.86 2.04 4.76 4.76 0 0 0 1 2.53 10.9 10.9 0 0 0 4.18 3.69c1.56.67 2.17.73 2.95.61.47-.07 1.46-.6 1.67-1.18.2-.58.2-1.07.14-1.18-.06-.1-.22-.16-.47-.28Z"/></svg>`;
+
 // Pantalla de éxito: solo después de que la base confirmó el pedido.
 function renderOrderSent() {
   const o = lastOrder;
@@ -848,15 +850,16 @@ function renderOrderSent() {
     ${closeBtn}
     <div class="y-sent" role="status">
       <span class="y-sent-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 5 5L20 7"/></svg></span>
-      <h2 id="cartSheetTitle">Pedido realizado correctamente</h2>
+      <h2 id="cartSheetTitle" class="y-sent-title">Pedido realizado correctamente</h2>
       ${o.id ? `<p class="y-sent-number">Pedido #${escapeHtml(String(o.id))}</p>` : ""}
       <p>Reservamos tus paquetes por 72 horas. Te confirmamos disponibilidad, entrega y pago por WhatsApp.</p>
       <div class="y-sent-actions">
         <a class="y-btn-primary" href="/cuenta?seccion=pedidos" data-autofocus>Ver mis pedidos</a>
+        ${o.url ? `<a class="y-btn-ghost y-btn-wa" href="${escapeHtml(o.url)}" target="_blank" rel="noopener" data-whatsapp>${WA_ICON}Avisar por WhatsApp</a>` : ""}
         <button type="button" class="y-btn-ghost" data-close>Volver a la góndola de yerbas</button>
         <a class="y-btn-ghost" href="/">Volver a la web</a>
       </div>
-      ${o.url ? `<a class="y-link" href="${escapeHtml(o.url)}" target="_blank" rel="noopener">También podés avisarnos por WhatsApp</a>` : ""}
+      <p class="y-sent-note">Avisar es opcional: tu pedido ya quedó registrado.</p>
     </div>`;
 }
 
@@ -890,18 +893,30 @@ function setMessage(text, ok = false) {
   renderCartSheet();
 }
 
-function whatsappText(order) {
-  const lines = (order.items ?? []).map((i) =>
+// Mensaje para avisar por WhatsApp: sale del pedido que la base acaba de
+// confirmar (número, detalle y total), nunca del carrito (ya se vació). Solo el
+// nombre de pila para reconocerlo; sin teléfono, email ni otros datos.
+// Si el pedido se recuperó sin el detalle (recarga a mitad del envío), van el
+// número y el total, que alcanzan para encontrarlo.
+function whatsappText(order, firstName = "") {
+  const name = cleanName(firstName);
+  const lines = (order.items ?? []).filter((i) => i?.product_name).map((i) =>
     `• ${i.product_name}${i.variant_name ? ` ${i.variant_name}` : ""} x${i.quantity} — ${money(i.line_total)}`);
+  const total = Number(order.total);
   return [
-    `Hola! Te envío mi pedido de yerbas #${order.id}:`,
+    `¡Hola! ${name ? `Soy ${name}. ` : ""}Acabo de hacer el pedido de yerbas #${order.id} en la web.`,
+    ...(lines.length ? ["", ...lines] : []),
+    ...(order.total != null && Number.isFinite(total) ? ["", `Total: ${money(total)}`] : []),
     "",
-    ...lines,
-    "",
-    `Total: ${money(order.total)}`,
-    "",
-    "Es una solicitud: quedo a la espera de la confirmación. ¡Gracias!",
+    "Quedo a la espera de la confirmación. ¡Gracias!",
   ].join("\n");
+}
+
+// Nombre de pila para mostrar: sin espacios de más, sin «null»/«undefined», corto.
+function cleanName(value) {
+  const t = typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
+  if (!t || /^(null|undefined)$/i.test(t)) return "";
+  return t.split(" ")[0].slice(0, 40);
 }
 
 // Envío en curso guardado en esta pestaña: si se recarga la página a mitad
@@ -921,7 +936,9 @@ function orderSucceeded(order) {
   rememberSending(null);
   sendFailed = false;
   basket.clear();
-  lastOrder = { id: order.id, url: order.items ? `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(whatsappText(order))}` : null };
+  // wa.me abre la app de WhatsApp si está instalada y, si no, WhatsApp Web.
+  // Es solo un enlace: tocarlo no vuelve a enviar nada a la base.
+  lastOrder = { id: order.id, url: `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(whatsappText(order, profile?.firstName))}` };
   sending = false;
   cartMessage = null;
   renderCartSheet();
@@ -967,8 +984,11 @@ async function sendOrder() {
   try {
     api = await import("./api.js");
     signature = api.itemsSignature(lines);
-    const session = await api.getSession();
-    if (!session || session.user.id !== owner) throw Object.assign(new Error("La sesión cambió."), { hint: "owner_changed" });
+    // Si Supabase rechazó la renovación (sesión vencida o revocada), supabase-js
+    // ya la borró: se pide ingresar de nuevo, sin perder el carrito.
+    const session = await api.getSession().catch((e) => { if (hasStoredSession()) throw e; return null; });
+    if (!session) throw Object.assign(new Error("La sesión venció."), { hint: "session_expired" });
+    if (session.user.id !== owner) throw Object.assign(new Error("La sesión cambió."), { hint: "owner_changed" });
     rememberSending({ owner, signature, at: startedAt });
     const order = await withTimeout(api.createYerbaOrder(lines, profile?.phone ? null : phone), 15000);
     if (profile && !profile.phone) profile.phone = phone;
@@ -992,6 +1012,16 @@ async function sendOrder() {
     rememberSending(null);
     sending = false;
     sendFailed = true;
+    if (err?.hint === "session_expired") {
+      // El carrito sigue guardado en esta cuenta: al volver a ingresar se abre igual.
+      sendFailed = false;
+      pendingCheckout = true;
+      hideSheet();
+      document.dispatchEvent(new CustomEvent("povmatero:account-login", {
+        detail: { mode: "login", notice: "Tu sesión venció. Ingresá de nuevo para enviar el pedido: tu carrito quedó guardado." },
+      }));
+      return;
+    }
     if (err?.hint === "owner_changed") {
       basket.syncOwner();
       return setMessage("La sesión cambió en este navegador. Revisá el carrito antes de enviar.");

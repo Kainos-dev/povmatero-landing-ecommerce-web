@@ -23,6 +23,13 @@ const PHONE_RE = /^\+?[\d\s()-]{8,25}$/;
 
 const EYE_LABEL = { show: "Mostrar", hide: "Ocultar" };
 
+// Nombre de pila para saludar: sin espacios de más, sin «null»/«undefined», corto.
+export function cleanName(value) {
+  const t = typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
+  if (!t || /^(null|undefined)$/i.test(t)) return "";
+  return t.split(" ")[0].slice(0, 40);
+}
+
 export function initAccount() {
   const modal = document.getElementById("accountModal");
   const body = document.getElementById("accountBody");
@@ -75,10 +82,75 @@ export function initAccount() {
   button.addEventListener("click", () => (hasStoredSession() ? openMenu() : open()));
 
   // Pedidos de otras partes de la tienda (página «Mi cuenta», carrito).
+  //   detail: { mode: "login" | "signup", notice?: texto para mostrar arriba del formulario }
   document.addEventListener("povmatero:account-login", (e) => {
-    open(() => showAuth(e.detail?.mode === "signup" ? "signup" : "login"));
+    const notice = typeof e.detail?.notice === "string" ? { message: e.detail.notice } : null;
+    open(() => showAuth(e.detail?.mode === "signup" ? "signup" : "login", { notice }));
   });
   document.addEventListener("povmatero:signed-out", () => setSignedIn(false));
+
+  // ---------- La sesión guardada, ¿sigue valiendo? ----------
+  // El ícono se dibuja enseguida con lo guardado en el navegador (sin esperar a
+  // supabase-js). Apenas la página termina de cargar se confirma con Supabase:
+  // si el token venció se renueva solo (y supabase-js lo sigue renovando
+  // mientras la página esté abierta); si la sesión se revocó o ya no existe, se
+  // muestra como cerrada en vez de aparentar que sigue iniciada. Sin conexión
+  // no se cambia nada (se vuelve a probar más tarde).
+  let watching = false;
+  function sessionEnded() {
+    if (!button.classList.contains("is-signed-in")) return;
+    setSignedIn(false);
+    document.dispatchEvent(new CustomEvent("povmatero:signed-out", { detail: { reason: "expired" } }));
+    showToast("Tu sesión venció. Ingresá de nuevo cuando quieras: tu carrito quedó guardado.");
+  }
+  async function verifySession() {
+    if (!hasStoredSession()) return;
+    let api;
+    try {
+      api = await loadApi();
+      const session = await api.getSession();
+      if (session) setSignedIn(true);
+      else sessionEnded();
+    } catch (err) {
+      // Si Supabase rechazó la renovación, supabase-js ya borró la sesión.
+      if (!hasStoredSession()) sessionEnded();
+      else console.warn("Cuenta: no se pudo comprobar la sesión (se reintenta luego).", err);
+    }
+    if (api && !watching) {
+      watching = true;
+      // Más adelante (renovación automática fallida): misma respuesta. Un
+      // «Cerrar sesión» pedido por la persona no muestra el aviso de vencida.
+      api.onAuthChange((event) => {
+        if (event === "SIGNED_OUT" && !api.consumeLocalSignOut()) sessionEnded();
+      });
+    }
+  }
+  const idle = window.requestIdleCallback ?? ((fn) => setTimeout(fn, 1200));
+  if (document.readyState === "complete") idle(verifySession, { timeout: 4000 });
+  else window.addEventListener("load", () => idle(verifySession, { timeout: 4000 }), { once: true });
+  // Al volver a la pestaña después de un rato, se confirma otra vez.
+  let hiddenSince = 0;
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") hiddenSince = Date.now();
+    else if (hiddenSince && Date.now() - hiddenSince > 5 * 60 * 1000) verifySession();
+  });
+
+  // ---------- Saludo al ingresar ----------
+  // Nombre de pila del perfil (o el que se cargó al registrarse). Nunca «null»,
+  // «undefined» ni el email: si no hay nombre, el saludo va sin nombre.
+  async function firstNameOf(api, session) {
+    const fromMeta = cleanName(session?.user?.user_metadata?.first_name);
+    if (!session?.user?.id) return fromMeta;
+    try {
+      const profile = await Promise.race([
+        api.getProfile(session.user.id),
+        new Promise((resolve) => setTimeout(() => resolve(null), 2500)),
+      ]);
+      return cleanName(profile?.first_name) || fromMeta;
+    } catch {
+      return fromMeta;
+    }
+  }
 
   // ---------- Abrir / cerrar ----------
   function isOpen() { return modal.classList.contains("open"); }
@@ -313,9 +385,11 @@ export function initAccount() {
       setBusy(form, true, "Ingresando…");
       try {
         const api = await loadApi();
-        await api.signIn(form.email.value.trim(), form.password.value);
+        const session = await api.signIn(form.email.value.trim(), form.password.value);
         form.password.value = "";
-        stayHere("¡Hola de nuevo! Ya ingresaste.");
+        // Volver a ingresar (cuenta que ya existía): saludo con el nombre del perfil.
+        const name = await firstNameOf(api, session);
+        stayHere(name ? `¡Hola de nuevo, ${name}!` : "¡Hola de nuevo!");
       } catch (err) {
         console.warn(err);
         const api = await loadApi().catch(() => null);
@@ -401,7 +475,9 @@ export function initAccount() {
           return;
         }
         if (result.session) {
-          stayHere("¡Listo! Tu cuenta ya está creada.");
+          // Primer registro: bienvenida (no «hola de nuevo»).
+          const name = cleanName(form.firstName.value);
+          stayHere(name ? `¡Te damos la bienvenida, ${name}! Tu cuenta ya está creada.` : "¡Listo! Tu cuenta ya está creada.");
           return;
         }
         showCheckEmail(emailValue);
@@ -526,7 +602,11 @@ export function initAccount() {
         open(() => showNewPassword());
       } else {
         const session = await api.getSession();
-        const message = result.type === "signup" ? "¡Listo! Tu email quedó confirmado y ya ingresaste." : "Ya ingresaste.";
+        // Confirmación del email = primer ingreso de la cuenta: bienvenida.
+        const name = session ? await firstNameOf(api, session) : "";
+        const message = result.type === "signup"
+          ? (name ? `¡Te damos la bienvenida, ${name}! Tu email quedó confirmado y ya ingresaste.` : "¡Listo! Tu email quedó confirmado y ya ingresaste.")
+          : (name ? `¡Hola de nuevo, ${name}!` : "Ya ingresaste.");
         if (session) stayHere(message);
         else open(() => showAuth("login"));
       }
