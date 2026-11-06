@@ -27,7 +27,14 @@ function write(key, lines) {
   try {
     if (lines.length) localStorage.setItem(key, JSON.stringify(lines));
     else localStorage.removeItem(key);
+    const revision = crypto.randomUUID?.() ?? [...crypto.getRandomValues(new Uint8Array(16))].map(n => n.toString(16).padStart(2,"0")).join("");
+    localStorage.setItem(key + ":revision", revision);
   } catch { /* sin almacenamiento: dura lo que la pestaña */ }
+}
+
+function revisionFor(owner) {
+  try { return localStorage.getItem(keyFor(owner) + ":revision") ?? "legacy"; }
+  catch { return "legacy"; }
 }
 
 // Una línea por presentación, cantidades enteras positivas.
@@ -48,9 +55,10 @@ export function mergeLines(...lists) {
 export function createBasket({ onChange } = {}) {
   let owner = storedUserId();
   let lines = mergeLines(read(keyFor(owner)));
+  let revision = revisionFor(owner);
 
   const emit = (extra = {}) => onChange?.(lines.map((l) => ({ ...l })), extra);
-  const save = () => write(keyFor(owner), lines);
+  const save = () => { write(keyFor(owner), lines); revision = revisionFor(owner); };
 
   function set(variantId, qty) {
     syncOwner();
@@ -79,6 +87,7 @@ export function createBasket({ onChange } = {}) {
       }
     }
     lines = mergeLines(read(keyFor(owner)));
+    revision = revisionFor(owner);
     emit({ ownerChanged: true });
     return true;
   }
@@ -111,8 +120,9 @@ export function createBasket({ onChange } = {}) {
   window.addEventListener("storage", (e) => {
     if (e.key === null || e.key === SESSION_KEY) {
       if (!syncOwner() && e.key === null) { lines = mergeLines(read(keyFor(owner))); emit(); }
-    } else if (e.key === keyFor(owner)) {
+    } else if (e.key === keyFor(owner) || e.key === keyFor(owner) + ":revision") {
       lines = mergeLines(read(keyFor(owner)));
+      revision = revisionFor(owner);
       emit();
     }
   });
@@ -122,6 +132,18 @@ export function createBasket({ onChange } = {}) {
 
   return {
     get owner() { return owner; },
+    get revision() { return revision; },
+    refresh() {
+      const ownerChanged = syncOwner();
+      const before = JSON.stringify(lines), previousRevision = revision;
+      lines = mergeLines(read(keyFor(owner)));
+      revision = revisionFor(owner);
+      if (!ownerChanged && (before !== JSON.stringify(lines) || previousRevision !== revision)) emit();
+    },
+    clearIf(expectedOwner, expectedRevision) {
+      if (storedUserId() !== expectedOwner || owner !== expectedOwner || revisionFor(owner) !== expectedRevision) return false;
+      lines = []; save(); emit(); return true;
+    },
     lines: () => lines.map((l) => ({ ...l })),
     qty: (variantId) => lines.find((l) => l.variant_id === Number(variantId))?.qty ?? 0,
     units: () => lines.reduce((n, l) => n + l.qty, 0),

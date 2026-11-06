@@ -115,7 +115,7 @@ function freshState({ migrated = true } = {}) {
         if (fn === "admin_link_order_customer") { const o = st.orders.find((x) => x.id === a.order_id); o.customer_id = a.customer_id; (st.events[o.id] ??= []).push({ id: 2, event: "vinculado", detail: {}, created_at: new Date().toISOString() }); return json({ id: o.id }); }
         if (fn === "admin_cancel_sale") { const o = st.orders.find((x) => x.id === a.order_id); if (o.status !== "cancelado") { o.status = "cancelado"; o.order_items.forEach((i) => { st.variants.find((v) => v.id === i.variant_id).stock += i.quantity; }); } return json({ id: o.id }); }
         if (fn === "admin_restock_alerts") return json(st.alerts.filter((x) => !st.notified.has(x.id)));
-        if (fn === "admin_mark_restock_notified") { const done = a.ids.filter((i) => !st.notified.has(i)); done.forEach((i) => st.notified.add(i)); return json(done); }
+        if (fn === "admin_mark_restock_notified") return err(403, "42501", "Marcado manual revocado");
         return json(null);
       }
       if (p === "/rest/v1/product_variants") return json(st.variants);
@@ -226,12 +226,10 @@ function freshState({ migrated = true } = {}) {
   // ---------- 3. Avisos de reposición (panel) ----------
   { const st = freshState(); const { ctx, page, errors } = await open("#/avisos", st);
     const body = await text(page, "#adminContent");
-    check("avisos: «Para avisar (1)» y «Esperando (1)»", /Para avisar \(1\)/.test(body) && /Esperando reposición \(1\)/.test(body), body.slice(0, 300));
-    const wa = await page.getAttribute('.alert-row a:has-text("WhatsApp")', "href");
-    check("avisos: WhatsApp con el mensaje de la presentación", /wa\.me\/5491144441234\?text=.*Canarias%20Tradicional%201kg/.test(wa), wa);
-    await page.click('.alert-row button:has-text("Marcar avisado")');
-    await page.waitForTimeout(1200);
-    check("avisos: marcado → sale de «Para avisar»", /Para avisar \(0\)/.test(await text(page, "#adminContent")) && st.notified.has(1));
+    check("avisos: disponibilidad y espera", /Con disponibilidad \(1\)/.test(body) && /Esperando reposición \(1\)/.test(body), body.slice(0, 300));
+    check("avisos: explica email automático y consentimiento", /automáticamente/.test(body) && /consentimiento por email/.test(body));
+    check("avisos: no ofrece marcado manual ni enlaces de envío", await page.locator('.alert-row button, .alert-row a').count() === 0);
+    check("avisos: no llama función revocada", !st.calls.some(c => c[0] === 'admin_mark_restock_notified') && st.notified.size === 0);
     check("avisos: sin errores", !errors.length, errors.join(" | "));
     await ctx.close(); }
   { const st = freshState({ migrated: false }); const { ctx, page } = await open("#/avisos", st);

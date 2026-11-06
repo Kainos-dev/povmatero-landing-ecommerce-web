@@ -1,4 +1,4 @@
-// Bloque 3 en /yerbas: «Avisarme cuando vuelva». Supabase simulado.
+// Bloque 3 en /yerbas: «Avisarme por email cuando haya stock». Supabase simulado.
 const serve = require("./serve.cjs");
 const { chromium } = require(process.env.PW + "/node_modules/playwright-core");
 const ROOT = process.argv[2], OUT = process.argv[3];
@@ -29,7 +29,7 @@ const SESSION = { access_token: `${b64({ alg: "HS256" })}.${b64({ sub: UID, role
         if (!rows) { const r = await route.fetch(); rows = await r.json(); OUTV = rows[0].variant_id; }
         return json(rows.map((r) => ({ ...r, track_stock: true, stock: r.variant_id === OUTV ? 0 : 9 })));
       }
-      if (p === "/rest/v1/restock_requests") return migrated ? json([...st.active].map((v) => ({ variant_id: v }))) : json({ code: "PGRST205", message: "Could not find the table" }, 404);
+      if (p === "/rest/v1/restock_requests") return migrated ? json([...st.active].map((v) => ({ variant_id: v, email_consent_at: new Date().toISOString() }))) : json({ code: "PGRST205", message: "Could not find the table" }, 404);
       if (p === "/rest/v1/rpc/request_restock_alert") { const a = JSON.parse(req.postData()); st.calls.push(["req", a.variant_id]); if (!migrated) return json({ code: "PGRST202", message: "x" }, 404); st.active.add(a.variant_id); return json({ id: 1, variant_id: a.variant_id, status: "activa" }); }
       if (p === "/rest/v1/rpc/cancel_restock_alert") { const a = JSON.parse(req.postData()); st.calls.push(["cancel", a.variant_id]); st.active.delete(a.variant_id); return json(true); }
       if (p === "/rest/v1/customer_profiles") return json({ phone: "11 5555 1234", first_name: "Ana", last_name: "Paz", email: "a@test.com", marketing_opt_in: false });
@@ -62,26 +62,31 @@ const SESSION = { access_token: `${b64({ alg: "HS256" })}.${b64({ sub: UID, role
   for (const [label, vp] of [["escritorio", { width: 1440, height: 900 }], ["celular", { width: 390, height: 844 }]]) {
     const { ctx, page, errors, st } = await open({ vp });
     await openSheetOfOut(page);
-    check(`${label}: presentación agotada ofrece «Avisarme cuando vuelva»`, /Avisarme cuando vuelva/.test(await row(page)), await row(page));
+    check(`${label}: presentación agotada ofrece «Avisarme por email cuando haya stock»`, /Avisarme por email cuando haya stock/.test(await row(page)), await row(page));
     const others = await page.evaluate((id) => [...document.querySelectorAll("#productSheet .y-pres")].filter((r) => r.dataset.variant !== String(id)).some((r) => /Avisarme/.test(r.innerText)), OUTV);
     check(`${label}: solo en la presentación agotada (no en la otra)`, !others);
     await page.click("#productSheet [data-notify]");
+    check(`${label}: sin consentimiento no registra nada`, st.calls.length === 0);
+    await page.check("#productSheet [data-notify-consent]");
+    await page.click("#productSheet [data-notify]");
     await page.waitForTimeout(1200);
-    check(`${label}: registrado para esa presentación, con confirmación`, st.calls.length === 1 && st.calls[0][0] === "req" && st.calls[0][1] === OUTV && /Te avisamos cuando vuelva/.test(await row(page)) && /te avisamos cuando vuelva/i.test(await page.evaluate(() => document.getElementById("toast")?.textContent ?? "")));
+    check(`${label}: registrado para esa presentación, con confirmación`, st.calls.length === 1 && st.calls[0][0] === "req" && st.calls[0][1] === OUTV && /Te vamos a avisar cuando haya stock./.test(await row(page)) && /te vamos a avisar cuando haya stock/i.test(await page.evaluate(() => document.getElementById("toast")?.textContent ?? "")));
     if (OUT && label === "celular") await page.screenshot({ path: `${OUT}/aviso-${label}.png` });
     await page.click("#productSheet [data-notify-cancel]");
     await page.waitForTimeout(1000);
-    check(`${label}: se puede cancelar`, st.calls.at(-1)[0] === "cancel" && /Avisarme cuando vuelva/.test(await row(page)));
+    check(`${label}: se puede cancelar`, st.calls.at(-1)[0] === "cancel" && /Avisarme por email cuando haya stock/.test(await row(page)));
     // recarga: el aviso activo se recuerda
+    await page.check("#productSheet [data-notify-consent]");
     await page.click("#productSheet [data-notify]"); await page.waitForTimeout(800);
     await page.reload(); await page.waitForSelector(".y-variant"); await page.waitForTimeout(1500);
     await openSheetOfOut(page);
-    check(`${label}: al volver, muestra el aviso activo`, /Te avisamos cuando vuelva/.test(await row(page)));
+    check(`${label}: al volver, muestra el aviso activo`, /Te vamos a avisar cuando haya stock./.test(await row(page)));
     check(`${label}: sin errores`, !errors.length, errors.join(" | "));
     await ctx.close();
   }
   { const { ctx, page, st } = await open({ signedIn: false });
     await openSheetOfOut(page);
+    await page.check("#productSheet [data-notify-consent]");
     await page.click("#productSheet [data-notify]");
     await page.waitForTimeout(800);
     check("sin sesión: pide ingresar (no registra nada)", await page.evaluate(() => document.getElementById("accountModal").classList.contains("open")) && st.calls.length === 0);

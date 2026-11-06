@@ -6,7 +6,7 @@ import { h, mount, errorMessage, formatPrice, toast } from "../ui.js";
 import { icon } from "../icons.js";
 import {
   getOrder, setOrderStatus, updateOrderItems, listYerbaVariants, orderErrorMessage, whatsappNumber,
-  FLOW, FLOW_LABEL, isExpired, runOrderMaintenance, commitsStock, isEditable, canCancel, uiStatus, autoDeliveryAt, markReady, cancelReason, PENDING_HOURS,
+  FLOW, FLOW_LABEL, isExpired, runOrderMaintenance, commitsStock, isEditable, canCancel, uiStatus, autoDeliveryAt, markReady, cancelReason, PENDING_HOURS, reservationHours, orderLabel,
 } from "../api/orders.js";
 import { statusBadge, relativeTime } from "./orders.js";
 import { linkOrderCustomer, cancelSale, toolErrorMessage } from "../api/stockTools.js";
@@ -25,7 +25,7 @@ export async function renderOrderDetail(view, orderId) {
   let order;
   try {
     order = await getOrder(orderId);
-    // Pendiente de 72 h todavía sin marcar: se registra la cancelación ahora
+    // Pendiente vencido todavía sin marcar: se registra la cancelación ahora
     // (idempotente) para que el detalle y el historial queden completos.
     if (order && isExpired(order)) {
       await runOrderMaintenance().catch((err) => console.warn("Mantenimiento de pedidos:", err));
@@ -65,8 +65,8 @@ function draw(view, order) {
     backLink(order.kind),
     h("div", { class: "page-header" },
       h("div", { class: "title-block" },
-        h("h1", {}, `Pedido #${order.id}`),
-        h("p", { class: "page-sub" }, `${yerbas ? "Yerbas" : sale ? "Venta presencial" : "Tienda"} · ${formatDate(order.created_at)}`)),
+        h("h1", {}, `Pedido ${orderLabel(order)}`),
+        h("p", { class: "page-sub" }, `${yerbas ? "Yerbas" : sale ? "Venta presencial" : "Tienda"} · ${formatDate(order.created_at)}${order.public_code ? ` · Nº interno ${order.id}` : ""}${order.legacy_public_code ? ` · Referencia anterior ${order.legacy_public_code}` : ""}`)),
       statusBadge(order)),
     yerbas ? statusPanel(order, reload) : sale ? salePanel(order, reload) : h("p", { class: "notice-info" },
       "Pedido de la tienda: es la solicitud que el cliente envió por WhatsApp. No tiene estados ni mueve stock."),
@@ -104,8 +104,8 @@ function statusPanel(order, reload) {
     note = h("div", { class: "notice-info" },
       h("strong", {}, reason ? `${reason}.` : "Pedido cancelado."),
       " ", reason && order.status === "pendiente"
-        ? `Pasaron ${PENDING_HOURS} h en «Pendiente» (desde ${formatDate(order.created_at)}): la reserva de stock ya se liberó.`
-        : reason ? `Estuvo ${PENDING_HOURS} h en «Pendiente» sin confirmarse. No se descontó stock.`
+        ? `Pasaron ${reservationHours(order)} h en «Pendiente» (desde ${formatDate(order.created_at)}): la reserva de stock ya se liberó.`
+        : reason ? `Estuvo ${reservationHours(order)} h en «Pendiente» sin confirmarse. No se descontó stock.`
         : returned ? "El stock que se había descontado se devolvió." : "");
   } else if (st === "pendiente") note = h("p", { class: "muted" }, (order.status === "pendiente"
       ? `Reserva el stock hasta ${formatDate(order.expires_at)} (${relativeTime(order.expires_at)}). Si para entonces no está listo, se cancela por falta de respuesta. `
@@ -127,7 +127,7 @@ function statusPanel(order, reload) {
       await reload(done);
     } catch (err) {
       console.warn(err);   // rechazo esperado de la base: se muestra el motivo
-      // Pasaron las 72 h mientras se miraba el pedido: se muestra ya cancelado.
+      // Venció la reserva mientras se miraba el pedido: se muestra ya cancelado.
       if (err?.hint === "auto_cancelled") { await reload(); toast(err.message, "error"); return; }
       errorBox.textContent = err?.hint === "invalid_transition" && order.status === "entregado"
         ? "Para volver un pedido entregado a «Listo» falta aplicar la migración 20261110000000_simple_order_states.sql."
@@ -146,12 +146,12 @@ function statusPanel(order, reload) {
   function drawActions() {
     const buttons = [];
     if (st === "pendiente") {
-      buttons.push(button("Marcar listo", "btn-primary", () => markReady(order), `Pedido #${order.id} listo: se descontó el stock.`));
+      buttons.push(button("Marcar listo", "btn-primary", () => markReady(order), `Pedido ${orderLabel(order)} listo: se descontó el stock.`));
     } else if (st === "listo") {
-      buttons.push(button("Marcar entregado", "btn-primary", () => setOrderStatus(order.id, "entregado"), `Pedido #${order.id} entregado.`));
+      buttons.push(button("Marcar entregado", "btn-primary", () => setOrderStatus(order.id, "entregado"), `Pedido ${orderLabel(order)} entregado.`));
       buttons.push(button("Volver a pendiente", "btn-ghost", () => setOrderStatus(order.id, "preparando"), "Volvió a pendiente: el stock se devolvió."));
     } else if (st === "entregado") {
-      buttons.push(button("Volver a «Listo» (no lo retiró)", "btn-ghost", () => setOrderStatus(order.id, "listo"), `Pedido #${order.id} otra vez listo.`));
+      buttons.push(button("Volver a «Listo» (no lo retiró)", "btn-ghost", () => setOrderStatus(order.id, "listo"), `Pedido ${orderLabel(order)} otra vez listo.`));
     }
     if (canCancel(order)) {
       const b = h("button", { type: "button", class: "btn-ghost btn-danger" }, "Cancelar pedido");
@@ -165,9 +165,9 @@ function statusPanel(order, reload) {
     const yes = h("button", { type: "button", class: "btn-primary btn-danger-solid" }, "Sí, cancelar");
     const no = h("button", { type: "button", class: "btn-ghost" }, "No");
     no.addEventListener("click", drawActions);
-    yes.addEventListener("click", () => run(() => setOrderStatus(order.id, "cancelado"), yes, `Pedido #${order.id} cancelado.`));
+    yes.addEventListener("click", () => run(() => setOrderStatus(order.id, "cancelado"), yes, `Pedido ${orderLabel(order)} cancelado.`));
     mount(slot, h("div", { class: "confirm-box confirm-danger" },
-      h("strong", {}, `¿Cancelar el pedido #${order.id}?`),
+      h("strong", {}, `¿Cancelar el pedido ${orderLabel(order)}?`),
       h("span", {}, order.status === "listo"
         ? `Se devuelven ${units} ${units === 1 ? "unidad" : "unidades"} al stock. No se puede deshacer.`
         : "Deja de reservar stock. No se puede deshacer."),
@@ -219,11 +219,11 @@ function salePanel(order, reload) {
     const yes = h("button", { type: "button", class: "btn-primary btn-sm" }, "Sí, vincular");
     yes.addEventListener("click", async () => {
       yes.disabled = true; yes.textContent = "Guardando…";
-      try { await linkOrderCustomer(order.id, c.id); await reload(`Venta #${order.id} vinculada a ${c.name}.`); }
+      try { await linkOrderCustomer(order.id, c.id); await reload(`Venta ${orderLabel(order)} vinculada a ${c.name}.`); }
       catch (err) { fail(err); draw(); }
     });
     mount(slot, h("div", { class: "confirm-box" },
-      h("strong", {}, `¿Vincular la venta #${order.id} a ${c.name}?`),
+      h("strong", {}, `¿Vincular la venta ${orderLabel(order)} a ${c.name}?`),
       h("span", {}, [c.email, c.phone].filter(Boolean).join(" · ")),
       h("div", { class: "actions" }, yes, h("button", { type: "button", class: "btn-ghost btn-sm", onclick: draw }, "No"))));
   }
@@ -232,11 +232,11 @@ function salePanel(order, reload) {
     const yes = h("button", { type: "button", class: "btn-primary btn-danger-solid btn-sm" }, "Sí, anular");
     yes.addEventListener("click", async () => {
       yes.disabled = true; yes.textContent = "Guardando…";
-      try { await cancelSale(order.id); await reload(`Venta #${order.id} anulada: el stock se devolvió.`); }
+      try { await cancelSale(order.id); await reload(`Venta ${orderLabel(order)} anulada: el stock se devolvió.`); }
       catch (err) { fail(err); draw(); }
     });
     mount(slot, h("div", { class: "confirm-box confirm-danger" },
-      h("strong", {}, `¿Anular la venta #${order.id}?`),
+      h("strong", {}, `¿Anular la venta ${orderLabel(order)}?`),
       h("span", {}, `Se devuelven ${units} ${units === 1 ? "unidad" : "unidades"} al stock.`),
       h("div", { class: "actions" }, yes, h("button", { type: "button", class: "btn-ghost btn-sm", onclick: draw }, "No"))));
   }
@@ -349,7 +349,7 @@ function itemsPanel(order, reload) {
       save.textContent = "Guardando…";
       try {
         await updateOrderItems(order.id, [...lines.values()].map((l) => ({ variant_id: l.variant_id, quantity: l.qty })));
-        await reload(`Pedido #${order.id} actualizado.`);
+        await reload(`Pedido ${orderLabel(order)} actualizado.`);
       } catch (err) {
         console.warn(err);   // rechazo esperado de la base: se muestra el motivo
         errorBox.textContent = orderErrorMessage(err, errorMessage);
@@ -382,7 +382,7 @@ function itemsPanel(order, reload) {
 function contactPanel(order) {
   const number = whatsappNumber(order.customer_phone);
   const first = (order.customer_name || "").split(" ")[0];
-  const text = `Hola${first ? ` ${first}` : ""}! Te escribimos de Povmatero por tu ${order.kind === "presencial" ? "compra" : "pedido"} ${order.kind === "yerbas" ? "de yerbas " : ""}#${order.id}.`;
+  const text = `Hola${first ? ` ${first}` : ""}! Te escribimos de Povmatero por tu ${order.kind === "presencial" ? "compra" : "pedido"} ${order.kind === "yerbas" ? "de yerbas " : ""}${orderLabel(order)}.`;
   return h("section", { class: "panel" },
     h("div", { class: "panel-head" }, h("h2", {}, "Cliente")),
     h("div", { class: "order-contact" },

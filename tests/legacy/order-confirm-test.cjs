@@ -34,16 +34,19 @@ const SESSION = { access_token: `${b64({ alg: "HS256" })}.${b64({ sub: UID, role
       if (p === "/auth/v1/user") return json(SESSION.user);
       if (p === "/rest/v1/rpc/create_yerba_order") {
         st.rpc++;
-        const items = JSON.parse(req.postData()).items;
-        const order = { id: st.nextId++, total: 1000, item_count: 1, status: "pendiente", created_at: new Date().toISOString(), items: items.map((i) => ({ ...i, product_name: "Yerba", variant_name: "1 kg", line_total: 1000 })) };
+        const args = JSON.parse(req.postData()), items = args.items;
+        const order = { id: st.nextId, public_code: "AP-00" + (st.nextId++ - 500), total: 1000, item_count: 1, status: "pendiente", created_at: new Date().toISOString(), items: items.map((i) => ({ ...i, product_name: "Yerba", variant_name: "1 kg", line_total: 1000 })) };
         if (st.mode === "stock") return json({ code: "23514", message: "No alcanza el stock de: Yerba 1 kg (quedan 0).", hint: "insufficient_stock", details: "[]" }, 400);
         if (st.mode === "down") return route.abort("failed");
-        st.saved.push({ id: order.id, total: 1000, created_at: order.created_at, order_items: items.map((i) => ({ variant_id: i.variant_id, quantity: i.quantity })) });
+        st.saved.push({ id: order.id, client_key: args.client_key, public_code: order.public_code, total: 1000, created_at: order.created_at, order_items: items.map((i) => ({ variant_id: i.variant_id, quantity: i.quantity })) });
         if (st.mode === "lost") return route.abort("failed");
         if (st.mode === "slow") await new Promise((r) => setTimeout(r, 2500));
         return json(order);
       }
-      if (p === "/rest/v1/orders") return json(st.saved.slice().reverse());
+      if (p === "/rest/v1/orders") {
+        const key = url.searchParams.get('client_key')?.replace(/^eq\./,'');
+        return json(key ? st.saved.find(o => o.client_key === key) ?? null : st.saved.slice().reverse());
+      }
       if (req.method() !== "GET") return json([]);
       return route.continue();
     });
@@ -91,9 +94,9 @@ const SESSION = { access_token: `${b64({ alg: "HS256" })}.${b64({ sub: UID, role
         title: document.querySelector(".y-sent h2")?.textContent, num: document.querySelector(".y-sent-number")?.textContent,
         actions: [...document.querySelectorAll(".y-sent-actions > *")].map((a) => [a.textContent.trim(), a.getAttribute("href"), a.className]),
       }));
-      check(`${label}: «Pedido realizado correctamente» con el número`, done.title === "Pedido realizado correctamente" && done.num === "Pedido #501", JSON.stringify(done));
+      check(`${label}: «Pedido realizado» con el código público`, done.title === "Pedido realizado" && done.num === "Pedido AP-001", JSON.stringify(done));
       check(`${label}: cuatro acciones; «Ver mis pedidos» principal, «Avisar por WhatsApp» segunda`, done.actions.length === 4 && done.actions[0][0] === "Ver mis pedidos" && done.actions[0][1] === "/cuenta?seccion=pedidos" && /y-btn-primary/.test(done.actions[0][2])
-        && done.actions[1][0] === "Avisar por WhatsApp" && /^https:\/\/wa\.me\/5491160554815\?text=.*%23501/.test(done.actions[1][1])
+        && done.actions[1][0] === "Avisar por WhatsApp" && /^https:\/\/wa\.me\/5491160554815\?text=.*AP-001/.test(done.actions[1][1]) && !/%23501/.test(done.actions[1][1])
         && done.actions[2][0] === "Volver a la góndola de yerbas" && done.actions[3][0] === "Volver a la web" && done.actions[3][1] === "/", JSON.stringify(done.actions));
       check(`${label}: un solo pedido aunque se toque dos veces`, st.rpc === 1, String(st.rpc));
       check(`${label}: el carrito se vació recién con el éxito`, (await cartCount(page)) === 0);
@@ -117,7 +120,7 @@ const SESSION = { access_token: `${b64({ alg: "HS256" })}.${b64({ sub: UID, role
       await page.waitForTimeout(2500);
       const r = await page.evaluate(() => ({ msg: document.querySelector("#cartSheet .y-msg:not([hidden])")?.textContent, btn: document.querySelector("#cartSheet [data-send]")?.textContent.trim(), sent: !!document.querySelector(".y-sent") }));
       check(`${label}: si falla, error comprensible y sin éxito`, /No alcanza el stock/.test(r.msg ?? "") && !r.sent, JSON.stringify(r));
-      check(`${label}: si falla, el carrito no se vacía y se puede reintentar`, (await cartCount(page)) === 1 && r.btn === "Reintentar el pedido", r.btn);
+      check(`${label}: si falla, el carrito no se vacía y se puede volver a enviar (sin «Reintentar»)`, (await cartCount(page)) === 1 && r.btn === "Realizar pedido", r.btn);
       st.mode = "ok";
       await page.click("#cartSheet [data-send]");
       await page.waitForSelector(".y-sent", { timeout: 10000 });
@@ -130,7 +133,7 @@ const SESSION = { access_token: `${b64({ alg: "HS256" })}.${b64({ sub: UID, role
       await page.click("#cartSheet [data-send]");
       await page.waitForSelector(".y-sent", { timeout: 10000 }).catch(() => {});
       const r = await page.evaluate(() => ({ num: document.querySelector(".y-sent-number")?.textContent }));
-      check(`${label}: respuesta perdida pero guardado → éxito con el número, sin reenviar`, r.num === "Pedido #501" && st.rpc === 1 && (await cartCount(page)) === 0, JSON.stringify(r) + " rpc " + st.rpc);
+      check(`${label}: respuesta perdida pero guardado → éxito con el número, sin reenviar`, r.num === "Pedido AP-001" && st.rpc === 1 && (await cartCount(page)) === 0, JSON.stringify(r) + " rpc " + st.rpc);
       await ctx.close(); }
 
     // 4. Sin conexión (no se guardó): error y reintento
@@ -139,7 +142,7 @@ const SESSION = { access_token: `${b64({ alg: "HS256" })}.${b64({ sub: UID, role
       await page.click("#cartSheet [data-send]");
       await page.waitForTimeout(2500);
       const r = await page.evaluate(() => ({ msg: document.querySelector("#cartSheet .y-msg:not([hidden])")?.textContent, btn: document.querySelector("#cartSheet [data-send]")?.textContent.trim() }));
-      check(`${label}: sin conexión → error claro, carrito intacto, reintentar`, /conect/i.test(r.msg ?? "") && r.btn === "Reintentar el pedido" && (await cartCount(page)) === 1, JSON.stringify(r));
+      check(`${label}: sin conexión → error claro, carrito intacto, reintentar`, /conect/i.test(r.msg ?? "") && r.btn === "Realizar pedido" && (await cartCount(page)) === 1, JSON.stringify(r));
       await ctx.close(); }
   }
 
@@ -151,7 +154,7 @@ const SESSION = { access_token: `${b64({ alg: "HS256" })}.${b64({ sub: UID, role
     await page.reload();
     await page.waitForSelector(".y-variant"); await page.waitForTimeout(3000);
     const r = await page.evaluate(() => ({ sent: document.querySelector(".y-sent-number")?.textContent, open: document.getElementById("cartSheet").classList.contains("open") }));
-    check("recarga a mitad del envío: al volver muestra el pedido realizado y vacía el carrito", r.sent === "Pedido #501" && r.open && (await cartCount(page)) === 0 && st.rpc === 1, JSON.stringify(r) + " rpc " + st.rpc);
+    check("recarga a mitad del envío: al volver muestra el pedido realizado y vacía el carrito", r.sent === "Pedido AP-001" && r.open && (await cartCount(page)) === 0 && st.rpc === 1, JSON.stringify(r) + " rpc " + st.rpc);
     await ctx.close(); }
 
   console.log(`\n${ok} OK, ${fail} FALLAS`);

@@ -100,6 +100,16 @@ onSignedOut(() => {
   if (views.login.hidden) showLogin();
 });
 
+// Notificación tocada con el panel ya abierto (navegadores sin client.navigate):
+// el service worker pide abrir el pedido. Solo direcciones del panel.
+navigator.serviceWorker?.addEventListener("message", (e) => {
+  const url = e.data?.type === "povmatero:open" ? String(e.data.url ?? "") : "";
+  try {
+    const target = new URL(url, location.origin);
+    if (target.origin === location.origin && target.pathname.startsWith("/admin")) location.href = target.href;
+  } catch { /* nada */ }
+});
+
 async function init() {
   try {
     const user = await getCurrentUser();

@@ -1,2 +1,7 @@
 # Pruebas locales: no se publican en Vercel.
 tests/
+supabase/
+.vscode/
+.env*
+*.md
+.release-local/

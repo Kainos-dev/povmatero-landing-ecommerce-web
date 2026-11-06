@@ -40,6 +40,7 @@ const U = {
   async function as(user) {
     if (!user) { await db.exec("reset role"); await q("select set_config('request.jwt.claims', '', false)"); return; }
     if (user === "anon") { await db.exec("set role anon"); await q("select set_config('request.jwt.claims', $1, false)", [JSON.stringify({ role: "anon" })]); return; }
+    if (user === "service") { await db.exec("set role service_role"); await q("select set_config('request.jwt.claims', $1, false)", [JSON.stringify({ role: "service_role" })]); return; }
     await db.exec("set role authenticated");
     await q("select set_config('request.jwt.claims', $1, false)", [JSON.stringify({ sub: U[user].id, role: "authenticated" })]);
   }
@@ -111,11 +112,11 @@ const U = {
     check("aviso: sin sesión no se puede", !r.ok, r.msg);
     r = await call("ana", "select public.request_restock_alert($1) as r", [C1]);
     check("aviso: si hay stock, no se registra (hint available)", !r.ok && r.hint === "available", r.msg);
-    r = await call("ana", "select public.request_restock_alert($1) as r", [C500]);
+    r = await call("ana", "select public.request_restock_alert($1,true) as r", [C500]);
     check("aviso: Canarias 500 g agotada → registrado", r.ok && r.val.status === "activa", r.msg);
-    const r2 = await call("ana", "select public.request_restock_alert($1) as r", [C500]);
+    const r2 = await call("ana", "select public.request_restock_alert($1,true) as r", [C500]);
     check("aviso: pedirlo otra vez no duplica (misma solicitud)", r2.ok && r2.val.id === r.val.id && Number((await one("select count(*) n from public.restock_requests where user_id = $1", [U.ana.id])).n) === 1);
-    r = await call("beto", "select public.request_restock_alert($1) as r", [C500]);
+    r = await call("beto", "select public.request_restock_alert($1,true) as r", [C500]);
     check("aviso: otro cliente, misma presentación → su propia solicitud", r.ok);
     r = await call("ana", "select public.request_restock_alert($1) as r", [MATE]);
     check("aviso: solo yerbas", !r.ok && r.hint === "unavailable", r.msg);
@@ -138,9 +139,16 @@ const U = {
     const ids = r.rows.map((x) => Number(x.id));
     const s0 = await stock(C500);
     r = await call("admin", "select array_agg(x) a from public.admin_mark_restock_notified($1::bigint[]) x", [ids]);
-    check("aviso: marcar avisadas → 2", r.ok && r.rows[0].a.length === 2, r.msg);
-    r = await call("admin", "select array_agg(x) a from public.admin_mark_restock_notified($1::bigint[]) x", [ids]);
-    check("aviso: marcarlas otra vez no cambia nada (nunca dos avisos)", r.ok && r.rows[0].a === null, JSON.stringify(r.rows));
+    check("aviso: ya no se marca manualmente desde el panel", !r.ok && r.code === '42501', r.msg);
+    const unauthorizedClaim = await call("admin", "select public.restock_email_claim('avisos@povmatero.com',10) r");
+    check("aviso: un administrador no puede enviar como servidor", !unauthorizedClaim.ok && unauthorizedClaim.code === '42501');
+    const jobs = (await call("service", "select public.restock_email_claim('avisos@povmatero.com',10) r")).val;
+    check("aviso: el servidor reclama los dos emails", jobs.length === 2);
+    for (const j of jobs) {
+      const args = [j.id,j.token];
+      check("aviso: confirmación del proveedor registrada una vez", (await call("service", "select public.restock_email_report($1,$2,'sent','fake-local') r",args)).val === true);
+      check("aviso: repetir la confirmación no duplica", (await call("service", "select public.restock_email_report($1,$2,'sent','fake-local') r",args)).val === false);
+    }
     check("aviso: avisar no mueve stock", (await stock(C500)) === s0);
     r = await call("ana", "select public.request_restock_alert($1) as r", [SARA]);
     check("aviso: con stock no se puede pedir (Sara)", !r.ok);

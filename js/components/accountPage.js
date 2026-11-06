@@ -18,6 +18,21 @@ const TIME = new Intl.DateTimeFormat("es-AR", { hour: "2-digit", minute: "2-digi
 
 const money = (n) => "$" + Number(n).toLocaleString("es-AR", { maximumFractionDigits: 2 });
 
+// WhatsApp comercial de Povmatero (el mismo de la tienda y de /yerbas).
+const WHATSAPP_NUMBER = "5491160554815";
+const WA_ICON = `<svg class="acc-wa-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12.04 2a9.9 9.9 0 0 0-8.5 15l-1.4 5.1 5.2-1.37A9.9 9.9 0 1 0 12.04 2Zm0 18.1a8.2 8.2 0 0 1-4.2-1.15l-.3-.18-3.08.81.82-3-.2-.31a8.2 8.2 0 1 1 6.96 3.83Zm4.5-6.14c-.25-.12-1.46-.72-1.69-.8-.23-.08-.39-.12-.55.12-.16.25-.63.8-.78.97-.14.16-.29.18-.53.06a6.7 6.7 0 0 1-3.34-2.92c-.25-.43.25-.4.72-1.34.08-.16.04-.3-.02-.43-.06-.12-.55-1.33-.76-1.82-.2-.48-.4-.41-.55-.42h-.47a.9.9 0 0 0-.65.3 2.74 2.74 0 0 0-.86 2.04 4.76 4.76 0 0 0 1 2.53 10.9 10.9 0 0 0 4.18 3.69c1.56.67 2.17.73 2.95.61.47-.07 1.46-.6 1.67-1.18.2-.58.2-1.07.14-1.18-.06-.1-.22-.16-.47-.28Z"/></svg>`;
+
+// El código público es la referencia del cliente; no mostrar IDs internos.
+const orderLabel = (o) => o.public_code ? String(o.public_code) : "Código pendiente";
+
+// «Consultar estado de mi pedido»: solo abre WhatsApp con un mensaje armado.
+// No crea ni cambia nada.
+function statusQueryUrl(o) {
+  const kind = o.kind === "yerbas" ? "de yerbas " : "";
+  const text = `¡Hola! Quiero consultar el estado de mi pedido ${kind}${orderLabel(o)} (del ${DATE.format(new Date(o.created_at))}). ¡Gracias!`;
+  return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(text)}`;
+}
+
 // Pedidos de yerbas: los mismos tres estados que el panel (Pendiente, Listo,
 // Entregado). Los de la tienda no tienen estados; las compras en el local
 // (ventas presenciales vinculadas a la cuenta) ya están entregadas.
@@ -37,7 +52,7 @@ function orderTag(o) {
   const [label, tone] = isUnanswered(o) ? YERBA_STATUS.cancelado : (YERBA_STATUS[o.status] ?? [o.status ?? "", ""]);
   return `<span class="acc-order-tag acc-order-tag--${tone || "wait"}">${escapeHtml(label)}</span>`;
 }
-// Pendiente 72 h sin respuesta: ya está cancelado (la base lo marca sola; puede
+// Reserva vencida sin respuesta (12 h; 72 h los pedidos anteriores): ya está cancelado (la base lo marca sola; puede
 // que todavía no haya corrido la tarea, pero la reserva ya se liberó).
 const isUnanswered = (o) => o.kind === "yerbas" && o.status === "pendiente" && o.expires_at && new Date(o.expires_at) <= new Date();
 function cancelNote(o) {
@@ -378,7 +393,7 @@ async function renderOrders(panel) {
           <li class="acc-card acc-order">
             <div class="acc-order-head">
               <div>
-                <h2>${o.kind === "yerbas" ? "Yerbas · " : ""}${o.kind === "presencial" ? "Compra" : "Pedido"} #${escapeHtml(String(o.id))}</h2>
+                <h2>${o.kind === "yerbas" ? "Yerbas · " : ""}${o.kind === "presencial" ? "Compra" : "Pedido"} ${escapeHtml(orderLabel(o))}</h2>
                 <p class="acc-muted"><time datetime="${escapeHtml(o.created_at)}">${escapeHtml(DATE.format(date))} · ${escapeHtml(TIME.format(date))}</time></p>
               </div>
               ${orderTag(o)}
@@ -393,6 +408,8 @@ async function renderOrders(panel) {
                 </li>`).join("")}
             </ul>
             <div class="acc-order-total"><span>Total</span><strong>${money(o.total)}</strong></div>
+            ${o.kind === "presencial" ? "" : `
+              <a class="acc-btn-wa" href="${escapeHtml(statusQueryUrl(o))}" target="_blank" rel="noopener" data-order-status>${WA_ICON}Consultar estado de mi pedido</a>`}
           </li>`;
       }).join("")}
     </ol>`;

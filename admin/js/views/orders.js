@@ -2,12 +2,12 @@
 // (solicitudes del carrito, sin estados) y Ventas (presenciales, cargadas en
 // el panel). #/pedidos?tab=yerbas&f=pendiente
 import { h, mount, errorMessage, formatPrice, normalizeText } from "../ui.js";
-import { listOrders, STATUS, uiStatus, runOrderMaintenance, cancelReason } from "../api/orders.js";
+import { listOrders, STATUS, uiStatus, runOrderMaintenance, cancelReason, orderLabel } from "../api/orders.js";
 
 const TABS = [["yerbas", "Yerbas"], ["tienda", "Tienda"], ["presencial", "Ventas"]];
 
 // Filtros de yerbas: los tres estados principales primero; el resto, aparte.
-// No hay «Vencidos»: a las 72 h en «Pendiente» el pedido queda cancelado.
+// No hay «Vencidos»: al vencer la reserva (12 h) en «Pendiente» el pedido queda cancelado.
 const FILTERS = [
   ["pendiente", "Pendientes", (o) => uiStatus(o) === "pendiente", true],
   ["listo", "Listos", (o) => uiStatus(o) === "listo", true],
@@ -52,7 +52,7 @@ function orderCard(o) {
   return h("li", {},
     h("a", { class: "order-card", href: `#/pedidos/${o.id}` },
       h("div", { class: "order-card-top" },
-        h("strong", { class: "order-num" }, `#${o.id}`),
+        h("strong", { class: "order-num" }, orderLabel(o)),
         statusBadge(o),
         h("span", { class: "order-date muted" }, DATE.format(new Date(o.created_at)))),
       h("div", { class: "order-card-name" }, o.customer_name || o.customer_email || "Cliente sin nombre",
@@ -84,7 +84,7 @@ export async function renderOrders(view, query = {}) {
     refresh.disabled = true;
     let orders;
     try {
-      // Primero, cancelación (72 h en «Pendiente») y entrega automática (24 h en «Listo»). Idempotente.
+      // Primero, cancelación (reserva vencida en «Pendiente») y entrega automática (24 h en «Listo»). Idempotente.
       if (tab === "yerbas") await runOrderMaintenance().catch((err) => console.warn("Mantenimiento de pedidos:", err));
       orders = await listOrders(tab);
     } catch (err) {
@@ -102,7 +102,7 @@ export async function renderOrders(view, query = {}) {
   refresh.addEventListener("click", load);
 
   function draw(orders) {
-    const search = h("input", { type: "search", class: "input", placeholder: "Buscar por número, nombre o teléfono…", "aria-label": "Buscar pedidos", value: query.q ?? "" });
+    const search = h("input", { type: "search", class: "input", placeholder: "Buscar por código, nombre o teléfono…", "aria-label": "Buscar pedidos", value: query.q ?? "" });
     const list = h("ul", { class: "order-list" });
     const count = h("p", { class: "muted" });
 
@@ -128,9 +128,11 @@ export async function renderOrders(view, query = {}) {
 
     function paint() {
       const q = normalizeText(search.value.trim()).replace(/^#/, "");
+      const code = q.replace(/[^a-z0-9]/g, "");
       const digits = q.replace(/\D/g, "");
       const visible = orders.filter((o) => (!active || active[2](o)) && (!q
         || String(o.id) === q
+        || (code.length >= 3 && normalizeText(o.public_code ?? "").replace(/[^a-z0-9]/g, "").startsWith(code))
         || normalizeText(o.customer_name).includes(q)
         || normalizeText(o.customer_email).includes(q)
         || (digits.length >= 3 && String(o.customer_phone ?? "").replace(/\D/g, "").includes(digits))));

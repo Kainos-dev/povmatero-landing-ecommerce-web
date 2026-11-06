@@ -257,7 +257,7 @@ export function initCart(UI) {
       : items.map(item => `• ${item.name}${item.variant ? ` (${item.variant})` : ""} x${item.qty} — ${formatPrice(item.price * item.qty)}`);
     return [
       "Hola! Quiero hacer este pedido:",
-      ...(order ? [`Pedido #${order.id}`] : []),
+      ...(order ? [`Pedido ${order.public_code || "Código pendiente"}`] : []),
       "",
       ...lines,
       "",
@@ -370,7 +370,7 @@ export function initCart(UI) {
 
     orderShown = Boolean(order);
     showOrderNote(order
-      ? `Pedido #${escapeHtml(String(order.id))} guardado en <a href="/cuenta?seccion=pedidos">Mi cuenta</a>. Es una solicitud: se confirma por WhatsApp.`
+      ? `Pedido ${escapeHtml(order.public_code || "Código pendiente")} guardado en <a href="/cuenta?seccion=pedidos">Mi cuenta</a>. Es una solicitud: se confirma por WhatsApp.`
       : "");
     sending = false;
     UI.whatsappBtn.disabled = false;

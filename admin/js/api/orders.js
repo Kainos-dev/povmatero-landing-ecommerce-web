@@ -7,9 +7,11 @@ import { supabase } from "/js/lib/supabaseClient.js";
 const BASE_COLUMNS =
   "id, created_at, updated_at, kind, status, expires_at, status_changed_at, stock_applied, " +
   "customer_id, customer_name, customer_email, customer_phone, item_count, total";
-// Columnas de las migraciones 20261110 (estados) y 20261112 (cancelación por
-// falta de respuesta). Si la base todavía no tiene alguna (42703), se pide sin ella.
+// Columnas de las migraciones 20261110 (estados), 20261112 (cancelación por
+// falta de respuesta) y 20261114 (código público). Si la base todavía no tiene alguna (42703), se pide sin ella.
 const COLUMN_SETS = [
+  BASE_COLUMNS + ", ready_at, delivered_at, auto_delivered, auto_deliver, cancel_reason, cancelled_at, auto_cancelled, public_code, legacy_public_code",
+  BASE_COLUMNS + ", ready_at, delivered_at, auto_delivered, auto_deliver, cancel_reason, cancelled_at, auto_cancelled, public_code",
   BASE_COLUMNS + ", ready_at, delivered_at, auto_delivered, auto_deliver, cancel_reason, cancelled_at, auto_cancelled",
   BASE_COLUMNS + ", ready_at, delivered_at, auto_delivered, auto_deliver",
   BASE_COLUMNS,
@@ -24,9 +26,19 @@ async function selectOrders(build, extra = "") {
   }
 }
 
-// Un pendiente que pasa 72 h sin respuesta se cancela solo (migración 20261112).
+// Un pendiente cuya reserva vence sin respuesta se cancela solo (migración
+// 20261112). La reserva dura 12 h desde la migración 20261114 (72 h los
+// pedidos anteriores): las horas de cada pedido salen de sus fechas.
 export const UNANSWERED_REASON = "Cancelado por falta de respuesta";
-export const PENDING_HOURS = 72;
+export const PENDING_HOURS = 12;
+export function reservationHours(o) {
+  const h = o?.expires_at && o?.created_at ? Math.round((new Date(o.expires_at) - new Date(o.created_at)) / 3600e3) : 0;
+  return h > 0 ? h : PENDING_HOURS;
+}
+
+// Cómo se nombra un pedido: su código público (PV-...) o, si todavía no tiene
+// (base sin la migración 20261114, venta sin cuenta), su número interno.
+export const orderLabel = (o) => o?.public_code || `#${o?.id}`;
 
 // Tres estados para el panel. En la base, «Pendiente» agrupa pendiente,
 // confirmado y preparando (los tres reservan stock igual).
@@ -43,7 +55,7 @@ export const FLOW_LABEL = { pendiente: "Pendiente", listo: "Listo", entregado: "
 export const PENDING_STATES = ["pendiente", "confirmado", "preparando"];
 
 // Estado que ve el panel: pendiente | listo | entregado | cancelado.
-// No hay «Vencido»: un pendiente cuya reserva de 72 h ya pasó está cancelado
+// No hay «Vencido»: un pendiente cuya reserva ya venció está cancelado
 // (la base lo marca en la próxima tarea; la reserva ya se liberó).
 export function uiStatus(o) {
   if (o.kind === "presencial") return o.status === "cancelado" ? "cancelado" : "entregado";
@@ -124,7 +136,7 @@ export async function deliverDueOrders() {
   return data ?? [];
 }
 
-// Mantenimiento al abrir «Pedidos»: cancela los pendientes de 72 h y entrega
+// Mantenimiento al abrir «Pedidos»: cancela los pendientes vencidos y entrega
 // los listos de 24 h (run_order_maintenance, idempotente). Lo mismo corre solo
 // una vez por día en Vercel (/api/cron-pedidos). Sin la migración 20261112,
 // solo la entrega automática.
@@ -159,10 +171,10 @@ export async function setOrderStatus(orderId, status) {
   return data;
 }
 
-// La base canceló el pedido (72 h sin respuesta) en vez de hacer el cambio pedido.
+// La base canceló el pedido (reserva vencida sin respuesta) en vez de hacer el cambio pedido.
 function throwIfAutoCancelled(data, orderId, wanted) {
   if (data?.auto_cancelled && data.status === "cancelado" && wanted !== "cancelado") {
-    const err = new Error(`El pedido #${orderId} se canceló por falta de respuesta (${PENDING_HOURS} h en «Pendiente»).`);
+    const err = new Error(`El pedido ${orderLabel(data)} se canceló por falta de respuesta (venció su reserva en «Pendiente»).`);
     err.hint = "auto_cancelled";
     throw err;
   }

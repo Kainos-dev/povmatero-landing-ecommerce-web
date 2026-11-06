@@ -189,11 +189,13 @@ function ordersExtra({ route, url, p, m, body, json, err, rows, st }) {
   // ---------- Cliente: «Mis pedidos» ----------
   for (const migrated of [true, false]) {
     const st = ordersState({ migrated });
+    // El cliente recibe códigos públicos tras la migración 16, no números internos.
+    st.orders.forEach((o) => { o.public_code = `PV-TEST${o.id}`; });
     for (const vp of [DESK, PHONE]) {
       const { ctx, page, errors } = await open("/cuenta?seccion=pedidos", st, vp);
       await page.waitForSelector(".acc-order", { timeout: 20000 }).catch(() => {});
       const cards = await page.$$eval(".acc-order", (c) => c.map((x) => x.innerText.replace(/\s+/g, " ")));
-      const card = (id) => cards.find((t) => t.includes(`#${id}`)) ?? "";
+      const card = (id) => cards.find((t) => t.includes(`PV-TEST${id}`)) ?? "";
       const label = migrated ? "con migración" : "sin migración";
       check(`mis pedidos (${label}, ${vp.width}px): carga todos los pedidos`, cards.length === 6, cards.length + " " + errors.join(" | "));
       check(`mis pedidos (${label}, ${vp.width}px): el de 72 h figura «Cancelado» con el motivo`, /CANCELADO|Cancelado/i.test(card(202)) && card(202).includes(REASON), card(202));

@@ -1,11 +1,12 @@
 // Tarea programada (Vercel Cron, ver "crons" en vercel.json): mantenimiento
 // de pedidos de yerbas, una vez por día.
-//   * Pendiente hace 72 h → «Cancelado» («Cancelado por falta de respuesta»).
+//   * Pendiente con la reserva vencida (12 h; 72 h los pedidos anteriores a la
+//     migración 20261114) → «Cancelado» («Cancelado por falta de respuesta»).
 //   * Listo hace 24 h → «Entregado».
 // Lo hace la base (public.run_order_maintenance, migración 20261112000000):
 // es idempotente, así que correrla de más no duplica nada.
 //
-// La reserva de stock de un pendiente se libera exactamente a las 72 h aunque
+// La reserva de stock de un pendiente se libera exactamente al vencer aunque
 // esta tarea corra más tarde (la base cuenta la reserva por expires_at); la
 // tarea deja asentado el estado, el motivo y el historial.
 //
@@ -13,6 +14,12 @@
 // «Authorization: Bearer <CRON_SECRET>» si existe la variable CRON_SECRET.
 // Sin CRON_SECRET o sin SUPABASE_SECRET_KEY no hace nada (responde 503).
 // Nunca devuelve datos de clientes: solo los números de pedido que cambió.
+//
+// Notificaciones a administradores (migración 20261115): si están las claves
+// VAPID, además procesa la cola de Web Push (reintentos y avisos que no
+// salieron en el momento). Si eso falla, la tarea igual responde bien.
+
+const { vapidKeys, dispatch } = require("./_lib/webpush.js");
 
 const SUPABASE_URL = "https://gubrehbalkfvzwsndbcv.supabase.co";
 const TIMEOUT_MS = 15000;
@@ -62,6 +69,14 @@ async function handler(req, res) {
       cancelados: Array.isArray(data.cancelados) ? data.cancelados.map(Number) : [],
       entregados: Array.isArray(data.entregados) ? data.entregados.map(Number) : [],
     };
+    const vapid = vapidKeys();
+    if (vapid) {
+      try {
+        result.notificaciones = await dispatch({ supabaseUrl: SUPABASE_URL, secretKey: key, vapid, budgetMs: 10000 });
+      } catch (err) {
+        console.error("cron-pedidos: no se pudo procesar la cola de notificaciones", String(err?.message ?? err).slice(0, 200));
+      }
+    }
     console.log(`cron-pedidos: ${result.cancelados.length} cancelados [${result.cancelados.join(", ")}], ${result.entregados.length} entregados [${result.entregados.join(", ")}]`);
     res.statusCode = 200;
     res.setHeader("Content-Type", "application/json");

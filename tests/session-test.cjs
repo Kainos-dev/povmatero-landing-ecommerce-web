@@ -103,7 +103,7 @@ async function installRoutes(ctx, auth, { catalog }) {
     if (p === "/rest/v1/rpc/create_yerba_order") {
       auth.log.push(["order"]);
       const items = body().items;
-      return json({ id: 4321, status: "pendiente", total: 13000 * items[0].quantity, item_count: items.length, items: items.map((i) => ({ variant_id: i.variant_id, product_name: "Canarias Serena", variant_name: "1kg", unit_price: 13000, quantity: i.quantity, line_total: 13000 * i.quantity })) });
+      return json({ id: 4321, public_code: 'PV-ACDEFAABCD', status: "pendiente", total: 13000 * items[0].quantity, item_count: items.length, items: items.map((i) => ({ variant_id: i.variant_id, product_name: "Canarias Serena", variant_name: "1kg", unit_price: 13000, quantity: i.quantity, line_total: 13000 * i.quantity })) });
     }
     return json([]);
   });
@@ -199,12 +199,12 @@ const CATALOG = [
   const wa = await page.$eval("[data-whatsapp]", (a) => ({ href: a.href, target: a.target, rel: a.rel, ...(() => { const s = getComputedStyle(a); const p = a.previousElementSibling.getBoundingClientRect(), r = a.getBoundingClientRect(); return { color: s.color, border: s.borderTopColor, bg: s.backgroundColor, h: r.height, w: r.width, ph: p.height, pw: p.width, radius: s.borderRadius }; })() }));
   const msg = decodeURIComponent(new URL(wa.href).searchParams.get("text") ?? "");
   check("WhatsApp: abre wa.me (app o WhatsApp Web) al número de la tienda, en otra pestaña", wa.href.startsWith("https://wa.me/5491160554815?text=") && wa.target === "_blank" && /noopener/.test(wa.rel), wa.href);
-  check("WhatsApp: mensaje con número de pedido, nombre, detalle y total", /#4321/.test(msg) && /Soy Ana\./.test(msg) && /Canarias Serena 1kg x1/.test(msg) && /Total: \$\s?13\.000/.test(msg), msg);
+  check("WhatsApp: mensaje con código público, nombre, detalle y total", /PV-ACDEFAABCD/.test(msg) && !/#4321/.test(msg) && /Soy Ana\./.test(msg) && /Canarias Serena 1kg x1/.test(msg) && /Total: \$\s?13\.000/.test(msg), msg);
   check("WhatsApp: sin datos sensibles (teléfono, email)", !/ana@test\.com|4444|1234/.test(msg), msg);
   check("WhatsApp: fondo transparente, borde y texto verdes", wa.bg === "rgba(0, 0, 0, 0)" && wa.border === "rgb(37, 211, 102)" && /rgb\(17, 131, 59\)/.test(wa.color), JSON.stringify(wa));
   check("WhatsApp: mismo tamaño que los otros botones", Math.abs(wa.h - wa.ph) < 1 && Math.abs(wa.w - wa.pw) < 1, JSON.stringify(wa));
   const title = await page.$eval(".y-sent h2", (h) => { const s = getComputedStyle(h); return { f: s.fontFamily, t: s.textTransform, ls: s.letterSpacing, text: h.textContent }; });
-  check("título: «Pedido realizado correctamente» con Inter en mayúsculas espaciadas", /Inter/.test(title.f) && title.t === "uppercase" && parseFloat(title.ls) > 1 && /Pedido realizado correctamente/.test(title.text), JSON.stringify(title));
+  check("título: «PEDIDO REALIZADO» con Inter en mayúsculas espaciadas", /Inter/.test(title.f) && title.t === "uppercase" && parseFloat(title.ls) > 1 && /^Pedido realizado$/.test(title.text), JSON.stringify(title));
   await page.screenshot({ path: path.join(OUT, "exito-390.png") });
   const [popup] = await Promise.all([ctx.waitForEvent("page", { timeout: 10000 }).catch(() => null), page.click("[data-whatsapp]")]);
   await page.waitForTimeout(800);
@@ -224,10 +224,11 @@ const CATALOG = [
   // ---------- 5. Dos pestañas renovando a la vez ----------
   await age();
   const r1 = auth.count("refresh");
+  const issuedBeforeRace = auth.n;
   const p2 = await ctx.newPage();
   await Promise.all([page.goto(BASE + "/cuenta"), p2.goto(BASE + "/cuenta")]);
   await page.waitForTimeout(5000);
-  check("dos pestañas a la vez: una sola renovación, sin revocar la sesión", auth.count("refresh") - r1 === 1 && !!(await stored())?.refresh_token, JSON.stringify(auth.log.slice(-3)));
+  check("dos pestañas a la vez: una sola rotación de token, sin revocar la sesión", auth.count("refresh") > r1 && auth.n===issuedBeforeRace+1 && !!(await stored())?.refresh_token && !auth.tokens.get((await stored()).refresh_token)?.revoked, JSON.stringify(auth.log.slice(-3)));
   await p2.close();
 
   // ---------- 6. Respuesta de renovación perdida (app cambiada, corte) ----------
@@ -252,7 +253,7 @@ const CATALOG = [
   auth.revokeAll();
   await age();
   await go("/", ".site-header");
-  await page.waitForTimeout(2500);
+  await page.waitForFunction((k)=>!localStorage.getItem(k) && !document.querySelector('#accountBtn')?.classList.contains('is-signed-in'),KEY,{timeout:15000});
   check("revocada: al entrar a la tienda se muestra la sesión cerrada", !(await stored()) && !(await signedInIcon()), JSON.stringify({ stored: !!(await stored()), icon: await signedInIcon() }));
   check("revocada: aviso claro («Tu sesión venció…»)", (await toasts()).some((t) => /Tu sesión venció/.test(t)), JSON.stringify(await toasts()));
   check("revocada: el carrito de la cuenta queda guardado", JSON.stringify(await yerbasCart()) === JSON.stringify(cartBefore), JSON.stringify([cartBefore, await yerbasCart()]));
@@ -372,6 +373,7 @@ const CATALOG = [
   check("sin errores de JavaScript", !errors.length, errors.join(" | "));
   await ctx.close();
   srv.close();
+  if(path.dirname(path.resolve(profileDir))!==path.resolve(os.tmpdir()) || !path.basename(profileDir).startsWith('pov-session-'))throw Error('Unsafe test profile');
   fs.rmSync(profileDir, { recursive: true, force: true });
   console.log(`\n${ok} OK, ${fail} fallas`);
   process.exit(fail ? 1 : 0);

@@ -125,7 +125,8 @@ export async function updateProfile(userId, { firstName, lastName, phone }) {
 }
 
 // «Mis pedidos»: la RLS devuelve solo los pedidos de la cuenta con sesión.
-// cancel_reason (migración 20261112): si la base todavía no la tiene, se pide sin ella.
+// cancel_reason (20261112) y public_code (20261114): si la base todavía no las
+// tiene, se piden sin ellas.
 export async function listMyOrders() {
   const columns = "id, total, item_count, created_at, kind, status, expires_at, order_items (product_name, variant_name, unit_price, quantity, line_total)";
   const query = (cols) => supabase
@@ -134,7 +135,8 @@ export async function listMyOrders() {
     .order("created_at", { ascending: false })
     .order("id", { referencedTable: "order_items", ascending: true })
     .limit(50);
-  let { data, error } = await query(columns + ", cancel_reason");
+  let { data, error } = await query(columns + ", cancel_reason, public_code");
+  if (error?.code === "42703") ({ data, error } = await query(columns + ", cancel_reason"));
   if (error?.code === "42703") ({ data, error } = await query(columns));
   if (error) throw error;
   return data ?? [];
@@ -147,7 +149,14 @@ export async function listMyOrders() {
 export async function createOrder(items) {
   const { data, error } = await supabase.rpc("create_order", { items });
   if (error) throw error;
-  return data;   // { id, total, item_count, items: [{ product_name, variant_name, unit_price, quantity, line_total }] }
+  if (data.public_code) return data; // 20261116: incluido en la misma transacción.
+  // Código público del pedido (migración 20261114): la RLS solo devuelve los
+  // pedidos propios. Si no está (base anterior o error), se sigue sin él.
+  try {
+    const { data: row } = await supabase.from("orders").select("public_code").eq("id", data.id).maybeSingle();
+    if (row?.public_code) data.public_code = row.public_code;
+  } catch { /* sin código: la interfaz muestra «Código pendiente» */ }
+  return data;   // { id, public_code?, total, item_count, items: [{ product_name, variant_name, unit_price, quantity, line_total }] }
 }
 
 // Solo para mostrar el acceso al panel. La base vuelve a verificarlo en cada

@@ -1842,3 +1842,12 @@ a.move:hover { background: var(--a-sunken); }
 @media (prefers-reduced-motion: reduce) {
   .so-row.is-dragging { box-shadow: none; }
 }
+
+/* ---------- Notificaciones (#/notificaciones) ---------- */
+.push-steps { margin: 4px 0 0; padding-left: 22px; display: grid; gap: 8px; font-size: var(--a-text-sm); line-height: 1.45; }
+.push-notes { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: var(--a-text-sm); color: var(--a-fg-2); line-height: 1.45; }
+.push-state { display: flex; align-items: center; gap: 8px; margin: 0; font-weight: 600; font-size: var(--a-text-sm); }
+.push-state .icon { width: 18px; height: 18px; }
+.push-state.is-on { color: var(--a-fg); }
+.push-chip { margin-left: 8px; vertical-align: middle; }
+.notice-inline-warn { color: var(--a-red); }

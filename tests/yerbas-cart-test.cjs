@@ -123,7 +123,7 @@ const CATALOG = [
     await ctx.close(); }
 
   const src = fs.readFileSync(path.join(ROOT, "js/yerbas/main.js"), "utf8");
-  check("reserva: el carrito dice 72 horas (como la cancelación automática)", (src.match(/Reservamos tus paquetes por 72 horas/g) ?? []).length === 2 && !/por 24 horas/.test(src));
+  check("reserva: el carrito y la confirmación dicen 12 horas (como la cancelación automática)", /const RESERVATION_HOURS = 12;/.test(src) && (src.match(/Reservamos tus paquetes por \$\{RESERVATION_HOURS\} horas/g) ?? []).length === 2 && !/por (24|72) horas/.test(src));
   await browser.close(); srv.close();
   console.log(`\n${ok} OK · ${fail} fallas`);
   process.exit(fail ? 1 : 0);

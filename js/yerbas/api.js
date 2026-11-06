@@ -3,6 +3,7 @@
 // precios, stock disponible, teléfono y límites (ver la migración
 // 20261105000000_yerba_orders.sql). Acá solo viaja qué y cuánto.
 import { supabase } from "../lib/supabaseClient.js";
+import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from "../lib/supabaseConfig.js";
 
 export async function getSession() {
   const { data, error } = await supabase.auth.getSession();
@@ -21,11 +22,37 @@ export async function getProfilePhone(userId) {
 }
 
 // lines: [{ variant_id, qty }]. phone: opcional (si llega, se guarda en el perfil).
-export async function createYerbaOrder(lines, phone = null) {
+// clientKey: clave del intento (migración 20261114): repetir el envío con la
+// misma clave devuelve el pedido ya creado, sin duplicarlo. Si la base todavía
+// no acepta ese parámetro, se informa el error: no se reintenta sin clave.
+export async function createYerbaOrder(lines, phone = null, clientKey = null, session = null) {
   const items = lines.map((l) => ({ variant_id: Number(l.variant_id), quantity: Number(l.qty) }));
-  const { data, error } = await supabase.rpc("create_yerba_order", { items, contact_phone: phone || null });
+  const args = { items, contact_phone: phone || null };
+  if (session?.access_token) {
+    // Bind this operation to the session validated at its start. The shared SDK
+    // may switch accounts in another tab while a request is being prepared.
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/create_yerba_order`, {
+      method: "POST", cache: "no-store",
+      headers: { apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(clientKey ? { ...args, client_key: clientKey } : args),
+    });
+    const data = await response.json();
+    if (!response.ok) throw Object.assign(new Error(data?.message || "No pudimos registrar el pedido."), data,
+      response.status === 401 ? { hint: "session_expired" } : {});
+    return data;
+  }
+  const { data, error } = await supabase.rpc("create_yerba_order", clientKey ? { ...args, client_key: clientKey } : args);
   if (error) throw error;
-  return data;   // { id, status, expires_at, total, item_count, items: [...] }
+  return data;   // { id, public_code, status, expires_at, total, item_count, items: [...], repeated? }
+}
+
+// Recover this exact operation, never another purchase with coincidentally equal items.
+export async function findOrderByClientKey(userId, clientKey) {
+  const { data, error } = await supabase.from("orders")
+    .select("id, public_code, kind, status, created_at, expires_at, total, item_count, order_items (variant_id, product_name, variant_name, quantity, line_total)")
+    .eq("customer_id", userId).eq("client_key", clientKey).maybeSingle();
+  if (error) throw error;
+  return data ? { ...data, items: data.order_items, recovered: true } : null;
 }
 
 // ---------- Avisos de reposición (migración 20261108000000) ----------
@@ -33,14 +60,14 @@ export async function createYerbaOrder(lines, phone = null) {
 export async function listMyRestockAlerts() {
   const { data, error } = await supabase
     .from("restock_requests")
-    .select("variant_id")
+    .select("variant_id,email_consent_at")
     .eq("status", "activa");
   if (error) throw error;
-  return (data ?? []).map((r) => Number(r.variant_id));
+  return data ?? [];
 }
 
-export async function requestRestockAlert(variantId) {
-  const { data, error } = await supabase.rpc("request_restock_alert", { variant_id: Number(variantId) });
+export async function requestRestockAlert(variantId, emailConsent = false) {
+  const { data, error } = await supabase.rpc("request_restock_alert", { variant_id: Number(variantId), email_consent: emailConsent === true });
   if (error) throw error;
   return data;
 }
@@ -66,14 +93,17 @@ export function itemsSignature(items) {
 // yerbas de esta cuenta, creado desde «since», con las mismas presentaciones y
 // cantidades. Así nunca se envía dos veces. La RLS solo devuelve pedidos propios.
 export async function findRecentOrder(userId, since, signature) {
-  const { data, error } = await supabase
+  const query = (cols) => supabase
     .from("orders")
-    .select("id, total, created_at, order_items (variant_id, quantity)")
+    .select(cols)
     .eq("customer_id", userId)
     .eq("kind", "yerbas")
     .gte("created_at", new Date(since).toISOString())
     .order("created_at", { ascending: false })
     .limit(5);
+  // public_code: migración 20261114 (sin ella, se pide sin la columna).
+  let { data, error } = await query("id, public_code, total, created_at, order_items (variant_id, quantity)");
+  if (error?.code === "42703") ({ data, error } = await query("id, total, created_at, order_items (variant_id, quantity)"));
   if (error) throw error;
   return (data ?? []).find((o) => itemsSignature(o.order_items ?? []) === signature) ?? null;
 }

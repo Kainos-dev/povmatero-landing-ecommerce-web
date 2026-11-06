@@ -1,0 +1,91 @@
+// Entire database is local PGlite; no networking or real customer data.
+const assert = require('node:assert/strict');
+const fs = require('fs'), path = require('path');
+const { PGlite } = require(process.env.PW + '/node_modules/@electric-sql/pglite');
+const ROOT = path.resolve(process.argv[2] || path.join(__dirname,'..'));
+const STUB = fs.readFileSync(path.join(__dirname,'db-test.cjs'),'utf8').match(/const STUB = `([\s\S]*?)`;/)[1];
+(async()=> {
+ const db = new PGlite(); let checks=0;
+ const q=(s,p)=>db.query(s,p), one=async(s,p)=>(await q(s,p)).rows[0];
+ const ok=(name,value)=>{assert.ok(value,name); checks++; console.log('OK',name);};
+ const a='11111111-1111-4111-8111-111111111111', b='22222222-2222-4222-8222-222222222222';
+ const claims=async(id)=>q("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({sub:id,role:'authenticated'})]);
+ const files=fs.readdirSync(path.join(ROOT,'supabase/migrations')).filter(f=>f.endsWith('.sql')).sort();
+ const migrate=async(f)=>db.exec(fs.readFileSync(path.join(ROOT,'supabase/migrations',f),'utf8'));
+ try {
+ await db.exec(STUB);
+ for(const f of files.filter(f=>f<'20261116')) await migrate(f);
+ for(const id of [a,b]) await q("insert into auth.users(id,email,raw_user_meta_data) values($1,$2,$3)",[id,id+'@example.invalid',JSON.stringify({first_name:'Ana',last_name:'Arce',phone:'11 5555 1234'})]);
+ const old=[];
+ for(const id of [a,b]) old.push(await one("insert into public.orders(customer_id,item_count,total) values($1,1,100) returning *",[id]));
+ const cat=(await one("select id from public.categories where slug='yerbas'")).id;
+ const p=(await one("insert into public.products(category_id,slug,name,is_active) values($1,'email-test','Yerba de prueba',true) returning id",[cat])).id;
+ const v=(await one("insert into public.product_variants(product_id,name,price) values($1,'500 g',100) returning id",[p])).id;
+ const legacy=(await one("insert into public.restock_requests(product_id,variant_id,user_id,email) values($1,$2,$3,$4) returning *",[p,v,a,a+'@example.invalid']));
+ for(const f of files.filter(f=>f>='20261116')) await migrate(f);
+ const migrated=(await q('select * from public.orders order by id')).rows;
+ ok('historical duplicate labels become globally unique',old[0].public_code===old[1].public_code && new Set(migrated.map(o=>o.public_code)).size===2);
+ ok('historical keys, labels, totals and timestamps retained',migrated.every((o,i)=>o.id===old[i].id && o.legacy_public_code===old[i].public_code && o.total===old[i].total && +new Date(o.created_at)===+new Date(old[i].created_at)));
+ await assert.rejects(q("update public.orders set public_code='PV-AAAAAAAAAA' where id=$1",[old[0].id]),e=>e.hint==='code_immutable');checks++;
+ const generator=(await one("select pg_get_functiondef('private.random_public_order_code()'::regprocedure) def")).def;
+ await db.exec('create sequence private.collision_test');
+ await db.exec(`create or replace function private.random_public_order_code() returns text language sql volatile set search_path='' as $$ select case when nextval('private.collision_test')=1 then '${migrated[0].public_code}' else 'PV-0000000001' end $$`);
+ const fresh=await one('insert into public.orders(item_count,total) values(1,100) returning *');
+ ok('forced collision retries safely; anonymous sale also has code',fresh.public_code==='PV-0000000001');
+ await db.exec("create or replace function private.random_public_order_code() returns text language sql volatile as $$select 'PV-0000000001'::text$$");
+ await assert.rejects(q('insert into public.orders(item_count,total) values(1,100)'),e=>e.code==='40001');checks++;
+ await db.exec(generator);
+ const server=async(sql,params)=>{const old=(await one('select auth.jwt() claims')).claims;await q("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({role:'service_role'})]);try{return (await one(sql,params)).r;}finally{await q("select set_config('request.jwt.claims',$1,false)",[JSON.stringify(old)]);}};
+ const claim=async()=>server("select public.restock_email_claim('avisos@povmatero.com',10) r");
+ const check=async(j)=>server('select public.restock_email_check($1,$2) r',[j.id,j.token]);
+ const report=async(j,outcome='sent')=>server('select public.restock_email_report($1,$2,$3,$4) r',[j.id,j.token,outcome,'fake-local']);
+ const entry=async()=>q("insert into public.inventory_movements(variant_id,movement_type,quantity,reason) values($1,'entrada',1,'local test')",[v]);
+ const subscribe=async(id)=>{await claims(id); return (await one('select public.request_restock_alert($1,true) r',[v])).r;};
+ ok('old requests have no email consent',(await one('select email_consent_at from public.restock_requests where id=$1',[legacy.id])).email_consent_at===null);
+ await entry();
+ ok('old requests excluded even with stock',(await claim()).length===0);
+ await subscribe(a); // Explicitly renew the existing request, even if stock returned.
+ let jobs=await claim();
+ ok('explicit renewal consents; manual receipt generates one job',jobs.length===1 && jobs[0].payload.text.includes('500 g') && jobs[0].payload.text.includes('Yerba de prueba') && jobs[0].payload.to===a+'@example.invalid');
+ ok('active lease excludes a second worker',(await claim()).length===0);
+ const lease=jobs[0];
+ ok('ready before cancellation',await check(lease));
+ const token=(await one('select unsubscribe_token from public.restock_requests where id=$1',[legacy.id])).unsubscribe_token;
+ await server('select public.restock_email_unsubscribe($1) r',[token]);
+ ok('unsubscribe wins before send',!await check(lease));
+ // Reserve the one physical unit; a second subscriber must not be emailed yet.
+ await claims(b);
+ const order=(await one('select public.create_yerba_order($1::jsonb,null,$2::uuid) r',[JSON.stringify([{variant_id:v,quantity:1}]),'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'])).r;
+ ok('new order reserves exactly 12 hours',+new Date(order.expires_at)-+new Date(order.created_at)===12*3600000);
+ await subscribe(b);
+ ok('physical stock minus active reservations prevents email',(await claim()).length===0);
+ await q("update public.orders set created_at=now()-interval '13 hours',expires_at=now()-interval '1 hour' where id=$1",[order.id]);
+ jobs=await claim();
+ ok('expired reservation releases stock without maintenance',jobs.length===1);
+ const first=jobs[0];
+ await report(first,'retry');
+ await q("update private.restock_email_jobs set next_attempt_at=now() where request_id=$1",[first.id]);
+ const retry=(await claim())[0];
+ ok('retry freezes payload and rotates lease token',JSON.stringify(retry.payload)===JSON.stringify(first.payload) && retry.token!==first.token);
+ ok('stale worker cannot acknowledge new lease',!await report(first));
+ ok('provider acceptance marks sent once',await report(retry) && !await report(retry));
+ ok('sent job cannot be claimed again',(await claim()).length===0);
+ // A new request while the last unit is reserved, then cancellation releases it.
+ await claims(a);
+ const o2=(await one('select public.create_yerba_order($1::jsonb,null) r',[JSON.stringify([{variant_id:v,quantity:1}])])).r;
+ await subscribe(b);
+ ok('new subscription waits while stock reserved',(await claim()).length===0);
+ await q("update public.orders set status='cancelado' where id=$1",[o2.id]);
+ const cancelled=(await claim())[0];
+ ok('cancellation makes the presentation eligible',!!cancelled);
+ await report(cancelled,'retry');
+ await q("update private.restock_email_jobs set first_attempt_at=now()-interval '21 hours',next_attempt_at=now() where request_id=$1",[cancelled.id]);
+ ok('ambiguous retries stop before 24h provider key expiry',(await claim()).length===0 && (await one('select state from private.restock_email_jobs where request_id=$1',[cancelled.id])).state==='failed');
+ await db.exec('set role authenticated');
+ for(const sql of ["select public.restock_email_claim('avisos@povmatero.com')","select public.request_restock_alert_before_email(1)","select * from private.restock_email_jobs"]){await assert.rejects(q(sql),e=>e.code==='42501'); checks++;}
+ await db.exec('reset role');
+ await db.exec(fs.readFileSync(path.join(ROOT,'supabase/checks/20261117_codigos_email.sql'),'utf8'));
+ checks++;
+ console.log(`${checks} checks passed`);
+ } finally {await db.close();}
+})().catch(e=>{console.error(e);process.exitCode=1;});

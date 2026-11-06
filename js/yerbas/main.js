@@ -5,6 +5,7 @@
 // (uno por invitado y uno por cuenta). Pedido: js/yerbas/api.js (se carga al enviar).
 import { loadYerbas, productAvailable, isAvailable, availabilityText, shelfImageFor, OTHER_BRANDS } from "./catalog.js?v=20261105-1";
 import { createBasket } from "./basket.js";
+import { createOrderAttempts } from "./orderAttempts.js";
 import { optimizedSrc, withFallback } from "../lib/images.js";
 import { escapeHtml } from "../lib/html.js";
 import { hasStoredSession } from "../lib/session.js";
@@ -14,6 +15,7 @@ import { showToast } from "../components/ui.js";
 
 const WHATSAPP_NUMBER = "5491160554815";
 const MAX_PER_PRESENTATION = 20;            // mismo límite que la base
+const RESERVATION_HOURS = 12;               // reserva de un pedido pendiente (migración 20261114)
 const PACK_WIDTH = 256;                      // ancho de imagen pedido al optimizador
 const LABEL_COLORS = ["#2f5d3a", "#7a2e2e", "#1f3b63", "#8a6a2b", "#4a4a4a", "#5b3a6b", "#2c5a5a", "#6b4a2b"];
 
@@ -34,9 +36,10 @@ let pendingCheckout = false;  // se pidió ingresar para enviar: al volver se ab
 let profile = null;           // { phone } del cliente con sesión (para pedir teléfono si falta)
 let profileFor = null;
 let sending = false;
+const orderAttempts = createOrderAttempts();
 
 const basket = createBasket({ onChange: (_lines, { ownerChanged } = {}) => {
-  if (ownerChanged) { profile = null; profileFor = null; loadRestockAlerts(); }
+  if (ownerChanged) { profile = null; profileFor = null; lastOrder = null; loadRestockAlerts(); }
   renderDock();
   renderBadges();
   if (openSheet === ui.cartSheet) renderCartSheet();
@@ -452,26 +455,46 @@ function stepperHtml(value, max, label) {
 // figura). Requiere cuenta. Si la base todavía no tiene los avisos, no se
 // muestra la opción.
 let restockAlerts = new Set();     // presentaciones con aviso activo de esta cuenta
+let legacyRestockAlerts = new Set();
 let restockEnabled = true;
 let restockBusy = null;            // presentación que se está guardando
 let pendingRestock = null;         // { product, variantId } pedido antes de ingresar
+let repaintProduct = null;
+let restockLoadGeneration = 0;
 
 async function loadRestockAlerts() {
+  const generation = ++restockLoadGeneration;
   restockAlerts = new Set();
-  if (!hasStoredSession() || !restockEnabled) return;
+  legacyRestockAlerts = new Set();
+  if (!hasStoredSession() || !restockEnabled) {
+    if (openSheet === ui.productSheet) repaintProduct?.();
+    return;
+  }
   try {
     const api = await import("./api.js");
-    restockAlerts = new Set(await api.listMyRestockAlerts());
+    const alerts = await api.listMyRestockAlerts();
+    if (generation !== restockLoadGeneration) return;
+    restockAlerts = new Set(alerts.filter((r) => r.email_consent_at).map((r) => Number(r.variant_id)));
+    legacyRestockAlerts = new Set(alerts.filter((r) => !r.email_consent_at).map((r) => Number(r.variant_id)));
+    // Mantener actualizado el perfil de la cuenta.
+    if (restockAlerts.size) ensureProfile();
   } catch (err) {
+    if (generation !== restockLoadGeneration) return;
     const api = await import("./api.js").catch(() => null);
     if (api?.restockMissing(err)) restockEnabled = false;
     else console.warn("Avisos de reposición:", err);
   }
+  if (openSheet === ui.productSheet) repaintProduct?.();
   if (pendingRestock && hasStoredSession()) {
-    const { product, variantId } = pendingRestock;
+    const { product, variantId, emailConsent } = pendingRestock;
     pendingRestock = null;
-    if (!restockAlerts.has(variantId)) toggleRestockAlert(product, variantId, true);
+    if (!restockAlerts.has(variantId)) toggleRestockAlert(product, variantId, true, null, emailConsent);
   }
+}
+
+// Consentimiento específico para reposición, independiente de novedades comerciales.
+function restockChannelText() {
+  return "El aviso llegará al correo de tu cuenta cuando el servicio de email esté configurado. No reserva stock. Podés cancelarlo acá o desde el correo.";
 }
 
 function restockHtml(v) {
@@ -479,19 +502,23 @@ function restockHtml(v) {
   const busy = restockBusy === v.id ? " disabled aria-busy=\"true\"" : "";
   if (restockAlerts.has(v.id)) {
     return `<div class="y-notify is-on">
-      <span class="y-notify-state">Te avisamos cuando vuelva</span>
+      <span class="y-notify-state">Te vamos a avisar cuando haya stock.</span>
+      <small class="y-notify-how">${escapeHtml(restockChannelText())}</small>
       <button type="button" class="y-notify-cancel" data-notify-cancel${busy}>Cancelar aviso</button>
     </div>`;
   }
-  return `<button type="button" class="y-notify-btn" data-notify${busy} aria-label="Avisarme cuando vuelva ${escapeHtml(v.label)}">Avisarme cuando vuelva</button>`;
+  return `<div class="y-notify"><small class="y-notify-how">${escapeHtml(restockChannelText())} ${legacyRestockAlerts.has(v.id) ? "Tu aviso anterior necesita esta confirmación para recibir emails." : ""}</small><label class="y-notify-how"><input type="checkbox" data-notify-consent${busy}> Acepto recibir un correo de reposición de esta presentación en el email de mi cuenta.</label><button type="button" class="y-notify-btn" data-notify${busy} aria-label="Avisarme por email cuando haya stock de ${escapeHtml(v.label)}">Avisarme por email cuando haya stock</button>${legacyRestockAlerts.has(v.id) ? `<button type="button" class="y-notify-cancel" data-notify-cancel${busy}>Cancelar aviso anterior</button>` : ""}</div>`;
 }
 
-async function toggleRestockAlert(product, variantId, on, rerender = null) {
+async function toggleRestockAlert(product, variantId, on, rerender = null, emailConsent = false) {
   const v = catalog?.byVariant.get(variantId)?.variant;
   if (!v || restockBusy) return;
-  const label = `${product.name} ${v.label}`;
+  if (on && emailConsent !== true) {
+    showToast("Aceptá recibir el correo de reposición para guardar el aviso.");
+    return;
+  }
   if (on && !hasStoredSession()) {
-    pendingRestock = { product, variantId };
+    pendingRestock = { product, variantId, emailConsent };
     hideSheet();
     document.dispatchEvent(new CustomEvent("povmatero:account-login", { detail: { mode: "login" } }));
     return;
@@ -501,12 +528,15 @@ async function toggleRestockAlert(product, variantId, on, rerender = null) {
   try {
     const api = await import("./api.js");
     if (on) {
-      await api.requestRestockAlert(variantId);
+      await api.requestRestockAlert(variantId, emailConsent);
       restockAlerts.add(variantId);
-      showToast(`Listo: te avisamos cuando vuelva ${label}.`);
+      legacyRestockAlerts.delete(variantId);
+      await ensureProfile();
+      showToast("Listo: te vamos a avisar cuando haya stock.");
     } else {
       await api.cancelRestockAlert(variantId);
       restockAlerts.delete(variantId);
+      legacyRestockAlerts.delete(variantId);
       showToast("Cancelaste el aviso.");
     }
   } catch (err) {
@@ -523,6 +553,7 @@ async function toggleRestockAlert(product, variantId, on, rerender = null) {
 
 // ---------- Presentaciones de un paquete ----------
 function openProduct(product, { focusVariant = null } = {}) {
+  repaintProduct = render;
   const chosen = new Map();   // variantId → cantidad elegida en esta hoja
   track("product_view", { path: "/yerbas", productId: product.id });
 
@@ -554,7 +585,7 @@ function openProduct(product, { focusVariant = null } = {}) {
           const max = room(v);
           const vOut = !isAvailable(v);
           return `
-            <li class="y-pres${vOut ? " is-out" : ""}${v.id === focusVariant ? " is-focus" : ""}" data-variant="${v.id}">
+            <li class="y-pres${vOut ? " is-out" : ""}${v.id === focusVariant ? " is-focus" : ""}${!vOut && (restockAlerts.has(v.id) || legacyRestockAlerts.has(v.id)) ? " has-notify" : ""}" data-variant="${v.id}">
               <span class="y-pres-thumb" style="--scale:${packScale(product, v)}">${packHtml(product, { variant: v, size: "y-pack--xs" })}</span>
               <div class="y-pres-info">
                 <strong>${escapeHtml(v.label)}</strong>
@@ -563,6 +594,7 @@ function openProduct(product, { focusVariant = null } = {}) {
                 ${vOut ? "" : limitNote(inCart, v)}
               </div>
               ${vOut ? restockHtml(v) : stepperHtml(n, max, `Cantidad de ${v.label}`)}
+              ${!vOut && (restockAlerts.has(v.id) || legacyRestockAlerts.has(v.id)) ? `<div class="y-pres-notify">${restockHtml(v)}</div>` : ""}
             </li>`;
         }).join("")}
       </ul>
@@ -577,7 +609,8 @@ function openProduct(product, { focusVariant = null } = {}) {
     const notify = e.target.closest("[data-notify], [data-notify-cancel]");
     if (notify) {
       const id = Number(notify.closest("[data-variant]").dataset.variant);
-      toggleRestockAlert(product, id, notify.hasAttribute("data-notify"), render);
+      toggleRestockAlert(product, id, notify.hasAttribute("data-notify"), render,
+        notify.closest(".y-notify")?.querySelector("[data-notify-consent]")?.checked === true);
       return;
     }
     const step = e.target.closest("[data-step]");
@@ -781,6 +814,9 @@ function openCart() {
   renderCartSheet();
   showSheet(ui.cartSheet);
   if (hasStoredSession()) ensureProfile().then(() => { if (openSheet === ui.cartSheet) renderCartSheet(); });
+  // El carrito muestra lo disponible AHORA: si la góndola se cargó hace rato,
+  // se actualiza (otros clientes pueden haber reservado mientras tanto).
+  if (catalog && basket.lines().length && Date.now() - loadedAt > 30000 && !sending) refreshCatalog();
 }
 
 function renderCartSheet() {
@@ -807,7 +843,7 @@ function renderCartSheet() {
               <div class="y-line-info">
                 <strong>${escapeHtml(l.product.name)}</strong>
                 <span>${escapeHtml(l.variant.label)} · ${money(l.variant.price)}</span>
-                ${limitNote(l.qty, l.variant)}
+                ${stockNote(l.qty, l.variant)}${limitNote(l.qty, l.variant)}
               </div>
               <div class="y-line-side">
                 ${stepperHtml(l.qty, max, `Cantidad de ${l.product.name} ${l.variant.label}`)}
@@ -826,10 +862,10 @@ function renderCartSheet() {
         </label>` : ""}
       <p class="y-msg${cartMessage?.ok ? " ok" : ""}" role="alert" ${cartMessage ? "" : "hidden"}>${escapeHtml(cartMessage?.text ?? "")}</p>
       <button type="button" class="y-btn-primary y-send" data-send ${sending ? 'disabled aria-busy="true"' : ""} data-autofocus>
-        ${sending ? "Realizando pedido…" : !signedIn ? "Ingresá para enviar el pedido" : sendFailed ? "Reintentar el pedido" : "Realizar pedido"}
+        ${sending ? "Realizando pedido…" : !signedIn ? "Ingresá para enviar el pedido" : "Realizar pedido"}
       </button>
       <p class="y-fineprint">${signedIn
-        ? "Es una solicitud: te confirmamos disponibilidad, entrega y pago por WhatsApp. Reservamos tus paquetes por 72 horas."
+        ? `Es una solicitud: te confirmamos disponibilidad, entrega y pago por WhatsApp. Reservamos tus paquetes por ${RESERVATION_HOURS} horas.`
         : "Para pedir yerbas necesitás una cuenta (así reservamos tus paquetes y te avisamos). Tu carrito se guarda."}</p>`
     : `
       <div class="y-cart-empty">
@@ -850,16 +886,15 @@ function renderOrderSent() {
     ${closeBtn}
     <div class="y-sent" role="status">
       <span class="y-sent-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 5 5L20 7"/></svg></span>
-      <h2 id="cartSheetTitle" class="y-sent-title">Pedido realizado correctamente</h2>
-      ${o.id ? `<p class="y-sent-number">Pedido #${escapeHtml(String(o.id))}</p>` : ""}
-      <p>Reservamos tus paquetes por 72 horas. Te confirmamos disponibilidad, entrega y pago por WhatsApp.</p>
+      <h2 id="cartSheetTitle" class="y-sent-title">Pedido realizado</h2>
+      ${o.label ? `<p class="y-sent-number">Pedido ${escapeHtml(o.label)}</p>` : ""}
+      <p>${o.recovered ? "Recuperamos el pedido original: no creamos otro ni renovamos su reserva. Consultá su estado en Mis pedidos; para una nueva compra, volvé a armar el carrito." : `Reservamos tus paquetes por ${RESERVATION_HOURS} horas. Te confirmamos disponibilidad, entrega y pago por WhatsApp.`}</p>
       <div class="y-sent-actions">
         <a class="y-btn-primary" href="/cuenta?seccion=pedidos" data-autofocus>Ver mis pedidos</a>
         ${o.url ? `<a class="y-btn-ghost y-btn-wa" href="${escapeHtml(o.url)}" target="_blank" rel="noopener" data-whatsapp>${WA_ICON}Avisar por WhatsApp</a>` : ""}
         <button type="button" class="y-btn-ghost" data-close>Volver a la góndola de yerbas</button>
         <a class="y-btn-ghost" href="/">Volver a la web</a>
       </div>
-      <p class="y-sent-note">Avisar es opcional: tu pedido ya quedó registrado.</p>
     </div>`;
 }
 
@@ -904,12 +939,18 @@ function whatsappText(order, firstName = "") {
     `• ${i.product_name}${i.variant_name ? ` ${i.variant_name}` : ""} x${i.quantity} — ${money(i.line_total)}`);
   const total = Number(order.total);
   return [
-    `¡Hola! ${name ? `Soy ${name}. ` : ""}Acabo de hacer el pedido de yerbas #${order.id} en la web.`,
+    `¡Hola! ${name ? `Soy ${name}. ` : ""}Acabo de hacer el pedido de yerbas ${orderLabel(order)} en la web.`,
     ...(lines.length ? ["", ...lines] : []),
     ...(order.total != null && Number.isFinite(total) ? ["", `Total: ${money(total)}`] : []),
     "",
     "Quedo a la espera de la confirmación. ¡Gracias!",
   ].join("\n");
+}
+
+// Cómo ve el cliente su pedido: el código público (ej. «AA-003»). El número
+// interno solo si la base todavía no tiene códigos (antes de la migración 20261114).
+function orderLabel(order) {
+  return order?.public_code ? String(order.public_code) : "Código pendiente";
 }
 
 // Nombre de pila para mostrar: sin espacios de más, sin «null»/«undefined», corto.
@@ -923,7 +964,6 @@ function cleanName(value) {
 // del envío, al volver se busca el pedido antes de dejar enviarlo de nuevo.
 const SENDING_KEY = "povmatero-yerbas-sending";
 const SKEW_MS = 2 * 60 * 1000;   // margen por si el reloj del teléfono no coincide con el de la base
-let sendFailed = false;
 
 function rememberSending(value) {
   try {
@@ -932,13 +972,19 @@ function rememberSending(value) {
   } catch { /* sin almacenamiento: solo se pierde la recuperación tras recargar */ }
 }
 
-function orderSucceeded(order) {
+function orderSucceeded(order, operation = null) {
   rememberSending(null);
-  sendFailed = false;
-  basket.clear();
+  orderAttempts.complete(operation?.attempt);
+  // A late response belongs to its original account, never the newly signed-in one.
+  if (operation && (basket.syncOwner() || basket.owner !== operation.owner)) {
+    sending = false;
+    return setMessage("La sesión cambió. Revisá el pedido en la cuenta desde la que lo enviaste.");
+  }
+  if (operation) basket.clearIf(operation.owner, operation.revision);
+  else basket.clear(); // recovery of a legacy, pre-client_key pending send
   // wa.me abre la app de WhatsApp si está instalada y, si no, WhatsApp Web.
   // Es solo un enlace: tocarlo no vuelve a enviar nada a la base.
-  lastOrder = { id: order.id, url: `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(whatsappText(order, profile?.firstName))}` };
+  lastOrder = { label: orderLabel(order), recovered: !!(order.repeated || order.recovered), url: `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(whatsappText(order, profile?.firstName))}` };
   sending = false;
   cartMessage = null;
   renderCartSheet();
@@ -947,9 +993,25 @@ function orderSucceeded(order) {
 
 async function sendOrder() {
   if (sending) return;
+  const owner = basket.owner;
+  sending = true;
+  try {
+    await orderAttempts.withLock(owner, async () => {
+      basket.refresh();
+      if (basket.owner !== owner) return setMessage("La sesión cambió. Revisá el carrito antes de enviar.");
+      await submitOrder(owner);
+    });
+  } finally {
+    sending = false;
+    if (openSheet === ui.cartSheet) renderCartSheet();
+  }
+}
+
+async function submitOrder(expectedOwner) {
   // La sesión cambió (otra pestaña, el panel): primero se muestra el carrito correcto.
   if (basket.syncOwner()) return setMessage("La sesión cambió en este navegador. Revisá el carrito antes de enviar.");
   const lines = basket.lines();
+  const revision = basket.revision;
   if (!lines.length) return;
 
   if (!hasStoredSession()) {
@@ -977,10 +1039,11 @@ async function sendOrder() {
   sending = true;
   cartMessage = null;
   renderCartSheet();
-  const owner = basket.owner;
+  const owner = expectedOwner;
   const startedAt = Date.now();
   let api;
   let signature = null;
+  let operation = null;
   try {
     api = await import("./api.js");
     signature = api.itemsSignature(lines);
@@ -989,32 +1052,35 @@ async function sendOrder() {
     const session = await api.getSession().catch((e) => { if (hasStoredSession()) throw e; return null; });
     if (!session) throw Object.assign(new Error("La sesión venció."), { hint: "session_expired" });
     if (session.user.id !== owner) throw Object.assign(new Error("La sesión cambió."), { hint: "owner_changed" });
-    rememberSending({ owner, signature, at: startedAt });
-    const order = await withTimeout(api.createYerbaOrder(lines, profile?.phone ? null : phone), 15000);
-    if (profile && !profile.phone) profile.phone = phone;
+    if (basket.owner !== owner || basket.revision !== revision) throw Object.assign(new Error("El carrito cambió. Revisalo antes de enviar."), { hint: "cart_changed" });
+    const attempt = await orderAttempts.prepare(owner, signature, revision);
+    if (basket.syncOwner() || basket.owner !== owner) throw Object.assign(new Error("La sesión cambió."), { hint: "owner_changed" });
+    operation = { owner, signature, revision, attempt };
+    rememberSending({ owner, signature, revision, key: attempt.key, at: attempt.at });
+    const order = await withTimeout(api.createYerbaOrder(lines, profile?.phone ? null : phone, attempt.key, session), 15000);
+    if (basket.owner === owner && profile && !profile.phone) profile.phone = phone;
     // El carrito se vacía recién con el pedido confirmado por la base.
-    orderSucceeded(order);
+    orderSucceeded(order, operation);
   } catch (err) {
     console.warn("Pedido de yerbas:", err);
     // Sin respuesta (corte, demora): puede haberse guardado igual. Antes de
     // ofrecer reintentar se busca; si está, es un éxito y no se duplica.
     if (api && signature && !err?.hint && !err?.code) {
       try {
-        const found = await api.findRecentOrder(owner, startedAt - SKEW_MS, signature);
-        if (found) return orderSucceeded(found);
+        const found = operation ? await api.findOrderByClientKey(owner, operation.attempt.key)
+          : await api.findRecentOrder(owner, startedAt - SKEW_MS, signature);
+        if (found) return orderSucceeded(found, operation);
       } catch (checkErr) {
         console.warn("Pedido de yerbas: no se pudo comprobar si se guardó.", checkErr);
         sending = false;
-        sendFailed = true;
-        return setMessage("No pudimos confirmar si tu pedido se registró. Revisá «Mis pedidos» en tu cuenta antes de volver a enviarlo.");
+        // La clave del intento se conserva: volver a tocar «Realizar pedido» no duplica.
+        return setMessage("No pudimos confirmar tu pedido. Revisá tu conexión y tocá «Realizar pedido» otra vez: si ya se registró, no se va a duplicar.");
       }
     }
     rememberSending(null);
     sending = false;
-    sendFailed = true;
     if (err?.hint === "session_expired") {
       // El carrito sigue guardado en esta cuenta: al volver a ingresar se abre igual.
-      sendFailed = false;
       pendingCheckout = true;
       hideSheet();
       document.dispatchEvent(new CustomEvent("povmatero:account-login", {
@@ -1026,15 +1092,47 @@ async function sendOrder() {
       basket.syncOwner();
       return setMessage("La sesión cambió en este navegador. Revisá el carrito antes de enviar.");
     }
-    const message = api ? api.orderErrorMessage(err) : "No pudimos conectarnos. Revisá tu internet e intentá de nuevo.";
+    const message = ["attempt_storage", "cart_changed"].includes(err?.hint) ? err.message
+      : api ? api.orderErrorMessage(err) : "No pudimos conectarnos. Revisá tu internet e intentá de nuevo.";
     if (err?.hint === "phone_required" && profile) profile.phone = null;
-    setMessage(message);
-    // Sin stock o producto despublicado: se actualiza la góndola y el carrito.
+    // Cambió el stock (otro cliente reservó) o se despublicó algo: se actualiza
+    // la góndola, se ajusta el carrito a lo disponible y se explica qué cambió.
+    // No se envía nada solo: la persona revisa y vuelve a tocar «Realizar pedido».
     if (err?.hint === "insufficient_stock" || err?.hint === "unavailable") {
-      await refreshCatalog();
-      setMessage(message + " Ajustamos tu carrito a lo disponible.");
+      setMessage("Revisando el stock…");
+      const changes = await refreshCatalog({ quiet: true });
+      return setMessage(stockChangedText(changes, api?.shortageDetail(err) ?? []) || message);
+    }
+    setMessage(message);
+  }
+}
+
+// «Cambió el stock mientras hacías el pedido. Ajustamos tu carrito: Canarias
+// Serena 1kg: quedan 2 (tenías 3); Sara Coco 500gr: se agotó. Revisá las
+// cantidades y tocá «Realizar pedido».»
+function stockChangedText(changes, shortage) {
+  const parts = changes.map((c) => {
+    const hit = catalog?.byVariant.get(c.variant_id);
+    const name = c.name ?? (hit ? `${hit.product.name} ${hit.variant.label}` : "Un producto");
+    if (c.removed) return `${name}: ya no está disponible`;
+    return c.to > 0 ? `${name}: ${c.to === 1 ? "queda 1" : `quedan ${c.to}`} (tenías ${c.from})` : `${name}: se agotó`;
+  });
+  if (!parts.length && shortage.length) {
+    // La góndola todavía no lo refleja: se informa lo que dijo la base.
+    for (const s of shortage) {
+      const name = `${s.product_name}${s.variant_name && s.variant_name !== "Único" ? ` ${s.variant_name}` : ""}`;
+      parts.push(Number(s.available) > 0 ? `${name}: ${Number(s.available) === 1 ? "queda 1" : `quedan ${s.available}`}` : `${name}: se agotó`);
+      if (catalog?.byVariant.get(Number(s.variant_id))) basket.set(Number(s.variant_id), Math.max(0, Math.min(basket.qty(Number(s.variant_id)), Number(s.available) || 0)));
     }
   }
+  if (!parts.length) return "";
+  return `Cambió el stock mientras hacías el pedido. Ajustamos tu carrito: ${parts.join("; ")}. Revisá las cantidades y tocá «Realizar pedido».`;
+}
+
+// Disponible en el carrito: se avisa cuando queda poco (y todavía no se agregó todo).
+function stockNote(qty, variant) {
+  if (variant.stock === null || variant.stock > 3 || qty >= variant.stock) return "";
+  return `<small class="y-line-stock">${variant.stock === 1 ? "Queda 1 disponible" : `Quedan ${variant.stock} disponibles`}</small>`;
 }
 
 // Se recargó la página a mitad de un envío: si el pedido se guardó, se muestra
@@ -1043,14 +1141,17 @@ async function resumeInterruptedSend() {
   let pending = null;
   try { pending = JSON.parse(sessionStorage.getItem(SENDING_KEY) ?? "null"); } catch { /* nada */ }
   if (!pending) return;
-  if (!pending.signature || !hasStoredSession() || Date.now() - pending.at > 30 * 60 * 1000 || pending.owner !== basket.owner) {
+  if (!pending.signature || !hasStoredSession() || pending.owner !== basket.owner) {
     return rememberSending(null);
   }
   try {
     const api = await import("./api.js");
-    const found = await api.findRecentOrder(pending.owner, pending.at - SKEW_MS, pending.signature);
+    const attempt = orderAttempts.find(pending.owner, pending.signature);
+    const key = pending.key || attempt?.key;
+    const found = key ? await api.findOrderByClientKey(pending.owner, key)
+      : Date.now() - pending.at <= 30 * 60 * 1000 ? await api.findRecentOrder(pending.owner, pending.at - SKEW_MS, pending.signature) : null;
     if (found) {
-      orderSucceeded(found);
+      orderSucceeded(found, key ? { owner: pending.owner, revision: pending.revision ?? basket.revision, attempt } : null);
       showSheet(ui.cartSheet);
     }
     rememberSending(null);
@@ -1068,20 +1169,27 @@ function withTimeout(promise, ms) {
 // ---------------------------------------------------------------------
 // Datos
 // ---------------------------------------------------------------------
-async function refreshCatalog() {
+// Devuelve los cambios que hubo que hacer en el carrito (lo que ya no alcanza).
+let loadedAt = 0;
+async function refreshCatalog({ quiet = false } = {}) {
   try {
     catalog = await loadYerbas();
+    loadedAt = Date.now();
   } catch (err) {
     console.warn("Yerbas: no se pudo actualizar.", err);
-    return;
+    return [];
   }
   lastPerRow = shelfLayout().key + ":" + Math.round((ui.track.clientWidth || 0) / 40);
   renderAisle();
   const changes = basket.reconcile(catalog);
   renderDock();
-  if (changes.length && openSheet !== ui.cartSheet) {
-    showToast("Actualizamos tu carrito según el stock disponible.");
+  if (!quiet && changes.length) {
+    if (openSheet === ui.cartSheet && !lastOrder) setMessage(stockChangedText(changes, []));
+    else if (openSheet !== ui.cartSheet) showToast("Actualizamos tu carrito según el stock disponible.");
+  } else if (openSheet === ui.cartSheet) {
+    renderCartSheet();
   }
+  return changes;
 }
 
 
@@ -1099,6 +1207,7 @@ async function start() {
 
   try {
     catalog = await loadYerbas();
+    loadedAt = Date.now();
   } catch (err) {
     console.error(err);
     ui.track.removeAttribute("aria-busy");

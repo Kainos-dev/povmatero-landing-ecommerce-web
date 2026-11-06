@@ -1,2 +1,7 @@
 tests/.image-cache/
 tests/**/pgdata-*/
+.env*
+!.env.example
+.release-local/
+INFORME-VALIDACION-LOCAL.md
+INFORME-PREPARACION-PUBLICACION.md

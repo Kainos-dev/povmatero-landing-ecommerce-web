@@ -19,6 +19,7 @@ import { renderStockTools } from "./views/stockTools.js";
 import { renderRestockAlerts } from "./views/restockAlerts.js";
 import { renderYerbaCreate } from "./views/yerbaCreate.js";
 import { renderImageOptimize } from "./views/imageOptimize.js";
+import { renderNotifications } from "./views/notifications.js";
 
 const DEFAULT_ROUTE = "#/inicio";
 
@@ -41,11 +42,12 @@ const routes = [
   [/^#\/gondola\/?$/,         (view, m, q) => renderShelf(view, q),                         "#/gondola"],
   [/^#\/stock-rapido\/?$/,     (view, m, q) => renderStockTools(view, q),           "#/stock-rapido"],
   [/^#\/avisos\/?$/,           (view) => renderRestockAlerts(view),                 "#/avisos"],
+  [/^#\/notificaciones\/?$/,   (view) => renderNotifications(view),                 "#/notificaciones"],
   [/^#\/mas\/?$/,              (view) => renderMore(view),                          "#/mas"],
 ];
 
 // Secciones que en el celular viven dentro de «Más».
-const IN_MORE = new Set(["#/optimizar-imagenes", "#/stock-rapido", "#/avisos", "#/clientes", "#/gondola", "#/estadisticas", "#/imagenes", "#/importar-precios", "#/revision", "#/mas"]);
+const IN_MORE = new Set(["#/optimizar-imagenes", "#/stock-rapido", "#/avisos", "#/clientes", "#/gondola", "#/estadisticas", "#/imagenes", "#/importar-precios", "#/revision", "#/notificaciones", "#/mas"]);
 
 // Marca en «Pedidos» con los pedidos de yerbas pendientes (sin vencer).
 let badgeTimer = 0;

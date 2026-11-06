@@ -232,10 +232,6 @@ export async function listRestockAlerts() {
   return check(await supabase.rpc("admin_restock_alerts"));
 }
 
-export async function markRestockNotified(ids) {
-  return check(await supabase.rpc("admin_mark_restock_notified", { ids }));
-}
-
 // Rechazos de la base con un mensaje ya pensado para el panel.
 const KNOWN = new Set(["insufficient_stock", "unavailable", "invalid_transition", "not_found", "invalid_items", "operation_conflict", "reserved_stock",
   "customer_required", "customer_not_found", "already_linked", "not_presencial"]);

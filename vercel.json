@@ -1,5 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/restock-send.js": { "maxDuration": 60 },
+    "api/push-send.js": { "maxDuration": 60 },
+    "api/cron-pedidos.js": { "maxDuration": 60 }
+  },
   "crons": [
     {
       "path": "/api/cron-pedidos",
@@ -47,6 +52,32 @@
           "value": "public, max-age=86400, stale-while-revalidate=604800"
         }
       ]
+    },
+    {
+      "source": "/admin/sw.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        },
+        {
+          "key": "Service-Worker-Allowed",
+          "value": "/admin/"
+        }
+      ]
+    },
+    {
+      "source": "/admin/manifest.webmanifest",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/manifest+json"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600"
+        }
+      ]
     }
   ],
   "rewrites": [
@@ -72,6 +103,13 @@
     {
       "source": "/yerbas",
       "destination": "/yerbas.html"
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/admin",
+      "destination": "/admin/",
+      "permanent": false
     }
   ]
 }
