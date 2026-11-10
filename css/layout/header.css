@@ -12,10 +12,14 @@
   background:#000;
 }
 
-.header-inner {
+.header-inner,
+.pdp-inner {
   max-width: 90vw;
   margin: 0 auto;
   padding: 0 24px;
+}
+
+.header-inner {
   height: 60px;
   /* position: relative; */
   display: flex;

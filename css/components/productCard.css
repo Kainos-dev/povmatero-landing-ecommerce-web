@@ -206,6 +206,16 @@
   box-shadow: 0 0 0 .1em var(--details), 0 24px 44px -14px rgba(0, 0, 0, 0.35);
 }
 
+/* Catálogo y similares: mismo aro marrón del hover, también en reposo.
+   La sombra sigue el radio de la card; no cambia su tamaño ni la grilla. */
+.product-card:not(.product-card--yerba) {
+  box-shadow: 0 0 0 .1em var(--details), 0 4px 10px -4px rgba(0, 0, 0, 0.12);
+}
+
+.product-card:not(.product-card--yerba).is-lifted {
+  box-shadow: 0 0 0 .1em var(--details), 0 8px 18px -8px rgba(0, 0, 0, 0.18);
+}
+
 /* Yerbas: misma elevación y sombra, sin el borde marrón */
 .product-card--yerba.is-lifted {
   box-shadow: 0 0 0 .1em transparent, 0 24px 44px -14px rgba(0, 0, 0, 0.35);

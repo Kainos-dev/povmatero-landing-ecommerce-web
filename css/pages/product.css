@@ -15,14 +15,11 @@ html:not(.route-product) .pdp { display: none; }
 
 .pdp {
   background: var(--bg);
-  padding: 84px 24px 16px; /* + 8em del footer */
+  padding: 84px 0 16px; /* el ancho y los márgenes los comparte con el navbar */
   min-height: 70vh;
 }
 
-.pdp-inner {
-  max-width: 1200px;
-  margin: 0 auto;
-}
+/* .pdp-inner comparte ancho y padding con .header-inner (header.css y responsive.css). */
 
 /* Volver + categoría */
 .pdp-nav {
@@ -142,7 +139,7 @@ html:not(.route-product) .pdp { display: none; }
 /* =========================
    TAMBIÉN TE PUEDE INTERESAR
 ========================= */
-/* A todo el ancho de la pantalla (sale del contenedor de 1200px) */
+/* A todo el ancho de la pantalla (sale del contenedor principal) */
 .pdp-related {
   width: 100vw;
   margin-top: 56px;
@@ -228,7 +225,7 @@ html:not(.route-product) .pdp { display: none; }
    CELULAR
 ========================= */
 @media (max-width: 768px) {
-  .pdp { padding: 76px 16px 16px; }
+  .pdp { padding: 76px 0 16px; }
   .pdp-detail { border-radius: 16px; }
   .pdp .modal-image { min-height: 0; }
   .pdp .modal-stage,

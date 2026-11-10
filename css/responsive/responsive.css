@@ -22,7 +22,8 @@
     grid-template-columns: repeat(4, 1fr);
   }
 
-  .header-inner { 
+  .header-inner,
+  .pdp-inner {
     padding: 0 40px; 
   }
 
