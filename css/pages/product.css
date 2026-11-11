@@ -200,7 +200,8 @@ html:not(.route-product) .pdp { display: none; }
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scroll-snap-type: x mandatory;
-  padding: 20px 0 32px;
+  /* Reserva para la sombra ambiental y la escala del hover, sin recortarlas. */
+  padding: 28px 0 48px;
   scrollbar-width: none;
 }
 .pdp-related-track::-webkit-scrollbar { display: none; }
@@ -242,7 +243,7 @@ html:not(.route-product) .pdp { display: none; }
   }
   .pdp .modal-options .variant-btn { padding: 9px 14px; }
   .pdp-related { margin-top: 40px; }
-  .pdp-related-track { gap: 16px; padding: 16px 0 28px; }
+  .pdp-related-track { gap: 16px; padding: 24px 0 40px; }
   .pdp-related-track > .product-card { flex-basis: 72vw; }
 }
 
