@@ -7,7 +7,13 @@ const baseline=process.argv.includes('--baseline'),record={};let checks=0;
 const {execFileSync}=require('node:child_process');
 const cssFiles=['css/components/productCard.css','css/layout/header.css','css/pages/product.css','css/responsive/responsive.css'];
 // The pre-change CSS is read from history, never checked out over local files.
-const originalCss=baseline?new Map(cssFiles.map(file=>['/'+file,execFileSync('git',['-c',`safe.directory=${ROOT}`,'show',`e4b0988:${file}`],{cwd:ROOT,encoding:'utf8'})])):null;
+const originalCss=baseline?new Map(cssFiles.map(file=>['/'+file,execFileSync('git',['-c',`safe.directory=${ROOT}`,'show',`7a28e24:${file}`],{cwd:ROOT,encoding:'utf8'})])):null;
+function shadowLayers(value){return value.split(/,(?![^(]*\))/).map(layer=>{
+ const color=layer.match(/rgba?\(([^)]+)\)/)?.[1].split(',').map(Number)||[];
+ const lengths=layer.replace(/rgba?\([^)]+\)/,'').trim().split(/\s+/).map(parseFloat);
+ return {alpha:color.length===4?color[3]:1,y:lengths[1]||0,blur:lengths[2]||0,spread:lengths[3]||0};
+}).filter(layer=>layer.blur>0);}
+const shadowStrength=value=>shadowLayers(value).reduce((sum,layer)=>sum+layer.alpha,0);
 const ok=(value,label)=>{assert.ok(value,label);checks++;};
 const rows=Array.from({length:12},(_,i)=>({product_id:i+1,product_slug:'fixture-'+(i+1),product_name:i<10?'Mate ficticio '+(i+1):'Yerba ficticia '+(i+1),
  description:'Producto de prueba local',category_slug:i<10?'mates':'yerbas',category_name:i<10?'Mates':'Yerbas',brand:i<10?null:'Ficticia',
@@ -35,6 +41,7 @@ async function main(){
    await ctx.route('**/__style-image/**',r=>r.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400"><rect width="600" height="400" fill="#ddd1bd"/><circle cx="300" cy="200" r="110" fill="#6b5948"/></svg>'}));
    const page=await ctx.newPage();page.on('pageerror',e=>errors.push(e.message));
    await page.goto(base);await page.locator('.product-grid .card-name').first().waitFor();await page.waitForTimeout(900);
+   await page.waitForFunction(()=>{const intro=document.getElementById('preloader');return !intro||getComputedStyle(intro).display==='none'||Number(getComputedStyle(intro).opacity)<0.01;},null,{timeout:8000});
    // The storefront normally links yerbas to its separate gondola. Exercise the
    // shared card factory explicitly to verify its excluded variant as well.
    await page.evaluate(async()=>{const {createProductCard}=await import('/js/components/catalog.js');
@@ -42,10 +49,10 @@ async function main(){
    const card=page.locator('.product-grid .product-card:not(.product-card--yerba)').first();
    const style=await card.evaluate(el=>({shadow:getComputedStyle(el).boxShadow,radius:getComputedStyle(el).borderRadius}));
    const yerba=await page.locator('.product-grid .product-card--yerba').first().evaluate(el=>({shadow:getComputedStyle(el).boxShadow,radius:getComputedStyle(el).borderRadius}));
-   if(!baseline){ok(style.shadow.includes('rgb(55, 39, 29)'),width+': permanent original brown');ok(style.radius==='20px',width+': rounded card');ok(/0\.12/.test(style.shadow),width+': subtle resting shadow');}
+   if(!baseline){ok(style.shadow.includes('rgb(55, 39, 29)'),width+': permanent original brown');ok(style.radius==='20px',width+': rounded card');ok(shadowLayers(style.shadow).length===2,width+': layered resting shadow');}
    await card.scrollIntoViewIfNeeded();
    if(!touch){await card.hover();await page.waitForTimeout(550);ok(await card.evaluate(el=>el.classList.contains('is-lifted')),width+': mouse lift');
-    if(!baseline)ok(/0\.18/.test(await card.evaluate(el=>getComputedStyle(el).boxShadow)),width+': restrained hover shadow');
+    if(!baseline)ok(shadowStrength(await card.evaluate(el=>getComputedStyle(el).boxShadow))>shadowStrength(style.shadow),width+': stronger hover shadow');
     await page.mouse.move(1,1);await page.waitForTimeout(550);
    }else ok(!(await card.evaluate(el=>el.classList.contains('is-lifted'))),width+': no sticky touch lift');
    await page.keyboard.press('Tab');await card.locator('.card-name a').focus();ok(await card.evaluate(el=>getComputedStyle(el).outlineStyle!=='none'),width+': keyboard focus');
@@ -63,10 +70,21 @@ async function main(){
      overflow:document.documentElement.scrollWidth-innerWidth};
    });
    if(!baseline){ok(Math.abs(metrics.headerLeft-metrics.detail.x)<1&&Math.abs(metrics.headerRight-metrics.detail.right)<1,width+': detail aligned with navbar content');}
-   if(!baseline)ok(await page.locator('.pdp-related-track .product-card:not(.product-card--yerba)').first().evaluate(el=>{
-    const card=el.getBoundingClientRect(),track=el.parentElement.getBoundingClientRect();
-    return card.top-track.top>=8&&track.bottom-card.bottom>=8;
-   }),width+': carousel has vertical clearance for shadow/focus');
+   if(!baseline){
+    const layers=shadowLayers(style.shadow),below=Math.max(...layers.map(s=>s.y+s.blur+s.spread)),above=Math.max(4,...layers.map(s=>s.blur+s.spread-s.y));
+    ok(await page.locator('.pdp-related-track .product-card:not(.product-card--yerba)').first().evaluate((el,{below,above})=>{
+     const card=el.getBoundingClientRect(),track=el.parentElement.getBoundingClientRect();
+     return card.top-track.top>=above&&track.bottom-card.bottom>=below;
+    },{below,above}),width+': carousel has vertical clearance for shadow/focus');
+   }
+   if(!baseline&&!touch){
+    await page.evaluate(()=>{const card=[...document.querySelectorAll('.pdp-related-track .product-card:not(.product-card--yerba)')].find(el=>{const r=el.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth;});if(card)card.dataset.shadowProbe='true';});
+    const related=page.locator('[data-shadow-probe="true"]');await related.hover();await page.waitForTimeout(550);
+    const hovered=await related.evaluate(el=>({shadow:getComputedStyle(el).boxShadow,top:el.getBoundingClientRect().top-el.parentElement.getBoundingClientRect().top,bottom:el.parentElement.getBoundingClientRect().bottom-el.getBoundingClientRect().bottom,lifted:el.classList.contains('is-lifted')}));
+    const layers=shadowLayers(hovered.shadow);
+    ok(hovered.lifted&&hovered.top>=Math.max(...layers.map(s=>s.blur+s.spread-s.y))&&hovered.bottom>=Math.max(...layers.map(s=>s.y+s.blur+s.spread)),width+': carousel hover shadow is not vertically clipped');
+    await page.mouse.move(1,1);await page.waitForTimeout(550);
+   }
    ok(metrics.overflow<=1,width+': no horizontal overflow');ok(metrics.imageFit==='contain',width+': photo not cropped');
    if(width>768)ok(Math.abs(metrics.image.width/metrics.panel.width-1.3)<0.02,width+': preserved photo/panel ratio');
    const thumbs=page.locator('.pdp .modal-thumb');ok(await thumbs.count()>=2,width+': gallery retained');
@@ -78,10 +96,12 @@ async function main(){
    await page.locator('#cartClose').click();await page.waitForTimeout(450);
    ok(await page.locator('#cartPanel').evaluate(el=>!el.classList.contains('open')&&el.getBoundingClientRect().left>=innerWidth-1),width+': cart closes fully');
    await page.screenshot({path:path.join(OUT,`${baseline?'before':'after'}-product-${width}.png`),fullPage:true});
-   record[width]={metrics,yerba};
+   record[width]={metrics,yerba,style};
    if(!baseline){const previous=JSON.parse(fs.readFileSync(path.join(OUT,'baseline.json'),'utf8'))[width];
     ok(Math.abs(previous.metrics.track.width-metrics.track.width)<1&&Math.abs(previous.metrics.track.x-metrics.track.x)<1,width+': carousel width/position unchanged');
     ok(previous.metrics.gap===metrics.gap&&previous.metrics.cardBasis===metrics.cardBasis&&Math.abs(previous.metrics.cardWidth-metrics.cardWidth)<1,width+': carousel spacing/distribution unchanged');
+    ok(shadowStrength(style.shadow)>shadowStrength(previous.style.shadow),width+': more visible shadow than published version');
+    ok(Math.abs(previous.metrics.detail.width-metrics.detail.width)<1&&Math.abs(previous.metrics.detail.x-metrics.detail.x)<1,width+': product layout unchanged');
     assert.deepEqual(yerba,previous.yerba);checks++;
    }
    ok(errors.length===0,width+': no JS errors '+errors.join(';'));ok(writes.length===0,width+': no remote writes');

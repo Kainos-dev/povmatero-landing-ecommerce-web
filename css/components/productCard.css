@@ -209,11 +209,15 @@
 /* Catálogo y similares: mismo aro marrón del hover, también en reposo.
    La sombra sigue el radio de la card; no cambia su tamaño ni la grilla. */
 .product-card:not(.product-card--yerba) {
-  box-shadow: 0 0 0 .1em var(--details), 0 4px 10px -4px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 0 0 .1em var(--details),
+    0 2px 6px -1px rgba(0, 0, 0, 0.12),
+    0 8px 18px -6px rgba(0, 0, 0, 0.22);
 }
 
 .product-card:not(.product-card--yerba).is-lifted {
-  box-shadow: 0 0 0 .1em var(--details), 0 8px 18px -8px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 0 0 .1em var(--details),
+    0 4px 10px -3px rgba(0, 0, 0, 0.16),
+    0 10px 20px -10px rgba(0, 0, 0, 0.30);
 }
 
 /* Yerbas: misma elevación y sombra, sin el borde marrón */
